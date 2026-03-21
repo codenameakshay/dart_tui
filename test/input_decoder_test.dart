@@ -72,4 +72,12 @@ void main() {
     expect(mouse.x, 9);
     expect(mouse.y, 19);
   });
+
+  test('decodes DCS capability response', () {
+    final d = TerminalInputDecoder();
+    final msgs = d.feed('\x1bP1+r5463=31\x1b\\'.codeUnits);
+    expect(msgs.length, 1);
+    expect(msgs.first, isA<CapabilityMsg>());
+    expect((msgs.first as CapabilityMsg).content, 'Tc=1');
+  });
 }

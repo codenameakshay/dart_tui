@@ -1,5 +1,3 @@
-// ignore_for_file: non_constant_identifier_names
-
 import 'dart:async';
 
 import 'msg.dart';
@@ -99,50 +97,3 @@ String _format(String template, List<Object?> args) {
   }
   return out;
 }
-
-// Bubble Tea-like aliases.
-@Deprecated('Use batch(...)')
-Cmd? Batch(List<Cmd?> cmds) => batch(cmds);
-@Deprecated('Use sequence(...)')
-Cmd? Sequence(List<Cmd?> cmds) => sequence(cmds);
-@Deprecated('Use tick(...)')
-Cmd Tick(Duration d, Msg Function(DateTime t) fn) => tick(d, fn);
-@Deprecated('Use every(...)')
-Cmd Every(Duration d, Msg Function(DateTime t) fn) => every(d, fn);
-@Deprecated('Use quit()')
-Msg Quit() => quit();
-@Deprecated('Use interrupt()')
-Msg Interrupt() => interrupt();
-@Deprecated('Use suspend()')
-Msg Suspend() => suspend();
-@Deprecated('Use clearScreen()')
-Msg ClearScreen() => clearScreen();
-@Deprecated('Use requestWindowSize()')
-Msg RequestWindowSize() => requestWindowSize();
-@Deprecated('Use requestTerminalVersion()')
-Msg RequestTerminalVersion() => requestTerminalVersion();
-@Deprecated('Use requestForegroundColor()')
-Msg RequestForegroundColor() => requestForegroundColor();
-@Deprecated('Use requestBackgroundColor()')
-Msg RequestBackgroundColor() => requestBackgroundColor();
-@Deprecated('Use requestCursorColor()')
-Msg RequestCursorColor() => requestCursorColor();
-@Deprecated('Use requestCursorPosition()')
-Msg RequestCursorPosition() => requestCursorPosition();
-@Deprecated('Use requestCapability(...)')
-Cmd RequestCapability(String name) => requestCapability(name);
-@Deprecated('Use setClipboard(...)')
-Cmd SetClipboard(String s) => setClipboard(s);
-@Deprecated('Use readClipboard()')
-Msg ReadClipboard() => readClipboard();
-@Deprecated('Use setPrimaryClipboard(...)')
-Cmd SetPrimaryClipboard(String s) => setPrimaryClipboard(s);
-@Deprecated('Use readPrimaryClipboard()')
-Msg ReadPrimaryClipboard() => readPrimaryClipboard();
-@Deprecated('Use raw(...)')
-Cmd Raw(Object value) => raw(value);
-@Deprecated('Use println(...)')
-Cmd Println([Object? value]) => println(value);
-@Deprecated('Use printf(...)')
-Cmd Printf(String template, [List<Object?> args = const []]) =>
-    printf(template, args);

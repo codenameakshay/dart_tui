@@ -51,6 +51,18 @@ fvm dart run example/prompts_chain.dart
 
 Note: prompt demos are interactive TTY flows; piped stdin can produce partial/early input consumption.
 
+## Breaking Changes (Current Branch)
+
+- Removed legacy Go-style API aliases (`Batch`, `Sequence`, `Quit`, `Println`, `WithInput`, etc.).
+- Use canonical lowercase APIs instead (`batch`, `sequence`, `quit`, `println`, `withInput`, etc.).
+- `request*` commands now emit real terminal protocol queries and rely on decoder responses.
+
+For deterministic interactive smoke checks, run:
+
+```bash
+python3 tool/pty_examples_smoke.py
+```
+
 ## Core concepts
 
 | Concept | Role |

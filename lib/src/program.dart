@@ -1,5 +1,3 @@
-// ignore_for_file: non_constant_identifier_names
-
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -48,10 +46,6 @@ ProgramOption withContext(Future<void> Function() cancellation) {
   };
 }
 
-@Deprecated('Use withContext(...)')
-ProgramOption WithContext(Future<void> Function() cancellation) =>
-    withContext(cancellation);
-
 ProgramOption withInput(Stream<List<int>>? input) {
   return (p) {
     p._input = input;
@@ -59,26 +53,17 @@ ProgramOption withInput(Stream<List<int>>? input) {
   };
 }
 
-@Deprecated('Use withInput(...)')
-ProgramOption WithInput(Stream<List<int>>? input) => withInput(input);
-
 ProgramOption withOutput(IOSink output) {
   return (p) {
     p._output = output;
   };
 }
 
-@Deprecated('Use withOutput(...)')
-ProgramOption WithOutput(IOSink output) => withOutput(output);
-
 ProgramOption withEnvironment(Map<String, String> env) {
   return (p) {
     p._environment = Map<String, String>.unmodifiable(env);
   };
 }
-
-@Deprecated('Use withEnvironment(...)')
-ProgramOption WithEnvironment(Map<String, String> env) => withEnvironment(env);
 
 ProgramOption withoutSignalHandler() => (p) => p._disableSignalHandler = true;
 ProgramOption withoutCatchPanics() => (p) => p._disableCatchPanics = true;
@@ -94,24 +79,6 @@ ProgramOption withWindowSize(int width, int height) {
     p._height = height;
   };
 }
-
-@Deprecated('Use withoutSignalHandler()')
-ProgramOption WithoutSignalHandler() => withoutSignalHandler();
-@Deprecated('Use withoutCatchPanics()')
-ProgramOption WithoutCatchPanics() => withoutCatchPanics();
-@Deprecated('Use withoutRenderer()')
-ProgramOption WithoutRenderer() => withoutRenderer();
-@Deprecated('Use withFilter(...)')
-ProgramOption WithFilter(Msg? Function(Model model, Msg msg) filter) =>
-    withFilter(filter);
-@Deprecated('Use withFps(...)')
-ProgramOption WithFps(int fps) => withFps(fps);
-@Deprecated('Use withColorProfile(...)')
-ProgramOption WithColorProfile(ColorProfile profile) =>
-    withColorProfile(profile);
-@Deprecated('Use withWindowSize(...)')
-ProgramOption WithWindowSize(int width, int height) =>
-    withWindowSize(width, height);
 
 final class Program {
   Program({
@@ -290,22 +257,28 @@ final class Program {
           return;
         case RequestForegroundColorMsg():
           _output.write('\x1b]10;?\x07');
+          if (_disableInput) enqueue(ForegroundColorMsg(0xFFFFFF));
           return;
         case RequestBackgroundColorMsg():
           _output.write('\x1b]11;?\x07');
+          if (_disableInput) enqueue(BackgroundColorMsg(0x000000));
           return;
         case RequestCursorColorMsg():
           _output.write('\x1b]12;?\x07');
+          if (_disableInput) enqueue(CursorColorMsg(0xFFFFFF));
           return;
         case RequestCursorPositionMsg():
           _output.write('\x1b[6n');
+          if (_disableInput) enqueue(CursorPositionMsg(x: 0, y: 0));
           return;
         case RequestTerminalVersionMsg():
           _output.write('\x1b[>0c');
+          if (_disableInput) enqueue(TerminalVersionMsg('unknown'));
           return;
         case RequestCapabilityMsg():
           final encoded = _hexEncode(msg.name);
           _output.write('\x1bP+q$encoded\x1b\\');
+          if (_disableInput) enqueue(CapabilityMsg('${msg.name}=unknown'));
           return;
         case SetClipboardMsg():
           _output.write('\x1b]52;c;${_base64(msg.value)}\x07');
@@ -436,7 +409,6 @@ final class Program {
     _logSink = null;
     _finished?.complete();
   }
-
 }
 
 String _formatProgram(String template, List<Object?> args) {

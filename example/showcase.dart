@@ -1,6 +1,6 @@
 // Comprehensive interactive demo of dart_tui APIs.
 // Run from package root:
-//   dart run example/showcase.dart
+//   fvm dart run example/showcase.dart
 
 import 'package:dart_tui/dart_tui.dart';
 
@@ -294,7 +294,7 @@ ${TuiStyle.bold}Prompts API${TuiStyle.reset}
   • promptInput(label)     → Future<String?>
 
 Run:
-  dart run example/prompts_chain.dart
+  fvm dart run example/prompts_chain.dart
 
 Prompts run their own Program instances, so this showcase keeps them as
 documentation to avoid nested terminal sessions.
@@ -402,27 +402,27 @@ final class CommandEventsModel extends TeaModel {
         case 'p':
           return (
             _next('Pressed p → Println command dispatched'),
-            Println('showcase: println from command'),
+            println('showcase: println from command'),
           );
         case 'r':
           return (
             _next('Pressed r → raw command dispatched'),
-            Raw('\x1b[5n'),
+            raw('\x1b[5n'),
           );
         case 'w':
           return (
-            _next('Pressed w → RequestWindowSize'),
-            () => RequestWindowSize()
+            _next('Pressed w → requestWindowSize'),
+            () => requestWindowSize()
           );
         case 'f':
           return (
-            _next('Pressed f → RequestForegroundColor'),
-            () => RequestForegroundColor()
+            _next('Pressed f → requestForegroundColor'),
+            () => requestForegroundColor()
           );
         case 'c':
           return (
-            _next('Pressed c → RequestCapability(Tc)'),
-            RequestCapability('Tc'),
+            _next('Pressed c → requestCapability("Tc")'),
+            requestCapability('Tc'),
           );
         default:
           return (_next('Key: ${msg.key}'), null);
@@ -463,11 +463,11 @@ final class CommandEventsModel extends TeaModel {
     final b = StringBuffer()
       ..writeln('${TuiStyle.bold}Command + Event Demo${TuiStyle.reset}')
       ..writeln('Press keys:')
-      ..writeln('  p = Println')
-      ..writeln('  r = Raw')
-      ..writeln('  w = RequestWindowSize')
-      ..writeln('  f = RequestForegroundColor')
-      ..writeln('  c = RequestCapability("Tc")')
+      ..writeln('  p = println')
+      ..writeln('  r = raw')
+      ..writeln('  w = requestWindowSize')
+      ..writeln('  f = requestForegroundColor')
+      ..writeln('  c = requestCapability("Tc")')
       ..writeln()
       ..writeln('Recent events:')
       ..writeln('--------------');

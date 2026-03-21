@@ -1,6 +1,6 @@
 // One-file, detailed tour of current dart_tui APIs.
 // Run:
-//   dart run example/all_features.dart
+//   fvm dart run example/all_features.dart
 
 import 'package:dart_tui/dart_tui.dart';
 
@@ -82,17 +82,17 @@ final class AllFeaturesModel extends TeaModel {
         case 'p':
           return (
             _copyWith(logs: _push('Println command sent')),
-            Println('all_features: println'),
+            println('all_features: println'),
           );
         case 'w':
           return (
             _copyWith(logs: _push('RequestWindowSize command sent')),
-            () => RequestWindowSize()
+            () => requestWindowSize()
           );
         case 'f':
           return (
             _copyWith(logs: _push('RequestForegroundColor command sent')),
-            () => RequestForegroundColor()
+            () => requestForegroundColor()
           );
         default:
           if (msg.key.length == 1) {
@@ -209,9 +209,9 @@ $help
 
   String _commands() => '''
 Press:
-  • p => Println
-  • w => RequestWindowSize
-  • f => RequestForegroundColor
+  • p => println
+  • w => requestWindowSize
+  • f => requestForegroundColor
 
 Recent command/event log:
 ${logs.isEmpty ? '  (none yet)' : logs.map((e) => '  - $e').join('\n')}

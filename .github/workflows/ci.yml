@@ -6,8 +6,12 @@ on:
   pull_request:
 
 jobs:
-  analyze:
-    runs-on: ubuntu-latest
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: dart-lang/setup-dart@v1
@@ -17,3 +21,4 @@ jobs:
       - run: dart analyze
       - run: dart format --output=none --set-exit-if-changed .
       - run: dart test
+      - run: python3 tool/pty_examples_smoke.py

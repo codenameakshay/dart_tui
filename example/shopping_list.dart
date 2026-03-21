@@ -1,5 +1,5 @@
 // Bubble Tea shopping-list tutorial ported to dart_tui.
-// Run from package root: dart run example/shopping_list.dart
+// Run from package root: fvm dart run example/shopping_list.dart
 
 import 'package:dart_tui/dart_tui.dart';
 

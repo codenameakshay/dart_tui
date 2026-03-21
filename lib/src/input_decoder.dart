@@ -65,6 +65,14 @@ final class TerminalInputDecoder {
         continue;
       }
 
+      final dcs = _tryParseDcs(_buffer);
+      if (dcs == _ParseState.partial) break;
+      if (dcs case _ParsedMessages(:final consumed, :final msgs)) {
+        _consume(consumed);
+        out.addAll(msgs);
+        continue;
+      }
+
       final csi = _tryParseCsi(_buffer);
       if (csi == _ParseState.partial) break;
       if (csi case _ParsedMessages(:final consumed, :final msgs)) {
@@ -100,11 +108,10 @@ sealed class _ParseResult {
 }
 
 final class _ParseState extends _ParseResult {
-  const _ParseState._(this.kind);
-  final int kind;
+  const _ParseState._();
 
-  static const _ParseState none = _ParseState._(0);
-  static const _ParseState partial = _ParseState._(1);
+  static const _ParseState none = _ParseState._();
+  static const _ParseState partial = _ParseState._();
 }
 
 final class _ParsedMessages extends _ParseResult {
@@ -190,8 +197,7 @@ List<Msg> _decodeCsi(String seq) {
     return [TerminalVersionMsg(seq.substring(1, seq.length - 1))];
   }
 
-  if (seq.startsWith('<') &&
-      (seq.endsWith('M') || seq.endsWith('m'))) {
+  if (seq.startsWith('<') && (seq.endsWith('M') || seq.endsWith('m'))) {
     final release = seq.endsWith('m');
     final body = seq.substring(1, seq.length - 1);
     final parts = body.split(';');
@@ -246,6 +252,47 @@ _ParseResult _tryParseOsc(List<int> buffer) {
   return _ParseState.partial;
 }
 
+_ParseResult _tryParseDcs(List<int> buffer) {
+  if (buffer.length < 2) return _ParseState.none;
+  if (buffer[0] != 0x1b || buffer[1] != 0x50) return _ParseState.none;
+
+  var i = 2;
+  while (i < buffer.length) {
+    final b = buffer[i];
+    if (b == 0x1b) {
+      if (i + 1 >= buffer.length) return _ParseState.partial;
+      if (buffer[i + 1] == 0x5c) {
+        final seq = String.fromCharCodes(buffer.sublist(2, i));
+        return _ParsedMessages(consumed: i + 2, msgs: _decodeDcs(seq));
+      }
+    }
+    i++;
+  }
+  return _ParseState.partial;
+}
+
+List<Msg> _decodeDcs(String seq) {
+  final marker = seq.indexOf('+r');
+  if (marker == -1) return const <Msg>[];
+  var payload = seq.substring(marker + 2);
+  if (payload.startsWith(';')) {
+    payload = payload.substring(1);
+  }
+  if (payload.isEmpty) return const <Msg>[];
+
+  final eq = payload.indexOf('=');
+  if (eq == -1) {
+    final name = _decodeHexAscii(payload);
+    return [CapabilityMsg(name ?? payload)];
+  }
+
+  final nameHex = payload.substring(0, eq);
+  final valueHex = payload.substring(eq + 1);
+  final name = _decodeHexAscii(nameHex) ?? nameHex;
+  final value = _decodeHexAscii(valueHex) ?? valueHex;
+  return [CapabilityMsg('$name=$value')];
+}
+
 List<Msg> _decodeOsc(String seq) {
   if (seq.startsWith('10;')) {
     final rgb = _parseOscRgb(seq.substring(3));
@@ -281,6 +328,18 @@ List<Msg> _decodeOsc(String seq) {
   }
 
   return const <Msg>[];
+}
+
+String? _decodeHexAscii(String text) {
+  if (text.isEmpty || text.length.isOdd) return null;
+  final bytes = <int>[];
+  for (var i = 0; i < text.length; i += 2) {
+    final part = text.substring(i, i + 2);
+    final value = int.tryParse(part, radix: 16);
+    if (value == null) return null;
+    bytes.add(value);
+  }
+  return utf8.decode(bytes, allowMalformed: true);
 }
 
 int? _parseOscRgb(String text) {
