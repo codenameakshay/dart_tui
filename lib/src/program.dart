@@ -350,7 +350,9 @@ final class Program {
         default:
       }
 
-      if (msg is ModeReportMsg && msg.mode == 2026 && (msg.value == 1 || msg.value == 2)) {
+      if (msg is ModeReportMsg &&
+          msg.mode == 2026 &&
+          (msg.value == 1 || msg.value == 2)) {
         _renderer?.setSyncUpdates(true);
       }
       final (nextModel, cmd) = model.update(msg);

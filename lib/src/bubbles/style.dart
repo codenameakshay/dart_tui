@@ -68,7 +68,8 @@ final class Style {
   Style withMaxWidth(int? value) => copyWith(maxWidth: value);
   Style withMaxHeight(int? value) => copyWith(maxHeight: value);
   Style withAlign(Align value) => copyWith(align: value);
-  Style withAlignVertical(AlignVertical value) => copyWith(alignVertical: value);
+  Style withAlignVertical(AlignVertical value) =>
+      copyWith(alignVertical: value);
   Style withInline(bool value) => copyWith(inline: value);
   Style withProfile(ColorProfile? value) => copyWith(profile: value);
   Style withAdaptiveForeground(AdaptiveColor value) =>
@@ -156,7 +157,8 @@ final class Style {
     for (final line in lines) {
       final vis = _visibleWidth(line);
       final padRight = maxW - vis;
-      out.add('${' ' * padding.left}$line${' ' * padRight}${' ' * padding.right}');
+      out.add(
+          '${' ' * padding.left}$line${' ' * padRight}${' ' * padding.right}');
     }
     for (var i = 0; i < padding.bottom; i++) {
       out.add(' ' * innerWidth);
@@ -181,14 +183,17 @@ final class Style {
 
     // Alignment (horizontal) applied before padding to target width
     if (align != Align.left && result.isNotEmpty) {
-      final effectiveWidth = width ?? (result.fold<int>(
-        0,
-        (m, l) {
-          final w = _visibleWidth(l);
-          return w > m ? w : m;
-        },
-      ));
-      result = result.map((line) => _alignLine(line, effectiveWidth, align)).toList();
+      final effectiveWidth = width ??
+          (result.fold<int>(
+            0,
+            (m, l) {
+              final w = _visibleWidth(l);
+              return w > m ? w : m;
+            },
+          ));
+      result = result
+          .map((line) => _alignLine(line, effectiveWidth, align))
+          .toList();
     } else if (width != null) {
       // Left-align: pad to width
       result = result.map((line) {
@@ -325,7 +330,8 @@ final class Style {
 
     if (adaptive != null) {
       // Use background luminance to choose light/dark variant
-      final bgRgb = backgroundRgb ?? (background256 != null ? _ansi256ToRgb(background256!) : null);
+      final bgRgb = backgroundRgb ??
+          (background256 != null ? _ansi256ToRgb(background256!) : null);
       final isDark = bgRgb == null || _isDarkBackground(bgRgb);
       rgb = isDark ? adaptive.dark : adaptive.light;
     } else if (explicitRgb != null) {
@@ -369,7 +375,9 @@ final class Style {
     if (index < 8) {
       return foreground ? '\x1b[${30 + index}m' : '\x1b[${40 + index}m';
     } else {
-      return foreground ? '\x1b[${90 + index - 8}m' : '\x1b[${100 + index - 8}m';
+      return foreground
+          ? '\x1b[${90 + index - 8}m'
+          : '\x1b[${100 + index - 8}m';
     }
   }
 }
@@ -411,11 +419,21 @@ RgbColor _ansi256ToRgb(int idx) {
   if (idx < 16) {
     // Standard ANSI 16 colors (approximate)
     const colors = [
-      RgbColor(0, 0, 0), RgbColor(128, 0, 0), RgbColor(0, 128, 0),
-      RgbColor(128, 128, 0), RgbColor(0, 0, 128), RgbColor(128, 0, 128),
-      RgbColor(0, 128, 128), RgbColor(192, 192, 192), RgbColor(128, 128, 128),
-      RgbColor(255, 0, 0), RgbColor(0, 255, 0), RgbColor(255, 255, 0),
-      RgbColor(0, 0, 255), RgbColor(255, 0, 255), RgbColor(0, 255, 255),
+      RgbColor(0, 0, 0),
+      RgbColor(128, 0, 0),
+      RgbColor(0, 128, 0),
+      RgbColor(128, 128, 0),
+      RgbColor(0, 0, 128),
+      RgbColor(128, 0, 128),
+      RgbColor(0, 128, 128),
+      RgbColor(192, 192, 192),
+      RgbColor(128, 128, 128),
+      RgbColor(255, 0, 0),
+      RgbColor(0, 255, 0),
+      RgbColor(255, 255, 0),
+      RgbColor(0, 0, 255),
+      RgbColor(255, 0, 255),
+      RgbColor(0, 255, 255),
       RgbColor(255, 255, 255),
     ];
     return colors[idx];
@@ -439,11 +457,21 @@ RgbColor _ansi256ToRgb(int idx) {
 int _nearestAnsi16(RgbColor rgb) {
   // Full 16-color palette (0-7 standard, 8-15 bright)
   const palette = [
-    RgbColor(0, 0, 0), RgbColor(128, 0, 0), RgbColor(0, 128, 0),
-    RgbColor(128, 128, 0), RgbColor(0, 0, 128), RgbColor(128, 0, 128),
-    RgbColor(0, 128, 128), RgbColor(192, 192, 192), RgbColor(128, 128, 128),
-    RgbColor(255, 0, 0), RgbColor(0, 255, 0), RgbColor(255, 255, 0),
-    RgbColor(0, 0, 255), RgbColor(255, 0, 255), RgbColor(0, 255, 255),
+    RgbColor(0, 0, 0),
+    RgbColor(128, 0, 0),
+    RgbColor(0, 128, 0),
+    RgbColor(128, 128, 0),
+    RgbColor(0, 0, 128),
+    RgbColor(128, 0, 128),
+    RgbColor(0, 128, 128),
+    RgbColor(192, 192, 192),
+    RgbColor(128, 128, 128),
+    RgbColor(255, 0, 0),
+    RgbColor(0, 255, 0),
+    RgbColor(255, 255, 0),
+    RgbColor(0, 0, 255),
+    RgbColor(255, 0, 255),
+    RgbColor(0, 255, 255),
     RgbColor(255, 255, 255),
   ];
   // Map bright indices (8-15) back to standard (0-7) for code generation
@@ -540,10 +568,12 @@ String joinHorizontal(double alignment, List<String> blocks) {
 
   final split = blocks.map((b) => b.split('\n')).toList();
   final maxLines = split.fold<int>(0, (m, l) => l.length > m ? l.length : m);
-  final widths = split.map((l) => l.fold<int>(0, (m, s) {
-    final w = _visibleWidth(s);
-    return w > m ? w : m;
-  })).toList();
+  final widths = split
+      .map((l) => l.fold<int>(0, (m, s) {
+            final w = _visibleWidth(s);
+            return w > m ? w : m;
+          }))
+      .toList();
 
   // Pad each block to maxLines
   final padded = List.generate(split.length, (bi) {

@@ -33,7 +33,8 @@ final class StopwatchModel extends TeaModel {
 
   StopwatchModel start() => copyWith(running: true);
   StopwatchModel stop() => copyWith(running: false);
-  StopwatchModel reset() => copyWith(elapsed: Duration.zero, clearLastTick: true, running: false);
+  StopwatchModel reset() =>
+      copyWith(elapsed: Duration.zero, clearLastTick: true, running: false);
 
   @override
   (Model, Cmd?) update(Msg msg) {

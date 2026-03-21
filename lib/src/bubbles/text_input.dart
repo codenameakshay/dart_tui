@@ -115,7 +115,10 @@ final class TextInputModel extends TeaModel {
       case 'tab':
         final suggestion = _activeSuggestion;
         if (suggestion != null) {
-          return (copyWith(value: suggestion, cursorPos: suggestion.length), null);
+          return (
+            copyWith(value: suggestion, cursorPos: suggestion.length),
+            null
+          );
         }
         return (this, null);
 
@@ -132,8 +135,9 @@ final class TextInputModel extends TeaModel {
         if (!focused) return (this, null);
         if (msg.key.length == 1) {
           if (charLimit > 0 && value.length >= charLimit) return (this, null);
-          final newValue =
-              value.substring(0, cursorPos) + msg.key + value.substring(cursorPos);
+          final newValue = value.substring(0, cursorPos) +
+              msg.key +
+              value.substring(cursorPos);
           return (copyWith(value: newValue, cursorPos: cursorPos + 1), null);
         }
         return (this, null);

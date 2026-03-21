@@ -20,10 +20,8 @@ final class HelpModel extends TeaModel {
     String title = 'Help',
     bool showBorder = false,
   }) {
-    final entries = map.bindings
-        .where((b) => b.enabled)
-        .map((b) => b.help)
-        .toList();
+    final entries =
+        map.bindings.where((b) => b.enabled).map((b) => b.help).toList();
     return HelpModel(entries: entries, title: title, showBorder: showBorder);
   }
 

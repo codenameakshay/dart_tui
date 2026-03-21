@@ -51,7 +51,8 @@ final class TableModel extends TeaModel {
       );
 
   TableModel _moveCursor(int delta) {
-    final newCursor = (cursor + delta).clamp(0, rows.isEmpty ? 0 : rows.length - 1);
+    final newCursor =
+        (cursor + delta).clamp(0, rows.isEmpty ? 0 : rows.length - 1);
     var newOffset = scrollOffset;
     if (newCursor < newOffset) newOffset = newCursor;
     if (newCursor >= newOffset + height) newOffset = newCursor - height + 1;

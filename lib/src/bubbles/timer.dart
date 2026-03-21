@@ -43,7 +43,8 @@ final class TimerModel extends TeaModel {
 
   TimerModel start() => copyWith(running: true);
   TimerModel stop() => copyWith(running: false);
-  TimerModel reset() => copyWith(elapsed: Duration.zero, clearLastTick: true, running: false);
+  TimerModel reset() =>
+      copyWith(elapsed: Duration.zero, clearLastTick: true, running: false);
 
   @override
   (Model, Cmd?) update(Msg msg) {

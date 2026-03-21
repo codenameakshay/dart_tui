@@ -22,7 +22,8 @@ final class ViewportModel extends TeaModel {
   final bool softWrap;
   final List<String> _wrappedLines;
 
-  static List<String> _computeWrapped(String content, int width, bool softWrap) {
+  static List<String> _computeWrapped(
+      String content, int width, bool softWrap) {
     if (content.isEmpty) return const [''];
     final lines = content.split('\n');
     if (!softWrap) return lines;
@@ -33,7 +34,8 @@ final class ViewportModel extends TeaModel {
       } else {
         var start = 0;
         while (start < line.length) {
-          result.add(line.substring(start, (start + width).clamp(0, line.length)));
+          result.add(
+              line.substring(start, (start + width).clamp(0, line.length)));
           start += width;
         }
       }
@@ -100,7 +102,9 @@ final class ViewportModel extends TeaModel {
       case 'G':
         return (scrollTo(totalLines), null);
       case 'left':
-        if (!softWrap) return (_rebuild(xOffset: (xOffset - 1).clamp(0, 9999)), null);
+        if (!softWrap) {
+          return (_rebuild(xOffset: (xOffset - 1).clamp(0, 9999)), null);
+        }
         return (this, null);
       case 'right':
         if (!softWrap) return (_rebuild(xOffset: xOffset + 1), null);
@@ -113,7 +117,8 @@ final class ViewportModel extends TeaModel {
   @override
   View view() {
     final end = (yOffset + height).clamp(0, _wrappedLines.length);
-    final visible = _wrappedLines.sublist(yOffset.clamp(0, _wrappedLines.length), end);
+    final visible =
+        _wrappedLines.sublist(yOffset.clamp(0, _wrappedLines.length), end);
     if (!softWrap && xOffset > 0) {
       return newView(visible.map((l) {
         if (l.length <= xOffset) return '';

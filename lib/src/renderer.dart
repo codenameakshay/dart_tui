@@ -74,8 +74,9 @@ final class AnsiRenderer implements TeaRenderer {
     }
 
     if (_syncUpdates) _output.write('\x1b[?2026h');
-    final maxRows =
-        nextLines.length > _lastLines.length ? nextLines.length : _lastLines.length;
+    final maxRows = nextLines.length > _lastLines.length
+        ? nextLines.length
+        : _lastLines.length;
     for (var row = 0; row < maxRows; row++) {
       final next = row < nextLines.length ? nextLines[row] : '';
       final prev = row < _lastLines.length ? _lastLines[row] : '';
@@ -110,14 +111,14 @@ final class AnsiRenderer implements TeaRenderer {
       return;
     }
     // In alt-screen: save cursor, scroll up to create space, write at top, restore
-    _output.write('\x1b[s');      // save cursor position
-    _output.write('\x1b[1;1H');   // move to top-left
-    _output.write('\x1b[S');      // scroll up one line (creates blank row at bottom)
-    _output.write('\x1b[1;1H');   // back to top-left
+    _output.write('\x1b[s'); // save cursor position
+    _output.write('\x1b[1;1H'); // move to top-left
+    _output.write('\x1b[S'); // scroll up one line (creates blank row at bottom)
+    _output.write('\x1b[1;1H'); // back to top-left
     _output.write(line);
-    _output.write('\x1b[K');      // clear to end of line
-    _output.write('\x1b[u');      // restore cursor position
-    _hasRenderedFrame = false;    // invalidate diff cache
+    _output.write('\x1b[K'); // clear to end of line
+    _output.write('\x1b[u'); // restore cursor position
+    _hasRenderedFrame = false; // invalidate diff cache
   }
 
   @override
@@ -203,8 +204,9 @@ final class AnsiRenderer implements TeaRenderer {
 /// A single terminal cell: one grapheme cluster plus the active SGR state.
 final class _Cell {
   const _Cell(this.char, this.attrs);
-  final String char;   // one grapheme cluster (may be multi-byte)
-  final String attrs;  // the CSI SGR sequence(s) active at this cell, e.g. '\x1b[1;32m'
+  final String char; // one grapheme cluster (may be multi-byte)
+  final String
+      attrs; // the CSI SGR sequence(s) active at this cell, e.g. '\x1b[1;32m'
 
   @override
   bool operator ==(Object other) =>
@@ -213,14 +215,6 @@ final class _Cell {
   @override
   int get hashCode => Object.hash(char, attrs);
 }
-
-/// Strips all ANSI/VT escape sequences from [s].
-String _stripAnsi(String s) =>
-    s.replaceAll(RegExp(r'\x1b(?:\[[0-9;?]*[A-Za-z]|[\]\(][^\x07]*\x07|\[[\d;]*m)'), '');
-
-/// Measures the display width of [s] after stripping ANSI codes.
-/// Uses [characters] for correct Unicode grapheme cluster counting.
-int _ansiAwareWidth(String s) => _stripAnsi(s).characters.length;
 
 /// Renderer that diffs at the individual cell level, emitting precise
 /// cursor-move + character-write sequences only for changed cells.
@@ -356,19 +350,24 @@ final class CellRenderer implements TeaRenderer {
   /// Emit only the cells that differ from [_lastGrid].
   void _diffAndEmit(List<List<_Cell>> next) {
     final prev = _lastGrid;
-    final rows = next.length > (prev?.length ?? 0) ? next.length : (prev?.length ?? 0);
+    final rows =
+        next.length > (prev?.length ?? 0) ? next.length : (prev?.length ?? 0);
     var lastRow = -1;
     var lastCol = -1;
     var lastAttrs = '';
 
     for (var row = 0; row < rows; row++) {
       final nextRow = row < next.length ? next[row] : const <_Cell>[];
-      final prevRow = (prev != null && row < prev.length) ? prev[row] : const <_Cell>[];
-      final cols = nextRow.length > prevRow.length ? nextRow.length : prevRow.length;
+      final prevRow =
+          (prev != null && row < prev.length) ? prev[row] : const <_Cell>[];
+      final cols =
+          nextRow.length > prevRow.length ? nextRow.length : prevRow.length;
 
       for (var col = 0; col < cols; col++) {
-        final nextCell = col < nextRow.length ? nextRow[col] : const _Cell(' ', '');
-        final prevCell = col < prevRow.length ? prevRow[col] : const _Cell(' ', '');
+        final nextCell =
+            col < nextRow.length ? nextRow[col] : const _Cell(' ', '');
+        final prevCell =
+            col < prevRow.length ? prevRow[col] : const _Cell(' ', '');
 
         if (nextCell == prevCell) continue;
 
@@ -456,7 +455,9 @@ final class _EscSeq {
 /// Returns the raw sequence, its length, and whether it's an SGR sequence.
 _EscSeq _consumeEscape(String s, int start) {
   // Expect s[start] == '\x1b'
-  if (start + 1 >= s.length) return _EscSeq(raw: '\x1b', length: 1, isSgr: false);
+  if (start + 1 >= s.length) {
+    return const _EscSeq(raw: '\x1b', length: 1, isSgr: false);
+  }
 
   final next = s[start + 1];
   if (next == '[') {
@@ -473,7 +474,9 @@ _EscSeq _consumeEscape(String s, int start) {
   } else if (next == ']') {
     // OSC sequence: \x1b] ... BEL or ST
     var i = start + 2;
-    while (i < s.length && s[i] != '\x07' && !(s[i] == '\x1b' && i + 1 < s.length && s[i + 1] == '\\')) {
+    while (i < s.length &&
+        s[i] != '\x07' &&
+        !(s[i] == '\x1b' && i + 1 < s.length && s[i + 1] == '\\')) {
       i++;
     }
     if (i < s.length) i++; // include BEL

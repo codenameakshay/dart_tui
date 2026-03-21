@@ -101,7 +101,8 @@ final class FilePickerModel extends TeaModel {
   }
 
   FilePickerModel _moveCursor(int delta) {
-    final newCursor = (cursor + delta).clamp(0, entries.isEmpty ? 0 : entries.length - 1);
+    final newCursor =
+        (cursor + delta).clamp(0, entries.isEmpty ? 0 : entries.length - 1);
     var newOffset = scrollOffset;
     if (newCursor < newOffset) newOffset = newCursor;
     if (newCursor >= newOffset + height) newOffset = newCursor - height + 1;
@@ -112,7 +113,11 @@ final class FilePickerModel extends TeaModel {
   (Model, Cmd?) update(Msg msg) {
     switch (msg) {
       case _DirLoadedMsg(:final entries):
-        return (copyWith(entries: entries, cursor: 0, scrollOffset: 0, loading: false), null);
+        return (
+          copyWith(
+              entries: entries, cursor: 0, scrollOffset: 0, loading: false),
+          null
+        );
 
       case KeyMsg():
         switch (msg.key) {

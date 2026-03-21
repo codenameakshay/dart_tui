@@ -1,4 +1,6 @@
 /// Bubbles component library barrel export.
+library;
+
 export 'bubbles/file_picker.dart';
 export 'bubbles/help.dart';
 export 'bubbles/key_map.dart';
