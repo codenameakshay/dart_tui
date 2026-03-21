@@ -1,17 +1,15 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
-import 'dart:isolate';
 
 import 'package:dart_console/dart_console.dart';
 import 'package:meta/meta.dart';
 
 import 'cmd.dart';
+import 'key_buffer_parser.dart';
 import 'key_util.dart';
 import 'model.dart';
 import 'msg.dart';
-
-const _tickSentinel = '__dart_tui_tick__';
 
 /// Options for [Program].
 @immutable
@@ -29,8 +27,10 @@ class ProgramOptions {
   /// Hide the caret while the program runs.
   final bool hideCursor;
 
-  /// If set, [Program] races key reads with this interval and emits [TickMsg].
-  /// Needed for spinners/animations without blocking the event loop.
+  /// If set, [Program] emits [TickMsg] on this interval.
+  ///
+  /// Input is read asynchronously from stdin so the event loop can deliver
+  /// [TickMsg] between key events (for spinners and other animations).
   final Duration? tickInterval;
 
   /// Optional append-only debug log (Bubble Tea–style file logging).
@@ -64,16 +64,40 @@ final class Program {
   Future<Object?> _runCore(TeaModel initial) async {
     final queue = Queue<Msg>();
     StreamSubscription<ProcessSignal>? sigSub;
+    StreamSubscription<List<int>>? stdinSub;
+    Timer? tickTimer;
+    Completer<void>? wake;
+    final keyBuffer = <int>[];
+    var shouldExit = false;
+
+    void enqueue(Msg m) {
+      queue.add(m);
+      final w = wake;
+      wake = null;
+      w?.complete();
+    }
+
+    Future<void> waitForActivity() async {
+      while (queue.isEmpty && !shouldExit) {
+        final c = Completer<void>();
+        wake = c;
+        if (queue.isNotEmpty) {
+          wake = null;
+          if (!c.isCompleted) c.complete();
+          continue;
+        }
+        await c.future;
+      }
+    }
 
     void schedule(Cmd? cmd) {
       if (cmd == null) return;
       cmd().then((m) {
-        if (m != null) queue.add(m);
+        if (m != null) enqueue(m);
       });
     }
 
     var model = initial;
-    var exit = false;
 
     void applyOne(Msg msg) {
       if (msg is CompoundMsg) {
@@ -83,7 +107,7 @@ final class Program {
         return;
       }
       if (msg is QuitMsg) {
-        exit = true;
+        shouldExit = true;
         return;
       }
       final result = model.update(msg);
@@ -101,12 +125,14 @@ final class Program {
         stdout.write('\x1b[?25l');
       }
 
+      _console.rawMode = true;
+
       schedule(model.init());
 
       if (!Platform.isWindows) {
         try {
           sigSub = ProcessSignal.sigwinch.watch().listen((_) {
-            queue.add(
+            enqueue(
               WindowSizeMsg(_console.windowWidth, _console.windowHeight),
             );
           });
@@ -115,16 +141,33 @@ final class Program {
         }
       }
 
-      queue.add(
+      enqueue(
         WindowSizeMsg(_console.windowWidth, _console.windowHeight),
       );
 
-      while (!exit) {
+      if (_options.tickInterval != null) {
+        tickTimer = Timer.periodic(_options.tickInterval!, (_) {
+          enqueue(TickMsg(DateTime.now()));
+        });
+      }
+
+      stdinSub = stdin.listen(
+        (data) {
+          keyBuffer.addAll(data);
+          Key? k;
+          while ((k = parseKeyFromBuffer(keyBuffer)) != null) {
+            enqueue(KeyMsg(keyToTeaString(k!)));
+          }
+        },
+        cancelOnError: true,
+      );
+
+      while (!shouldExit) {
         await Future<void>.delayed(Duration.zero);
         while (queue.isNotEmpty) {
           applyOne(queue.removeFirst());
         }
-        if (exit) {
+        if (shouldExit) {
           break;
         }
 
@@ -140,25 +183,7 @@ final class Program {
         }
 
         _render(model.view());
-
-        String? keyOrTick;
-        if (_options.tickInterval != null) {
-          keyOrTick = await Future.any<String?>([
-            _readKeyTeaIsolate(),
-            Future<String?>.delayed(
-              _options.tickInterval!,
-              () => _tickSentinel,
-            ),
-          ]);
-        } else {
-          keyOrTick = await _readKeyTeaIsolate();
-        }
-
-        if (keyOrTick == _tickSentinel) {
-          queue.add(TickMsg(DateTime.now()));
-        } else if (keyOrTick != null) {
-          queue.add(KeyMsg(keyOrTick));
-        }
+        await waitForActivity();
       }
 
       if (model is OutcomeModel) {
@@ -166,6 +191,8 @@ final class Program {
       }
       return null;
     } finally {
+      tickTimer?.cancel();
+      await stdinSub?.cancel();
       await sigSub?.cancel();
       if (_options.hideCursor) {
         stdout.write('\x1b[?25h');
@@ -178,15 +205,6 @@ final class Program {
       await _logSink?.close();
       _logSink = null;
     }
-  }
-
-  /// Reads one key in a short-lived isolate so the main isolate can still run timers.
-  Future<String> _readKeyTeaIsolate() {
-    return Isolate.run(() {
-      final c = Console();
-      final key = c.readKey();
-      return keyToTeaString(key);
-    });
   }
 
   void _render(String view) {

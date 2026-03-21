@@ -39,7 +39,7 @@ Future<String?> promptInput(
   return Program(console: console, options: options).runForResult(model);
 }
 
-final class _SelectPromptModel extends TeaModel implements OutcomeModel<String?> {
+final class _SelectPromptModel extends TeaModel implements OutcomeModel<String> {
   _SelectPromptModel({
     required this.choices,
     required this.title,
@@ -133,7 +133,7 @@ final class _SelectPromptModel extends TeaModel implements OutcomeModel<String?>
   }
 }
 
-final class _ConfirmPromptModel extends TeaModel implements OutcomeModel<bool?> {
+final class _ConfirmPromptModel extends TeaModel implements OutcomeModel<bool> {
   _ConfirmPromptModel({
     required this.question,
     this.result,
@@ -188,7 +188,7 @@ final class _ConfirmPromptModel extends TeaModel implements OutcomeModel<bool?> 
       '$question [y/N]\nY or Enter = yes, N = no, Esc = cancel';
 }
 
-final class _InputPromptModel extends TeaModel implements OutcomeModel<String?> {
+final class _InputPromptModel extends TeaModel implements OutcomeModel<String> {
   _InputPromptModel({
     required this.label,
     this.value = '',

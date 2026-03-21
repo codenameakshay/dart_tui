@@ -1,3 +1,4 @@
+import '../cmd.dart';
 import '../model.dart';
 import '../msg.dart' show Msg;
 

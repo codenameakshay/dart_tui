@@ -1,5 +1,5 @@
 /// Elm-style terminal UIs for Dart, inspired by [Bubble Tea](https://github.com/charmbracelet/bubbletea).
-library dart_tui;
+library;
 
 export 'src/cmd.dart';
 export 'src/key_util.dart';

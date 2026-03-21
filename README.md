@@ -31,6 +31,18 @@ Run it:
 dart run example/shopping_list.dart
 ```
 
+**All components** (shopping list, spinner, progress, text input, select list, `TuiStyle`, prompts info) in one interactive menu:
+
+```bash
+dart run example/showcase.dart
+```
+
+**Prompts** (`promptSelect` / `promptConfirm` / `promptInput`) each run their own `Program`; chain them from a script:
+
+```bash
+dart run example/prompts_chain.dart
+```
+
 ## Core concepts
 
 | Concept | Role |
@@ -40,7 +52,7 @@ dart run example/shopping_list.dart
 | [`Cmd`](lib/src/cmd.dart) | `Future<Msg?>` factory; `batch`, `sequence`, `tick` |
 | [`Program`](lib/src/program.dart) | Event loop, terminal restore, optional `tickInterval` for animations |
 
-Key input is read via a short-lived [`Isolate.run`](https://api.dart.dev/dart-isolate/Isolate/run.html) around `dart_console` so timers can fire between keystrokes when `ProgramOptions.tickInterval` is set.
+Key input is read from stdin on the **main isolate** via a non-blocking byte stream and the same key mapping as [`Console.readKey`](https://pub.dev/documentation/dart_console/latest/dart_console/Console/readKey.html) (see `lib/src/key_buffer_parser.dart`). Stdin is not reliably available to secondary isolates, so input must stay on the main isolate. `ProgramOptions.tickInterval` schedules [TickMsg](lib/src/msg.dart) on a timer; because the loop is not blocked on synchronous reads, ticks run between key events for spinners and similar animations.
 
 ## Prompts (optional)
 
