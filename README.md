@@ -221,6 +221,15 @@ Run any example with:
 dart run example/simple.dart
 ```
 
+For a full gallery with all examples and recordings, see [`example/README.md`](example/README.md).
+
+### GIF previews
+
+![simple](example/tapes/output/simple.gif)
+![spinner](example/tapes/output/spinner.gif)
+![table](example/tapes/output/table.gif)
+![showcase](example/tapes/output/showcase.gif)
+
 ---
 
 ## License
