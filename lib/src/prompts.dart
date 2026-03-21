@@ -92,6 +92,8 @@ final class _SelectPromptModel extends TeaModel implements OutcomeModel<String> 
           null,
         );
       case 'enter':
+      // LF (0x0a) maps to ctrl+j; CR (0x0d) maps to enter — terminals differ.
+      case 'ctrl+j':
         return (
           _SelectPromptModel(
             choices: choices,
@@ -168,6 +170,7 @@ final class _ConfirmPromptModel extends TeaModel implements OutcomeModel<bool> {
           null,
         );
       case 'enter':
+      case 'ctrl+j':
         return (
           _ConfirmPromptModel(question: question, result: true, finished: true),
           null,
@@ -213,6 +216,7 @@ final class _InputPromptModel extends TeaModel implements OutcomeModel<String> {
     if (msg is! KeyMsg) return (this, null);
     switch (msg.key) {
       case 'enter':
+      case 'ctrl+j':
         return (
           _InputPromptModel(
             label: label,

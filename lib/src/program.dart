@@ -11,6 +11,14 @@ import 'key_util.dart';
 import 'model.dart';
 import 'msg.dart';
 
+/// [stdin] is single-subscription; chained [Program.run] / [Program.runForResult]
+/// calls (e.g. prompts) each need a new listener. Wrapping once as broadcast
+/// allows that while keeping a single underlying subscription to stdin.
+Stream<List<int>>? _stdinBroadcastCache;
+
+Stream<List<int>> _stdinBroadcast() =>
+    _stdinBroadcastCache ??= stdin.asBroadcastStream();
+
 /// Options for [Program].
 @immutable
 class ProgramOptions {
@@ -151,7 +159,7 @@ final class Program {
         });
       }
 
-      stdinSub = stdin.listen(
+      stdinSub = _stdinBroadcast().listen(
         (data) {
           keyBuffer.addAll(data);
           Key? k;
