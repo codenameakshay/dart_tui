@@ -11,3 +11,6 @@ pubspec.lock
 # Logs
 *.log
 debug.log
+
+# VHS recorded GIFs
+example/tapes/output/*.gif
