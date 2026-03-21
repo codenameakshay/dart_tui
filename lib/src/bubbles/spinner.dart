@@ -1,6 +1,7 @@
 import '../cmd.dart';
 import '../model.dart';
 import '../msg.dart';
+import '../view.dart';
 
 /// Indeterminate spinner driven by [TickMsg].
 final class SpinnerModel extends TeaModel {
@@ -33,8 +34,8 @@ final class SpinnerModel extends TeaModel {
   }
 
   @override
-  String view() {
-    if (frames.isEmpty) return '$prefix $suffix';
-    return '$prefix${frames[index]}$suffix';
+  View view() {
+    if (frames.isEmpty) return newView('$prefix $suffix');
+    return newView('$prefix${frames[index]}$suffix');
   }
 }

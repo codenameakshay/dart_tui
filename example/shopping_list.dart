@@ -27,9 +27,6 @@ final class ShoppingModel extends TeaModel {
   final bool quitting;
 
   @override
-  bool get quit => quitting;
-
-  @override
   (TeaModel, Cmd?) update(Msg msg) {
     if (msg is WindowSizeMsg || msg is TickMsg) {
       return (this, null);
@@ -40,15 +37,7 @@ final class ShoppingModel extends TeaModel {
     switch (msg.key) {
       case 'ctrl+c':
       case 'q':
-        return (
-          ShoppingModel(
-            choices: choices,
-            cursor: cursor,
-            selected: selected,
-            quitting: true,
-          ),
-          null,
-        );
+        return (this, () => quit());
       case 'up':
       case 'k':
         final c = cursor > 0 ? cursor - 1 : 0;
@@ -85,7 +74,7 @@ final class ShoppingModel extends TeaModel {
   }
 
   @override
-  String view() {
+  View view() {
     final b = StringBuffer('What should we buy at the market?\n\n');
     for (var i = 0; i < choices.length; i++) {
       final cur = cursor == i ? '>' : ' ';
@@ -95,6 +84,6 @@ final class ShoppingModel extends TeaModel {
     b
       ..writeln()
       ..writeln('Press space/enter to toggle, q or ctrl+c to quit.');
-    return b.toString();
+    return newView(b.toString());
   }
 }

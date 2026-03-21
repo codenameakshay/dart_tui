@@ -1,6 +1,7 @@
 import '../cmd.dart';
 import '../model.dart';
 import '../msg.dart' show Msg;
+import '../view.dart';
 
 /// Simple determinate progress bar (0.0–1.0).
 final class ProgressModel extends TeaModel {
@@ -18,10 +19,10 @@ final class ProgressModel extends TeaModel {
   (TeaModel, Cmd?) update(Msg msg) => (this, null);
 
   @override
-  String view() {
+  View view() {
     final filled = (fraction * width).round().clamp(0, width);
     final bar = '${'#' * filled}${'.' * (width - filled)}';
     final pct = (fraction * 100).round();
-    return '${label.isEmpty ? '' : '$label '}$bar $pct%';
+    return newView('${label.isEmpty ? '' : '$label '}$bar $pct%');
   }
 }

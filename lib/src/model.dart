@@ -1,25 +1,26 @@
 import 'cmd.dart';
 import 'msg.dart';
+import 'view.dart';
 
 /// Elm-style model: [init], [update], [view].
 ///
 /// Inspired by [Bubble Tea](https://github.com/charmbracelet/bubbletea).
-abstract class TeaModel {
+abstract class Model {
   /// Optional command to run after the model is first installed.
   Cmd? init() => null;
 
   /// Handle the next message; return the new model and an optional follow-up command.
-  (TeaModel, Cmd?) update(Msg msg);
+  (Model, Cmd?) update(Msg msg);
 
-  /// Render the full screen as a string (newline-terminated lines).
-  String view();
-
-  /// When `true`, [Program] exits the loop after the current frame.
-  bool get quit => false;
+  /// Render the full program state.
+  View view();
 }
 
-/// A model that can signal completion with a value (used by [Program.runForResult]).
-abstract class OutcomeModel<T> implements TeaModel {
+/// Backwards-compatible alias for previous API name.
+typedef TeaModel = Model;
+
+/// Optional model mixin used by prompt-style flows that return a value.
+abstract class OutcomeModel<T> implements Model {
   /// When non-null, [Program] stops the loop and returns this value.
   T? get outcome;
 }

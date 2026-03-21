@@ -38,9 +38,6 @@ final class ShowcaseModel extends TeaModel {
     'Prompts API (how to run)',
   ];
 
-  @override
-  bool get quit => quitting;
-
   ShowcaseModel _copyWith({
     ShowcaseScreen? screen,
     int? menuCursor,
@@ -87,11 +84,6 @@ final class ShowcaseModel extends TeaModel {
     final nextChild = result.$1;
     final cmd = result.$2;
 
-    // ShoppingModel.quit would exit Program — lift to "return to menu" instead.
-    if (screen == ShowcaseScreen.shopping && nextChild is ShoppingModel && nextChild.quit) {
-      return (_copyWith(screen: ShowcaseScreen.menu, clearChild: true), null);
-    }
-
     return (_copyWith(child: nextChild), cmd);
   }
 
@@ -105,7 +97,7 @@ final class ShowcaseModel extends TeaModel {
     switch (msg.key) {
       case 'ctrl+c':
       case 'q':
-        return (_copyWith(quitting: true), null);
+        return (_copyWith(quitting: true), () => quit());
       case 'up':
       case 'k':
         final next = menuCursor > 0 ? menuCursor - 1 : 0;
@@ -189,21 +181,21 @@ final class ShowcaseModel extends TeaModel {
   }
 
   @override
-  String view() {
+  View view() {
     switch (screen) {
       case ShowcaseScreen.menu:
-        return _menuView();
+        return newView(_menuView());
       case ShowcaseScreen.style:
-        return _styleView();
+        return newView(_styleView());
       case ShowcaseScreen.prompts:
-        return _promptsView();
+        return newView(_promptsView());
       case ShowcaseScreen.shopping:
       case ShowcaseScreen.spinner:
       case ShowcaseScreen.progress:
       case ShowcaseScreen.textInput:
       case ShowcaseScreen.selectList:
-        final body = child?.view() ?? '(no model)';
-        return _wrapChild(body);
+        final body = child?.view().content ?? '(no model)';
+        return newView(_wrapChild(body));
     }
   }
 
@@ -215,7 +207,8 @@ final class ShowcaseModel extends TeaModel {
           open: '${TuiStyle.bold}${TuiStyle.fg256(141)}',
         ),
       )
-      ..writeln('${TuiStyle.dim}Select a demo, Enter to open, q to exit.${TuiStyle.reset}')
+      ..writeln(
+          '${TuiStyle.dim}Select a demo, Enter to open, q to exit.${TuiStyle.reset}')
       ..writeln();
     for (var i = 0; i < _menuItems.length; i++) {
       final mark = i == menuCursor ? '>' : ' ';
@@ -299,7 +292,7 @@ final class ProgressDemoModel extends TeaModel {
   }
 
   @override
-  String view() {
+  View view() {
     return ProgressModel(
       fraction: t,
       width: 48,

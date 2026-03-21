@@ -4,6 +4,7 @@ import 'cmd.dart';
 import 'model.dart';
 import 'msg.dart';
 import 'program.dart';
+import 'view.dart';
 
 /// Prompt helpers built on [Program] + [OutcomeModel] (optional sugar).
 
@@ -39,7 +40,8 @@ Future<String?> promptInput(
   return Program(console: console, options: options).runForResult(model);
 }
 
-final class _SelectPromptModel extends TeaModel implements OutcomeModel<String> {
+final class _SelectPromptModel extends TeaModel
+    implements OutcomeModel<String> {
   _SelectPromptModel({
     required this.choices,
     required this.title,
@@ -57,7 +59,6 @@ final class _SelectPromptModel extends TeaModel implements OutcomeModel<String> 
   @override
   String? get outcome => result;
 
-  @override
   bool get quit => finished;
 
   int get _c => cursor.clamp(0, choices.length - 1);
@@ -122,8 +123,10 @@ final class _SelectPromptModel extends TeaModel implements OutcomeModel<String> 
   }
 
   @override
-  String view() {
-    final b = StringBuffer(title)..writeln()..writeln();
+  View view() {
+    final b = StringBuffer(title)
+      ..writeln()
+      ..writeln();
     final cur = _c;
     for (var i = 0; i < choices.length; i++) {
       final mark = i == cur ? '>' : ' ';
@@ -131,7 +134,7 @@ final class _SelectPromptModel extends TeaModel implements OutcomeModel<String> 
     }
     b.writeln();
     b.write('↑/↓ navigate, Enter confirm, Esc cancel');
-    return b.toString();
+    return newView(b.toString());
   }
 }
 
@@ -149,7 +152,6 @@ final class _ConfirmPromptModel extends TeaModel implements OutcomeModel<bool> {
   @override
   bool? get outcome => result;
 
-  @override
   bool get quit => finished;
 
   @override
@@ -166,7 +168,8 @@ final class _ConfirmPromptModel extends TeaModel implements OutcomeModel<bool> {
       case 'n':
       case 'N':
         return (
-          _ConfirmPromptModel(question: question, result: false, finished: true),
+          _ConfirmPromptModel(
+              question: question, result: false, finished: true),
           null,
         );
       case 'enter':
@@ -187,8 +190,8 @@ final class _ConfirmPromptModel extends TeaModel implements OutcomeModel<bool> {
   }
 
   @override
-  String view() =>
-      '$question [y/N]\nY or Enter = yes, N = no, Esc = cancel';
+  View view() =>
+      newView('$question [y/N]\nY or Enter = yes, N = no, Esc = cancel');
 }
 
 final class _InputPromptModel extends TeaModel implements OutcomeModel<String> {
@@ -207,7 +210,6 @@ final class _InputPromptModel extends TeaModel implements OutcomeModel<String> {
   @override
   String? get outcome => result;
 
-  @override
   bool get quit => finished;
 
   @override
@@ -263,5 +265,5 @@ final class _InputPromptModel extends TeaModel implements OutcomeModel<String> {
   }
 
   @override
-  String view() => '$label $value█';
+  View view() => newView('$label $value█');
 }

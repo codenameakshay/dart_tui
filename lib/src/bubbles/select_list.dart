@@ -1,6 +1,7 @@
 import '../cmd.dart';
 import '../model.dart';
 import '../msg.dart';
+import '../view.dart';
 
 /// Vertical list with a cursor (arrow keys). Reusable building block.
 final class SelectListModel extends TeaModel {
@@ -24,19 +25,25 @@ final class SelectListModel extends TeaModel {
       case 'k':
         final c = _safeCursor;
         final next = c > 0 ? c - 1 : 0;
-        return (SelectListModel(items: items, cursor: next, title: title), null);
+        return (
+          SelectListModel(items: items, cursor: next, title: title),
+          null
+        );
       case 'down':
       case 'j':
         final c = _safeCursor;
         final next = c < items.length - 1 ? c + 1 : items.length - 1;
-        return (SelectListModel(items: items, cursor: next, title: title), null);
+        return (
+          SelectListModel(items: items, cursor: next, title: title),
+          null
+        );
       default:
         return (this, null);
     }
   }
 
   @override
-  String view() {
+  View view() {
     final b = StringBuffer();
     if (title.isNotEmpty) {
       b.writeln(title);
@@ -47,6 +54,6 @@ final class SelectListModel extends TeaModel {
       final mark = i == cur ? '>' : ' ';
       b.writeln('$mark ${items[i]}');
     }
-    return b.toString();
+    return newView(b.toString());
   }
 }

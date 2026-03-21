@@ -1,6 +1,7 @@
 import '../cmd.dart';
 import '../model.dart';
 import '../msg.dart';
+import '../view.dart';
 
 /// Single-line text field (keys: printable runes, backspace, enter).
 final class TextInputModel extends TeaModel {
@@ -47,8 +48,8 @@ final class TextInputModel extends TeaModel {
   }
 
   @override
-  String view() {
+  View view() {
     final display = value.isEmpty ? placeholder : value;
-    return label.isEmpty ? display : '$label $display';
+    return newView(label.isEmpty ? display : '$label $display');
   }
 }

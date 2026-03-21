@@ -7,6 +7,7 @@ export 'src/model.dart';
 export 'src/msg.dart';
 export 'src/program.dart';
 export 'src/prompts.dart';
+export 'src/view.dart';
 export 'src/bubbles/progress.dart';
 export 'src/bubbles/select_list.dart';
 export 'src/bubbles/spinner.dart';
