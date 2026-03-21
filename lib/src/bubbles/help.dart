@@ -2,6 +2,7 @@ import '../cmd.dart';
 import '../model.dart';
 import '../msg.dart';
 import '../view.dart';
+import 'key_map.dart';
 
 typedef HelpEntry = ({String key, String description});
 
@@ -11,6 +12,20 @@ final class HelpModel extends TeaModel {
     this.title = 'Help',
     this.showBorder = false,
   });
+
+  /// Construct a [HelpModel] from a [KeyMap], pulling help text from enabled
+  /// bindings only.
+  factory HelpModel.fromKeyMap(
+    KeyMap map, {
+    String title = 'Help',
+    bool showBorder = false,
+  }) {
+    final entries = map.bindings
+        .where((b) => b.enabled)
+        .map((b) => b.help)
+        .toList();
+    return HelpModel(entries: entries, title: title, showBorder: showBorder);
+  }
 
   final List<HelpEntry> entries;
   final String title;
