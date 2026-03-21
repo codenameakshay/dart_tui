@@ -1,12 +1,23 @@
 name: dart_tui
-description: >
-  Elm-style terminal UI for Dart, inspired by Bubble Tea (Model, Update, View, Cmd).
-  Build interactive CLIs with messages, async commands, and composable components.
-version: 0.1.0
-repository: https://github.com/codenameakshay/dart_cli_toolkit
+description: >-
+  Elm-style terminal UI framework for Dart. Port of Charmbracelet Bubble Tea:
+  Model–Update–View architecture, async commands, composable components, and
+  a full Bubbles component library.
+version: 1.0.0
+homepage: https://github.com/codenameakshay/dart_tui
+repository: https://github.com/codenameakshay/dart_tui
+issue_tracker: https://github.com/codenameakshay/dart_tui/issues
+documentation: https://pub.dev/documentation/dart_tui/latest/
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
+
+topics:
+  - terminal
+  - tui
+  - cli
+  - elm
+  - bubbletea
 
 dependencies:
   dart_console: ^4.1.0

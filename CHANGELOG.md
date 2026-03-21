@@ -1,12 +1,35 @@
 # Changelog
 
-## Unreleased
+## 1.0.0
 
-- Runtime: moved to message-driven rendering with frame diffing.
-- Runtime: terminal request commands now send real CSI/OSC/DCS queries.
-- Input decoding: added CSI/OSC/DCS parsing for cursor position, colors, clipboard, mouse SGR, and capability replies.
-- Breaking: removed legacy alias APIs (`Batch`, `Quit`, `Println`, `WithInput`, etc.) in favor of canonical lowercase APIs.
-- Testing: added PTY example smoke harness (`tool/pty_examples_smoke.py`) and CI matrix for Linux + macOS.
+### New features
+
+- **CellRenderer**: cell-level diff renderer using grapheme clusters (`characters` package) — only changed cells emit ANSI sequences, eliminating flicker.
+- **Synchronized updates**: CSI `?2026h/l` wrapping for flicker-free frames on terminals that support it.
+- **ExecMsg / execProcess()**: run external processes (e.g. `$EDITOR`) with full terminal hand-off and optional exit-code callback.
+- **TextAreaModel**: multi-line editor with `charLimit`, ctrl+k/ctrl+u line-kill, cursor navigation.
+- **ViewportModel**: scrollable content pane with soft-wrap, `atBottom`/`scrollPercent`, keyboard navigation.
+- **TableModel** + **TableColumn**: tabular data viewer with header, separator, scrolling cursor, and optional row styles.
+- **TimerModel**: countdown timer, `start()`/`stop()`/`reset()` builders, `TickMsg` routing by `id`.
+- **StopwatchModel**: elapsed-time stopwatch with millisecond display.
+- **KeyMap** + **KeyBinding** + **HelpModel**: declarative keybinding registry; help UI with compact/full toggle.
+- **FilePickerModel**: async directory browser with extension filtering.
+- **Style system**: Lipgloss-inspired `Style` with `width`/`height` constraints, `Align`/`AlignVertical`, `inline` mode, `AdaptiveColor`, `Border` variants; `joinHorizontal()`, `joinVertical()`, `place()` layout helpers.
+- **EchoMode** (normal / password / none) and `suggestions` (tab-completion) on `TextInputModel`.
+- **ValidationFailedMsg** + validate callback on `TextInputModel`.
+- **`tickWithId(Duration, Object)`**: tick Cmd with routing ID for composable timers.
+- **`batch()` / `sequence()`**: concurrent vs. ordered command scheduling.
+- **Mouse support**: `MouseMode.cellMotion` / `allMotion`; `MouseClickMsg`, `MouseMotionMsg`, `MouseWheelMsg`.
+- **Cursor control**: `View.cursor` with `CursorShape` (block / underline / bar) and blink flag.
+- **Focus reporting**: `View.reportFocus`, `FocusMsg`, `BlurMsg`.
+- **Window title**: `View.windowTitle` OSC sequence.
+- **41 examples**: complete port of the Bubbletea example gallery.
+
+### Breaking changes from 0.1.0
+
+- Legacy Go-style uppercase API aliases removed (`Batch`, `Sequence`, `Quit`, `Println`, `WithInput`, etc.) — use canonical lowercase equivalents.
+- `request*` commands now emit real terminal protocol queries; decoder responses feed back as typed `Msg` values.
+- `ListModel` renamed to `SelectListModel`.
 
 ## 0.1.0
 

@@ -1,15 +1,28 @@
 # dart_tui
 
-Elm-style terminal applications in Dart, inspired by [Bubble Tea](https://github.com/charmbracelet/bubbletea): a **`Model`** with **`init`**, **`update`**, and declarative **`View`**, plus async **`Cmd`**s and a **`Program`** runtime.
+[![pub.dev](https://img.shields.io/pub/v/dart_tui.svg)](https://pub.dev/packages/dart_tui)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Compared to Flutter-like TUIs such as [nocterm](https://pub.dev/packages/nocterm), `dart_tui` keeps state in a single model and uses explicit **`Msg`** values (keys, window size, ticks) instead of `setState()` and widgets.
+Elm-style terminal UI framework for Dart, inspired by [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
-## Install
+Build interactive CLI applications with:
+
+- **Model–Update–View** architecture (same as Elm / Bubble Tea)
+- **Async commands** (`Cmd`) for I/O, timers, and process execution
+- **Composable components** — spinners, progress bars, text inputs, tables, viewports, and more
+- **Cell-level diff rendering** for flicker-free output
+- **Synchronized updates** (CSI `?2026`) on supported terminals
+
+---
+
+## Installation
 
 ```yaml
 dependencies:
-  dart_tui: ^0.1.0
+  dart_tui: ^1.0.0
 ```
+
+---
 
 ## Quick start
 
@@ -19,83 +32,197 @@ import 'package:dart_tui/dart_tui.dart';
 Future<void> main() async {
   await Program(
     options: const ProgramOptions(altScreen: true),
-  ).run(MyModel());
+  ).run(CounterModel());
 }
+
+final class CounterModel extends TeaModel {
+  CounterModel({this.count = 0});
+  final int count;
+
+  @override
+  Cmd? init() => tick(const Duration(seconds: 1), (_) => _TickMsg());
+
+  @override
+  (Model, Cmd?) update(Msg msg) {
+    if (msg is _TickMsg) {
+      if (count >= 5) return (this, () => quit());
+      return (
+        CounterModel(count: count + 1),
+        tick(const Duration(seconds: 1), (_) => _TickMsg()),
+      );
+    }
+    if (msg is KeyMsg && (msg.key == 'q' || msg.key == 'ctrl+c')) {
+      return (this, () => quit());
+    }
+    return (this, null);
+  }
+
+  @override
+  View view() => newView('Count: $count\n\nPress q to quit.');
+}
+
+final class _TickMsg extends Msg {}
 ```
 
-See [example/shopping_list.dart](example/shopping_list.dart) for the Bubble Tea shopping-list tutorial ported to Dart.
-
-Run it:
-
-```bash
-fvm dart run example/shopping_list.dart
-```
-
-**All components** (shopping list, spinner, progress, text input, select list, `TuiStyle`, prompts info) in one interactive menu:
-
-```bash
-fvm dart run example/showcase.dart
-```
-
-**Detailed one-file API tour** (style, components, commands, typed messages):
-
-```bash
-fvm dart run example/all_features.dart
-```
-
-**Prompts** (`promptSelect` / `promptConfirm` / `promptInput`) each run their own `Program`; chain them from a script:
-
-```bash
-fvm dart run example/prompts_chain.dart
-```
-
-Note: prompt demos are interactive TTY flows; piped stdin can produce partial/early input consumption.
-
-## Breaking Changes (Current Branch)
-
-- Removed legacy Go-style API aliases (`Batch`, `Sequence`, `Quit`, `Println`, `WithInput`, etc.).
-- Use canonical lowercase APIs instead (`batch`, `sequence`, `quit`, `println`, `withInput`, etc.).
-- `request*` commands now emit real terminal protocol queries and rely on decoder responses.
-
-For deterministic interactive smoke checks, run:
-
-```bash
-python3 tool/pty_examples_smoke.py
-```
-
-To force `fvm dart` in local runs:
-
-```bash
-DART_TUI_RUNNER="fvm dart" python3 tool/pty_examples_smoke.py
-```
+---
 
 ## Core concepts
 
-| Concept | Role |
-|--------|------|
-| [`Model`](lib/src/model.dart) | `init()` → optional `Cmd`; `update(Msg)` → next model + optional `Cmd`; `view()` → [`View`](lib/src/view.dart) |
-| [`Msg`](lib/src/msg.dart) | `KeyPressMsg`, `KeyReleaseMsg`, `WindowSizeMsg`, `TickMsg`, `PasteMsg`, `FocusMsg`, `QuitMsg`, … |
-| [`Cmd`](lib/src/cmd.dart) | `FutureOr<Msg?>` factory; `batch`, `sequence`, `tick`, `every`, request/clipboard/raw/print commands |
-| [`Program`](lib/src/program.dart) | Event loop, terminal restore, optional `tickInterval` for animations |
+| Concept | Description |
+|---------|-------------|
+| `Model` | Immutable state. Implement `init()`, `update(Msg)`, `view()`. |
+| `Msg` | Tagged event: key press, window resize, tick, custom data. |
+| `Cmd` | `FutureOr<Msg?> Function()` — async side-effect that delivers a message. |
+| `View` | Declared output string plus optional cursor, mouse mode, window title, alt-screen flag. |
+| `Program` | Runs the event loop; manages terminal raw mode, renderer, and signal handling. |
 
-Key input is read from stdin on the **main isolate** via a non-blocking byte stream and the same key mapping as [`Console.readKey`](https://pub.dev/documentation/dart_console/latest/dart_console/Console/readKey.html) (see `lib/src/key_buffer_parser.dart`). Stdin is not reliably available to secondary isolates, so input must stay on the main isolate. `ProgramOptions.tickInterval` schedules [TickMsg](lib/src/msg.dart) on a timer; because the loop is not blocked on synchronous reads, ticks run between key events for spinners and similar animations.
+### Model
 
-## Prompts (optional)
+```dart
+abstract class Model {
+  Cmd? init() => null;                     // startup command
+  (Model, Cmd?) update(Msg msg);           // state transition
+  View view();                             // render
+}
+```
 
-Imperative helpers for scripts:
+Return a value from prompt-style flows:
 
-- `promptSelect(choices)` → `Future<String?>`
-- `promptConfirm(question)` → `Future<bool?>`
-- `promptInput(label)` → `Future<String?>`
+```dart
+abstract class OutcomeModel<T> implements Model {
+  T? get outcome;  // non-null → program stops and returns this value
+}
 
-## Components
+final result = await Program().runForResult<String>(MyPromptModel());
+```
 
-Under `lib/src/bubbles/`: [`SpinnerModel`](lib/src/bubbles/spinner.dart), [`ProgressModel`](lib/src/bubbles/progress.dart), [`TextInputModel`](lib/src/bubbles/text_input.dart), [`SelectListModel`](lib/src/bubbles/select_list.dart), [`PaginatorModel`](lib/src/bubbles/paginator.dart), [`HelpModel`](lib/src/bubbles/help.dart), plus composable [`Style`](lib/src/bubbles/style.dart) and compatibility [`TuiStyle`](lib/src/bubbles/style.dart) helpers.
+### Cmd
 
-## Debugging
+```dart
+// Common helpers
+Msg quit()
+Msg interrupt()
+Cmd tick(Duration d, Msg Function(DateTime) fn)      // one-shot delay
+Cmd every(Duration d, Msg Function(DateTime) fn)     // wall-clock aligned
+Cmd? batch(List<Cmd?> cmds)                          // concurrent
+Cmd? sequence(List<Cmd?> cmds)                       // sequential
+Cmd execProcess(String exe, List<String> args, {...}) // external process
+Cmd println([Object? value])                          // print above TUI
+```
 
-Set `ProgramOptions(logFile: File('debug.log'))` to append rendered frames (similar in spirit to Bubble Tea’s file logging).
+### Program options
+
+```dart
+Program(
+  options: const ProgramOptions(
+    altScreen: true,
+    hideCursor: true,
+    tickInterval: Duration(milliseconds: 100),
+    logFile: File('debug.log'),
+  ),
+  programOptions: [
+    withFps(60),
+    withCellRenderer(),          // enable cell-level diff renderer
+    withFilter((model, msg) {    // intercept/transform messages
+      if (msg is QuitMsg) return null; // suppress
+      return msg;
+    }),
+  ],
+).run(MyModel());
+```
+
+---
+
+## Component library
+
+All components live under `package:dart_tui/dart_tui.dart` (re-exported from `lib/src/bubbles/`).
+
+| Component | Description |
+|-----------|-------------|
+| `SpinnerModel` | Animated indeterminate spinner driven by `TickMsg` |
+| `ProgressModel` | Determinate progress bar (0.0–1.0) |
+| `TextInputModel` | Single-line input: cursor, charLimit, EchoMode, validate, suggestions |
+| `TextAreaModel` | Multi-line editor with scroll and line-kill commands |
+| `SelectListModel` | Vertical list with keyboard cursor |
+| `PaginatorModel` | Page indicator (dots or custom label) |
+| `TableModel` | Scrollable table with column headers and row cursor |
+| `ViewportModel` | Scrollable content pane with soft-wrap |
+| `TimerModel` | Countdown timer: `start()`/`stop()`/`reset()`, `remaining`, `finished` |
+| `StopwatchModel` | Elapsed time: `start()`/`stop()`/`reset()` |
+| `HelpModel` | Compact/full keybinding help UI |
+| `KeyMap` / `KeyBinding` | Declarative keybinding registry |
+| `FilePickerModel` | Async directory browser with extension filtering |
+| `Style` | Lipgloss-inspired text styling: colors, dimensions, alignment, borders |
+
+### Style system
+
+```dart
+final title = Style(fg: '#FF5F87', bold: true, width: 40, align: Align.center)
+    .render('Hello, World!');
+
+// Layout helpers
+final ui = joinHorizontal(AlignVertical.top, [leftPane, rightPane]);
+final centered = place(termWidth, termHeight, Align.center, AlignVertical.middle, content);
+```
+
+---
+
+## Examples
+
+The `example/` directory contains 41 runnable examples:
+
+| File | What it shows |
+|------|---------------|
+| `simple.dart` | Tick-driven countdown |
+| `window_size.dart` | Terminal dimensions |
+| `fullscreen.dart` | Alt-screen mode |
+| `set_window_title.dart` | OSC window title |
+| `altscreen_toggle.dart` | Toggle alt-screen |
+| `vanish.dart` | Single keystroke, no residual output |
+| `textinput.dart` | Single-line text input |
+| `textinputs.dart` | Multi-field form with Tab focus |
+| `textarea.dart` | Multi-line editor |
+| `autocomplete.dart` | Input with tab-completion |
+| `list_simple.dart` | SelectListModel |
+| `list_default.dart` | List with selection state |
+| `result.dart` | OutcomeModel returning a value |
+| `paginator.dart` | Dot-style page indicator |
+| `table.dart` | City data table |
+| `package_manager.dart` | Spinner + progress multi-step |
+| `spinner.dart` | Animated spinner |
+| `spinners.dart` | Multiple spinner styles |
+| `progress_bar.dart` | Interactive progress bar |
+| `progress_animated.dart` | Auto-incrementing progress |
+| `composable_views.dart` | Timer + spinner composition |
+| `tabs.dart` | Tabbed interface |
+| `views.dart` | Two-phase view transition |
+| `pager.dart` | Scrollable pager with ViewportModel |
+| `print_key.dart` | Key introspection |
+| `cursor_style.dart` | Cursor shape / blink |
+| `mouse.dart` | Mouse event logging |
+| `realtime.dart` | Background async command |
+| `send_msg.dart` | External `program.send()` |
+| `timer.dart` | Countdown timer |
+| `stopwatch.dart` | Elapsed-time stopwatch |
+| `focus_blur.dart` | Focus/blur events |
+| `prevent_quit.dart` | Filter to intercept QuitMsg |
+| `sequence.dart` | batch() vs sequence() |
+| `exec_cmd.dart` | External editor via execProcess() |
+| `pipe.dart` | Piped stdin |
+| `http.dart` | HTTP with spinner |
+| `file_picker.dart` | FilePickerModel |
+| `help.dart` | HelpModel + KeyMap |
+| `color_profile.dart` | ColorProfileMsg and adaptive colors |
+| `isbn_form.dart` | Validated TextInputModel |
+
+Run any example with:
+
+```bash
+dart run example/simple.dart
+```
+
+---
 
 ## License
 
-MIT. This project is inspired by Bubble Tea; see [LICENSE](LICENSE) for third-party attribution.
+MIT. Inspired by [Bubble Tea](https://github.com/charmbracelet/bubbletea) by [Charm](https://charm.sh). See [LICENSE](LICENSE).
