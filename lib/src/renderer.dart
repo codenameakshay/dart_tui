@@ -52,6 +52,8 @@ final class AnsiRenderer implements TeaRenderer {
   bool _focusReportingEnabled = false;
   bool _bracketedPasteEnabled = false;
   MouseMode _mouseMode = MouseMode.none;
+  List<String> _lastLines = const <String>[];
+  bool _hasRenderedFrame = false;
 
   @override
   void render(View view) {
@@ -59,14 +61,32 @@ final class AnsiRenderer implements TeaRenderer {
     if (view.windowTitle.isNotEmpty) {
       _output.write('\x1b]0;${view.windowTitle}\x07');
     }
-    _output.write('\x1b[H\x1b[2J');
-    _output.write(view.content);
-    _logSink?.writeln('--- frame ---\n${view.content}');
+    final nextLines = view.content.split('\n');
+    if (_hasRenderedFrame && _linesEqual(nextLines, _lastLines)) {
+      return;
+    }
+
+    final maxRows =
+        nextLines.length > _lastLines.length ? nextLines.length : _lastLines.length;
+    for (var row = 0; row < maxRows; row++) {
+      final next = row < nextLines.length ? nextLines[row] : '';
+      final prev = row < _lastLines.length ? _lastLines[row] : '';
+      if (next == prev) continue;
+      _output.write('\x1b[${row + 1};1H');
+      _output.write(next);
+      _output.write('\x1b[K');
+    }
+
+    _lastLines = List<String>.from(nextLines);
+    _hasRenderedFrame = true;
+    _logSink?.writeln('--- frame (diff) ---\n${view.content}');
   }
 
   @override
   void clearScreen() {
     _output.write('\x1b[H\x1b[2J');
+    _lastLines = const <String>[];
+    _hasRenderedFrame = false;
   }
 
   @override
@@ -88,6 +108,8 @@ final class AnsiRenderer implements TeaRenderer {
     _focusReportingEnabled = false;
     _bracketedPasteEnabled = false;
     _mouseMode = MouseMode.none;
+    _lastLines = const <String>[];
+    _hasRenderedFrame = false;
     if (reset) {
       clearScreen();
     }
@@ -101,6 +123,14 @@ final class AnsiRenderer implements TeaRenderer {
   @override
   void close() {
     release();
+  }
+
+  bool _linesEqual(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   void _applyModes(View v) {

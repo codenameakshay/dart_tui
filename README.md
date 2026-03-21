@@ -28,26 +28,28 @@ See [example/shopping_list.dart](example/shopping_list.dart) for the Bubble Tea 
 Run it:
 
 ```bash
-dart run example/shopping_list.dart
+fvm dart run example/shopping_list.dart
 ```
 
 **All components** (shopping list, spinner, progress, text input, select list, `TuiStyle`, prompts info) in one interactive menu:
 
 ```bash
-dart run example/showcase.dart
+fvm dart run example/showcase.dart
 ```
 
 **Detailed one-file API tour** (style, components, commands, typed messages):
 
 ```bash
-dart run example/all_features.dart
+fvm dart run example/all_features.dart
 ```
 
 **Prompts** (`promptSelect` / `promptConfirm` / `promptInput`) each run their own `Program`; chain them from a script:
 
 ```bash
-dart run example/prompts_chain.dart
+fvm dart run example/prompts_chain.dart
 ```
+
+Note: prompt demos are interactive TTY flows; piped stdin can produce partial/early input consumption.
 
 ## Core concepts
 

@@ -1,5 +1,5 @@
 // Runs promptSelect → promptConfirm → promptInput in sequence (each run uses Program).
-//   dart run example/prompts_chain.dart
+//   fvm dart run example/prompts_chain.dart
 
 import 'dart:io';
 

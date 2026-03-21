@@ -148,7 +148,6 @@ final class Program {
   bool _running = false;
   bool _killed = false;
   Completer<void>? _finished;
-  Timer? _renderTicker;
   StreamSubscription<List<int>>? _inputSub;
   StreamSubscription<ProcessSignal>? _sigSub;
   TeaRenderer? _renderer;
@@ -182,8 +181,6 @@ final class Program {
   Future<void> releaseTerminal({bool resetRenderer = false}) async {
     if (!_running) return;
     if (_disableRenderer) return;
-    _renderTicker?.cancel();
-    _renderTicker = null;
     _renderer?.release(reset: resetRenderer);
     _console.rawMode = false;
   }
@@ -192,7 +189,6 @@ final class Program {
     if (!_running) return;
     if (_disableRenderer) return;
     _console.rawMode = true;
-    _startRenderTicker();
     final m = _runningModel;
     if (m != null) {
       _renderer?.restore(m.view());
@@ -246,8 +242,20 @@ final class Program {
       }
     }
 
-    void render(View v) {
+    var lastRenderMicros = 0;
+    Future<void> render(View v) async {
+      final minFrameMicros = (1000000 / _fps).round();
+      final nowMicros = DateTime.now().microsecondsSinceEpoch;
+      if (lastRenderMicros != 0 && minFrameMicros > 0) {
+        final delta = nowMicros - lastRenderMicros;
+        if (delta < minFrameMicros) {
+          await Future<void>.delayed(
+            Duration(microseconds: minFrameMicros - delta),
+          );
+        }
+      }
       _renderer?.render(v);
+      lastRenderMicros = DateTime.now().microsecondsSinceEpoch;
     }
 
     void scheduleResizeMsg() {
@@ -281,23 +289,23 @@ final class Program {
           scheduleResizeMsg();
           return;
         case RequestForegroundColorMsg():
-          enqueue(ForegroundColorMsg(0xFFFFFF));
+          _output.write('\x1b]10;?\x07');
           return;
         case RequestBackgroundColorMsg():
-          enqueue(BackgroundColorMsg(0x000000));
+          _output.write('\x1b]11;?\x07');
           return;
         case RequestCursorColorMsg():
-          enqueue(CursorColorMsg(0xFFFFFF));
+          _output.write('\x1b]12;?\x07');
           return;
         case RequestCursorPositionMsg():
-          enqueue(CursorPositionMsg(x: 0, y: 0));
+          _output.write('\x1b[6n');
           return;
         case RequestTerminalVersionMsg():
-          enqueue(
-              TerminalVersionMsg(_environment['TERM_PROGRAM'] ?? 'unknown'));
+          _output.write('\x1b[>0c');
           return;
         case RequestCapabilityMsg():
-          enqueue(CapabilityMsg(msg.name));
+          final encoded = _hexEncode(msg.name);
+          _output.write('\x1bP+q$encoded\x1b\\');
           return;
         case SetClipboardMsg():
           _output.write('\x1b]52;c;${_base64(msg.value)}\x07');
@@ -333,6 +341,7 @@ final class Program {
       final (nextModel, cmd) = model.update(msg);
       _runningModel = nextModel;
       await runCmd(cmd);
+      await render(_runningModel!.view());
     }
 
     try {
@@ -377,11 +386,9 @@ final class Program {
         });
       }
 
-      _startRenderTicker(render);
-
       final initCmd = _runningModel!.init();
       await runCmd(initCmd);
-      render(_runningModel!.view());
+      await render(_runningModel!.view());
 
       final externalCancellation = _externalCancellation;
       if (externalCancellation != null) {
@@ -415,8 +422,6 @@ final class Program {
   void _shutdown() {
     if (!_running && (_finished?.isCompleted ?? true)) return;
     _running = false;
-    _renderTicker?.cancel();
-    _renderTicker = null;
     unawaited(_inputSub?.cancel());
     _inputSub = null;
     unawaited(_sigSub?.cancel());
@@ -432,25 +437,6 @@ final class Program {
     _finished?.complete();
   }
 
-  void _render(View v) {
-    _renderer?.render(v);
-  }
-
-  void _startRenderTicker([void Function(View v)? customRender]) {
-    _renderTicker?.cancel();
-    _renderTicker =
-        Timer.periodic(Duration(milliseconds: (1000 / _fps).ceil()), (_) {
-      final m = _runningModel;
-      if (m != null && _running) {
-        final v = m.view();
-        if (customRender != null) {
-          customRender(v);
-        } else {
-          _render(v);
-        }
-      }
-    });
-  }
 }
 
 String _formatProgram(String template, List<Object?> args) {
@@ -462,3 +448,6 @@ String _formatProgram(String template, List<Object?> args) {
 }
 
 String _base64(String s) => base64Encode(utf8.encode(s));
+
+String _hexEncode(String input) =>
+    input.codeUnits.map((c) => c.toRadixString(16).padLeft(2, '0')).join();

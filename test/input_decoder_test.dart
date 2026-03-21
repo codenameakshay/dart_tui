@@ -34,4 +34,42 @@ void main() {
     expect(msgs.first, isA<KeyPressMsg>());
     expect((msgs.first as KeyPressMsg).key, 'a');
   });
+
+  test('decodes cursor position response', () {
+    final d = TerminalInputDecoder();
+    final msgs = d.feed('\x1b[12;34R'.codeUnits);
+    expect(msgs.length, 1);
+    expect(msgs.first, isA<CursorPositionMsg>());
+    final m = msgs.first as CursorPositionMsg;
+    expect(m.x, 33);
+    expect(m.y, 11);
+  });
+
+  test('decodes OSC color responses', () {
+    final d = TerminalInputDecoder();
+    final msgs = d.feed('\x1b]10;rgb:ffff/0000/0000\x07'.codeUnits);
+    expect(msgs.length, 1);
+    expect(msgs.first, isA<ForegroundColorMsg>());
+    expect((msgs.first as ForegroundColorMsg).rgb, 0xff0000);
+  });
+
+  test('decodes OSC clipboard response', () {
+    final d = TerminalInputDecoder();
+    final msgs = d.feed('\x1b]52;c;aGVsbG8=\x07'.codeUnits);
+    expect(msgs.length, 1);
+    expect(msgs.first, isA<ClipboardMsg>());
+    expect((msgs.first as ClipboardMsg).content, 'hello');
+    expect((msgs.first as ClipboardMsg).selection, 0);
+  });
+
+  test('decodes mouse SGR click', () {
+    final d = TerminalInputDecoder();
+    final msgs = d.feed('\x1b[<0;10;20M'.codeUnits);
+    expect(msgs.length, 1);
+    expect(msgs.first, isA<MouseClickMsg>());
+    final mouse = (msgs.first as MouseClickMsg).mouse;
+    expect(mouse.button, MouseButton.left);
+    expect(mouse.x, 9);
+    expect(mouse.y, 19);
+  });
 }
