@@ -74,8 +74,10 @@ final class PreventQuitModel extends TeaModel {
   @override
   View view() {
     if (confirming) {
-      final title =
-          const Style().bold().foregroundColor256(196).render('Unsaved Changes');
+      final title = const Style()
+          .bold()
+          .foregroundColor256(196)
+          .render('Unsaved Changes');
       final yKey = const Style().bold().render('[y]');
       final nKey = const Style().bold().render('[n]');
       return newView(
@@ -84,8 +86,7 @@ final class PreventQuitModel extends TeaModel {
       );
     }
     final editorTitle = const Style().bold().render('Editor');
-    final hint =
-        const Style().dim().render('ctrl+c or esc (when empty): quit');
+    final hint = const Style().dim().render('ctrl+c or esc (when empty): quit');
     return newView(
       '$editorTitle\n\n${textarea.view().content}\n\n$hint',
     );

@@ -25,7 +25,7 @@ final class HttpModel extends TeaModel {
     this.error,
     this.done = false,
   }) : spinner =
-           spinner ?? SpinnerModel(suffix: ' Checking http://example.com...');
+            spinner ?? SpinnerModel(suffix: ' Checking http://example.com...');
 
   final SpinnerModel spinner;
   final int? status;

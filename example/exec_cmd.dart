@@ -36,8 +36,7 @@ final class ExecCmdModel extends TeaModel {
       [tmpFile.path],
       inheritStdio: true,
       onExit: (exitCode) {
-        final edited =
-            tmpFile.existsSync() ? tmpFile.readAsStringSync() : '';
+        final edited = tmpFile.existsSync() ? tmpFile.readAsStringSync() : '';
         try {
           tmpFile.deleteSync();
         } catch (_) {}
