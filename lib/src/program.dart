@@ -18,10 +18,7 @@ typedef ProgramOption = void Function(Program program);
 Stream<List<int>>? _stdinBroadcastCache;
 
 Stream<List<int>> _stdinBroadcast() {
-  return _stdinBroadcastCache ??= stdin.asBroadcastStream(
-    onListen: (subscription) => subscription.resume(),
-    onCancel: (subscription) => subscription.pause(),
-  );
+  return _stdinBroadcastCache ??= stdin.asBroadcastStream();
 }
 
 /// Compatibility options while migrating toward option-function API.
@@ -115,6 +112,7 @@ final class Program {
   bool _running = false;
   bool _killed = false;
   Completer<void>? _finished;
+  Timer? _tickTimer;
   StreamSubscription<List<int>>? _inputSub;
   StreamSubscription<ProcessSignal>? _sigSub;
   TeaRenderer? _renderer;
@@ -354,7 +352,8 @@ final class Program {
       }
 
       if (_compatOptions.tickInterval != null) {
-        Timer.periodic(_compatOptions.tickInterval!, (_) {
+        _tickTimer?.cancel();
+        _tickTimer = Timer.periodic(_compatOptions.tickInterval!, (_) {
           enqueue(TickMsg(DateTime.now()));
         });
       }
@@ -395,6 +394,8 @@ final class Program {
   void _shutdown() {
     if (!_running && (_finished?.isCompleted ?? true)) return;
     _running = false;
+    _tickTimer?.cancel();
+    _tickTimer = null;
     unawaited(_inputSub?.cancel());
     _inputSub = null;
     unawaited(_sigSub?.cancel());

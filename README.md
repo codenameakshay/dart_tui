@@ -63,6 +63,12 @@ For deterministic interactive smoke checks, run:
 python3 tool/pty_examples_smoke.py
 ```
 
+To force `fvm dart` in local runs:
+
+```bash
+DART_TUI_RUNNER="fvm dart" python3 tool/pty_examples_smoke.py
+```
+
 ## Core concepts
 
 | Concept | Role |

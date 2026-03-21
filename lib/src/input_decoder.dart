@@ -108,10 +108,11 @@ sealed class _ParseResult {
 }
 
 final class _ParseState extends _ParseResult {
-  const _ParseState._();
+  const _ParseState._(this.kind);
+  final int kind;
 
-  static const _ParseState none = _ParseState._();
-  static const _ParseState partial = _ParseState._();
+  static const _ParseState none = _ParseState._(0);
+  static const _ParseState partial = _ParseState._(1);
 }
 
 final class _ParsedMessages extends _ParseResult {

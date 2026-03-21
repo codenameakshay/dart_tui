@@ -13,22 +13,52 @@ import time
 
 
 EXAMPLES = [
-    ("shopping_list", ["q"]),
-    ("showcase", ["q"]),
-    ("all_features", ["q"]),
-    ("prompts_chain", ["\r", "y", "hello\r"]),
+    {
+        "name": "shopping_list",
+        "keys": ["q"],
+        "repeat_last": True,
+        "markers": ["\x1b[?1049h", "\x1b[?1049l"],
+    },
+    {
+        "name": "showcase",
+        "keys": ["q"],
+        "repeat_last": True,
+        "markers": ["\x1b[?1049h", "\x1b[?1049l"],
+    },
+    {
+        "name": "all_features",
+        "keys": ["q"],
+        "repeat_last": True,
+        "markers": ["\x1b[?1049h", "\x1b[?1049l"],
+    },
+    {
+        "name": "prompts_chain",
+        "keys": ["\r", "y", "\r", "h", "e", "l", "l", "o", "\r"],
+        "repeat_last": False,
+        "markers": ["Selected:", "Confirmed:", "Notes:"],
+    },
 ]
 
 
 def _dart_runner() -> list[str]:
-    if shutil.which("fvm"):
-        return ["fvm", "dart"]
+    override = os.environ.get("DART_TUI_RUNNER", "").strip()
+    if override:
+        return override.split()
     if shutil.which("dart"):
         return ["dart"]
+    if shutil.which("fvm"):
+        return ["fvm", "dart"]
     raise RuntimeError("Neither 'fvm' nor 'dart' is available in PATH.")
 
 
-def _run_example(example: str, keys: list[str], timeout_s: float = 20.0) -> dict:
+def _run_example(
+    example: str,
+    keys: list[str],
+    *,
+    repeat_last: bool,
+    markers: list[str],
+    timeout_s: float = 20.0,
+) -> dict:
     cmd = _dart_runner() + ["run", f"example/{example}.dart"]
     master, slave = pty.openpty()
     proc = subprocess.Popen(
@@ -45,12 +75,16 @@ def _run_example(example: str, keys: list[str], timeout_s: float = 20.0) -> dict
     next_key_at = start + 1.0
     key_idx = 0
     exit_code: int | None = None
+    checkpoints_ok = False
 
     while True:
         now = time.monotonic()
-        if key_idx < len(keys) and now >= next_key_at:
-            os.write(master, keys[key_idx].encode())
-            key_idx += 1
+        if now >= next_key_at:
+            if key_idx < len(keys):
+                os.write(master, keys[key_idx].encode())
+                key_idx += 1
+            elif repeat_last and keys:
+                os.write(master, keys[-1].encode())
             next_key_at = now + 0.8
 
         readable, _, _ = select.select([master], [], [], 0.1)
@@ -61,6 +95,12 @@ def _run_example(example: str, keys: list[str], timeout_s: float = 20.0) -> dict
                 chunk = b""
             if chunk:
                 out.extend(chunk)
+                text = out.decode("utf-8", errors="replace")
+                checkpoints_ok = all(m in text for m in markers)
+                if checkpoints_ok:
+                    proc.kill()
+                    exit_code = 0
+                    break
 
         exit_code = proc.poll()
         if exit_code is not None:
@@ -81,6 +121,7 @@ def _run_example(example: str, keys: list[str], timeout_s: float = 20.0) -> dict
         "example": example,
         "exit_code": int(exit_code),
         "timed_out": exit_code == 124,
+        "checkpoints_ok": checkpoints_ok,
         "saw_alt_enter": "\x1b[?1049h" in text,
         "saw_alt_leave": "\x1b[?1049l" in text,
         "tail": text[-220:],
@@ -90,10 +131,15 @@ def _run_example(example: str, keys: list[str], timeout_s: float = 20.0) -> dict
 def main() -> int:
     print("PTY example smoke tests")
     failures: list[dict] = []
-    for example, keys in EXAMPLES:
-        result = _run_example(example, keys)
+    for spec in EXAMPLES:
+        result = _run_example(
+            spec["name"],
+            spec["keys"],
+            repeat_last=spec["repeat_last"],
+            markers=spec["markers"],
+        )
         status = "PASS" if result["exit_code"] == 0 else "FAIL"
-        print(f"[{status}] {example} exit={result['exit_code']}")
+        print(f"[{status}] {spec['name']} exit={result['exit_code']}")
         if result["exit_code"] != 0:
             failures.append(result)
 

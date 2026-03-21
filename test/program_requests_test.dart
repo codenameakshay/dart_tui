@@ -26,6 +26,18 @@ void main() {
     await sink.close();
     await controller.close();
   });
+
+  test('program with tickInterval exits cleanly after quit', () async {
+    final program = Program(
+      options: const ProgramOptions(
+        altScreen: false,
+        tickInterval: Duration(milliseconds: 10),
+      ),
+      programOptions: [withInput(null)],
+    );
+
+    await program.run(_ImmediateQuitModel());
+  });
 }
 
 final class _RequestModel extends TeaModel {
@@ -37,6 +49,17 @@ final class _RequestModel extends TeaModel {
       () => quit(),
     ]);
   }
+
+  @override
+  (TeaModel, Cmd?) update(Msg msg) => (this, null);
+
+  @override
+  View view() => newView('');
+}
+
+final class _ImmediateQuitModel extends TeaModel {
+  @override
+  Cmd? init() => () => quit();
 
   @override
   (TeaModel, Cmd?) update(Msg msg) => (this, null);
