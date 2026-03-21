@@ -65,6 +65,7 @@ ProgramOption withEnvironment(Map<String, String> env) {
 ProgramOption withoutSignalHandler() => (p) => p._disableSignalHandler = true;
 ProgramOption withoutCatchPanics() => (p) => p._disableCatchPanics = true;
 ProgramOption withoutRenderer() => (p) => p._disableRenderer = true;
+ProgramOption withCellRenderer() => (p) => p._useCellRenderer = true;
 ProgramOption withFilter(Msg? Function(Model model, Msg msg) filter) =>
     (p) => p._filter = filter;
 ProgramOption withFps(int fps) => (p) => p._fps = fps.clamp(1, 120);
@@ -105,6 +106,7 @@ final class Program {
   bool _disableRenderer = false;
   bool _disableCatchPanics = false;
   bool _disableSignalHandler = false;
+  bool _useCellRenderer = false;
 
   IOSink? _logSink;
   Model? _runningModel;
@@ -361,12 +363,19 @@ final class Program {
       _logSink = _compatOptions.logFile?.openWrite(mode: FileMode.append);
       _renderer = _disableRenderer
           ? NilRenderer()
-          : AnsiRenderer(
-              output: _output,
-              logSink: _logSink,
-              defaultAltScreen: _compatOptions.altScreen,
-              defaultHideCursor: _compatOptions.hideCursor,
-            );
+          : _useCellRenderer
+              ? CellRenderer(
+                  output: _output,
+                  logSink: _logSink,
+                  defaultAltScreen: _compatOptions.altScreen,
+                  defaultHideCursor: _compatOptions.hideCursor,
+                )
+              : AnsiRenderer(
+                  output: _output,
+                  logSink: _logSink,
+                  defaultAltScreen: _compatOptions.altScreen,
+                  defaultHideCursor: _compatOptions.hideCursor,
+                );
       if (!_disableRenderer) {
         _console.rawMode = true;
       }
