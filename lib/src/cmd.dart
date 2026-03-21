@@ -55,6 +55,28 @@ Msg readClipboard() => ReadClipboardMsg();
 Cmd setPrimaryClipboard(String s) => () => SetPrimaryClipboardMsg(s);
 Msg readPrimaryClipboard() => ReadPrimaryClipboardMsg();
 Cmd raw(Object value) => () => RawMsg(value);
+
+/// Execute an external process, releasing terminal control around it.
+Cmd execProcess(
+  String executable,
+  List<String> arguments, {
+  Map<String, String>? environment,
+  bool inheritStdio = true,
+  Msg? Function(int exitCode)? onExit,
+}) =>
+    () => ExecMsg(
+          cmd: executable,
+          args: arguments,
+          env: environment,
+          inheritStdio: inheritStdio,
+          onExit: onExit,
+        );
+
+/// Tick with an ID for routing to specific timer/stopwatch models.
+Cmd tickWithId(Duration d, Object id) => () async {
+      await Future<void>.delayed(d);
+      return TickMsg(DateTime.now(), id: id);
+    };
 Cmd println([Object? value]) => () => PrintLineMsg('${value ?? ''}');
 Cmd printf(String template, [List<Object?> args = const []]) =>
     () => PrintLineMsg(_format(template, args));

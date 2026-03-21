@@ -247,6 +247,15 @@ final class Program {
           return;
         case SuspendMsg():
           await releaseTerminal(resetRenderer: true);
+          if (!Platform.isWindows) {
+            final contCompleter = Completer<void>();
+            final contSub = ProcessSignal.sigcont.watch().listen((_) {
+              if (!contCompleter.isCompleted) contCompleter.complete();
+            });
+            Process.killPid(pid, ProcessSignal.sigstop);
+            await contCompleter.future;
+            await contSub.cancel();
+          }
           await restoreTerminal();
           enqueue(ResumeMsg());
           return;
@@ -306,9 +315,42 @@ final class Program {
             await runCmd(c);
           }
           return;
+        case ExecMsg():
+          await releaseTerminal(resetRenderer: true);
+          try {
+            if (msg.inheritStdio) {
+              final process = await Process.start(
+                msg.cmd,
+                msg.args,
+                environment: msg.env,
+                mode: ProcessStartMode.inheritStdio,
+              );
+              final exitCode = await process.exitCode;
+              if (msg.onExit != null) {
+                final followUp = msg.onExit!(exitCode);
+                if (followUp != null) enqueue(followUp);
+              }
+            } else {
+              final result = await Process.run(
+                msg.cmd,
+                msg.args,
+                environment: msg.env,
+              );
+              if (msg.onExit != null) {
+                final followUp = msg.onExit!(result.exitCode);
+                if (followUp != null) enqueue(followUp);
+              }
+            }
+          } finally {
+            await restoreTerminal();
+          }
+          return;
         default:
       }
 
+      if (msg is ModeReportMsg && msg.mode == 2026 && (msg.value == 1 || msg.value == 2)) {
+        _renderer?.setSyncUpdates(true);
+      }
       final (nextModel, cmd) = model.update(msg);
       _runningModel = nextModel;
       await runCmd(cmd);
@@ -335,6 +377,10 @@ final class Program {
       }
 
       scheduleResizeMsg();
+      // Query terminal for synchronized updates support (DEC mode 2026)
+      if (!_disableInput) {
+        _output.write('\x1b[?2026\$y');
+      }
       enqueue(ColorProfileMsg(_profile));
       enqueue(EnvMsg(_environment));
 

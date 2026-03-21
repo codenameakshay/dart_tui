@@ -19,8 +19,9 @@ final class ResumeMsg extends Msg {}
 
 /// Tick signal for timers/animation.
 final class TickMsg extends Msg {
-  TickMsg(this.when);
+  TickMsg(this.when, {this.id});
   final DateTime when;
+  final Object? id;
 }
 
 /// Window resize event.
@@ -49,6 +50,23 @@ final class ClearScreenMsg extends Msg {}
 final class RawMsg extends Msg {
   RawMsg(this.value);
   final Object value;
+}
+
+/// Execute an external process, releasing terminal control around it.
+final class ExecMsg extends Msg {
+  ExecMsg({
+    required this.cmd,
+    required this.args,
+    this.env,
+    this.onExit,
+    this.inheritStdio = true,
+  });
+
+  final String cmd;
+  final List<String> args;
+  final Map<String, String>? env;
+  final Msg? Function(int exitCode)? onExit;
+  final bool inheritStdio;
 }
 
 /// Color profile update from terminal introspection.
@@ -356,4 +374,10 @@ final class MouseMotionMsg extends Msg implements MouseMsg {
   MouseMotionMsg(this.mouse);
   @override
   final Mouse mouse;
+}
+
+/// Emitted when TextInput validation fails.
+final class ValidationFailedMsg extends Msg {
+  ValidationFailedMsg(this.value);
+  final String value;
 }

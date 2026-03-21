@@ -6,6 +6,7 @@ abstract interface class TeaRenderer {
   void render(View view);
   void clearScreen();
   void insertAbove(String line);
+  void setSyncUpdates(bool enabled);
   void release({bool reset = false});
   void restore(View view);
   void close();
@@ -20,6 +21,9 @@ final class NilRenderer implements TeaRenderer {
 
   @override
   void insertAbove(String line) {}
+
+  @override
+  void setSyncUpdates(bool enabled) {}
 
   @override
   void release({bool reset = false}) {}
@@ -54,6 +58,7 @@ final class AnsiRenderer implements TeaRenderer {
   MouseMode _mouseMode = MouseMode.none;
   List<String> _lastLines = const <String>[];
   bool _hasRenderedFrame = false;
+  bool _syncUpdates = false;
 
   @override
   void render(View view) {
@@ -66,6 +71,7 @@ final class AnsiRenderer implements TeaRenderer {
       return;
     }
 
+    if (_syncUpdates) _output.write('\x1b[?2026h');
     final maxRows =
         nextLines.length > _lastLines.length ? nextLines.length : _lastLines.length;
     for (var row = 0; row < maxRows; row++) {
@@ -76,10 +82,16 @@ final class AnsiRenderer implements TeaRenderer {
       _output.write(next);
       _output.write('\x1b[K');
     }
+    if (_syncUpdates) _output.write('\x1b[?2026l');
 
     _lastLines = List<String>.from(nextLines);
     _hasRenderedFrame = true;
     _logSink?.writeln('--- frame (diff) ---\n${view.content}');
+  }
+
+  @override
+  void setSyncUpdates(bool enabled) {
+    _syncUpdates = enabled;
   }
 
   @override
@@ -93,7 +105,17 @@ final class AnsiRenderer implements TeaRenderer {
   void insertAbove(String line) {
     if (!_altScreenEnabled) {
       _output.writeln(line);
+      return;
     }
+    // In alt-screen: save cursor, scroll up to create space, write at top, restore
+    _output.write('\x1b[s');      // save cursor position
+    _output.write('\x1b[1;1H');   // move to top-left
+    _output.write('\x1b[S');      // scroll up one line (creates blank row at bottom)
+    _output.write('\x1b[1;1H');   // back to top-left
+    _output.write(line);
+    _output.write('\x1b[K');      // clear to end of line
+    _output.write('\x1b[u');      // restore cursor position
+    _hasRenderedFrame = false;    // invalidate diff cache
   }
 
   @override
