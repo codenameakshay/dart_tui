@@ -1,0 +1,100 @@
+import 'package:dart_console/dart_console.dart';
+
+/// Maps [dart_console] [Key] to Bubble Tea–style key strings.
+String keyToTeaString(Key key) {
+  if (!key.isControl) {
+    return key.char;
+  }
+  switch (key.controlChar) {
+    case ControlCharacter.arrowUp:
+      return 'up';
+    case ControlCharacter.arrowDown:
+      return 'down';
+    case ControlCharacter.arrowLeft:
+      return 'left';
+    case ControlCharacter.arrowRight:
+      return 'right';
+    case ControlCharacter.enter:
+      return 'enter';
+    case ControlCharacter.tab:
+      return 'tab';
+    case ControlCharacter.escape:
+      return 'esc';
+    case ControlCharacter.backspace:
+    case ControlCharacter.wordBackspace:
+      return 'backspace';
+    case ControlCharacter.delete:
+      return 'delete';
+    case ControlCharacter.home:
+      return 'home';
+    case ControlCharacter.end:
+      return 'end';
+    case ControlCharacter.pageUp:
+      return 'pgup';
+    case ControlCharacter.pageDown:
+      return 'pgdown';
+    case ControlCharacter.ctrlA:
+      return 'ctrl+a';
+    case ControlCharacter.ctrlB:
+      return 'ctrl+b';
+    case ControlCharacter.ctrlC:
+      return 'ctrl+c';
+    case ControlCharacter.ctrlD:
+      return 'ctrl+d';
+    case ControlCharacter.ctrlE:
+      return 'ctrl+e';
+    case ControlCharacter.ctrlF:
+      return 'ctrl+f';
+    case ControlCharacter.ctrlG:
+      return 'ctrl+g';
+    case ControlCharacter.ctrlH:
+      return 'ctrl+h';
+    case ControlCharacter.ctrlJ:
+      return 'ctrl+j';
+    case ControlCharacter.ctrlK:
+      return 'ctrl+k';
+    case ControlCharacter.ctrlL:
+      return 'ctrl+l';
+    case ControlCharacter.ctrlN:
+      return 'ctrl+n';
+    case ControlCharacter.ctrlO:
+      return 'ctrl+o';
+    case ControlCharacter.ctrlP:
+      return 'ctrl+p';
+    case ControlCharacter.ctrlQ:
+      return 'ctrl+q';
+    case ControlCharacter.ctrlR:
+      return 'ctrl+r';
+    case ControlCharacter.ctrlS:
+      return 'ctrl+s';
+    case ControlCharacter.ctrlT:
+      return 'ctrl+t';
+    case ControlCharacter.ctrlU:
+      return 'ctrl+u';
+    case ControlCharacter.ctrlV:
+      return 'ctrl+v';
+    case ControlCharacter.ctrlW:
+      return 'ctrl+w';
+    case ControlCharacter.ctrlX:
+      return 'ctrl+x';
+    case ControlCharacter.ctrlY:
+      return 'ctrl+y';
+    case ControlCharacter.ctrlZ:
+      return 'ctrl+z';
+    case ControlCharacter.F1:
+      return 'f1';
+    case ControlCharacter.F2:
+      return 'f2';
+    case ControlCharacter.F3:
+      return 'f3';
+    case ControlCharacter.F4:
+      return 'f4';
+    case ControlCharacter.wordLeft:
+      return 'word+left';
+    case ControlCharacter.wordRight:
+      return 'word+right';
+    case ControlCharacter.none:
+    case ControlCharacter.unknown:
+      return 'unknown';
+  }
+}
