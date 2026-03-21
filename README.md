@@ -1,6 +1,6 @@
 # dart_tui
 
-Elm-style terminal applications in Dart, inspired by [Bubble Tea](https://github.com/charmbracelet/bubbletea): a **`TeaModel`** with **`init`**, **`update`**, and **`view`**, plus async **`Cmd`**s and a **`Program`** runtime.
+Elm-style terminal applications in Dart, inspired by [Bubble Tea](https://github.com/charmbracelet/bubbletea): a **`Model`** with **`init`**, **`update`**, and declarative **`View`**, plus async **`Cmd`**s and a **`Program`** runtime.
 
 Compared to Flutter-like TUIs such as [nocterm](https://pub.dev/packages/nocterm), `dart_tui` keeps state in a single model and uses explicit **`Msg`** values (keys, window size, ticks) instead of `setState()` and widgets.
 
@@ -37,6 +37,12 @@ dart run example/shopping_list.dart
 dart run example/showcase.dart
 ```
 
+**Detailed one-file API tour** (style, components, commands, typed messages):
+
+```bash
+dart run example/all_features.dart
+```
+
 **Prompts** (`promptSelect` / `promptConfirm` / `promptInput`) each run their own `Program`; chain them from a script:
 
 ```bash
@@ -47,9 +53,9 @@ dart run example/prompts_chain.dart
 
 | Concept | Role |
 |--------|------|
-| [`TeaModel`](lib/src/model.dart) | `init()` → optional `Cmd`; `update(Msg)` → next model + optional `Cmd`; `view()` → `String` |
-| [`Msg`](lib/src/msg.dart) | `KeyMsg`, `WindowSizeMsg`, `TickMsg`, `CompoundMsg`, `QuitMsg`, … |
-| [`Cmd`](lib/src/cmd.dart) | `Future<Msg?>` factory; `batch`, `sequence`, `tick` |
+| [`Model`](lib/src/model.dart) | `init()` → optional `Cmd`; `update(Msg)` → next model + optional `Cmd`; `view()` → [`View`](lib/src/view.dart) |
+| [`Msg`](lib/src/msg.dart) | `KeyPressMsg`, `KeyReleaseMsg`, `WindowSizeMsg`, `TickMsg`, `PasteMsg`, `FocusMsg`, `QuitMsg`, … |
+| [`Cmd`](lib/src/cmd.dart) | `FutureOr<Msg?>` factory; `batch`, `sequence`, `tick`, `every`, request/clipboard/raw/print commands |
 | [`Program`](lib/src/program.dart) | Event loop, terminal restore, optional `tickInterval` for animations |
 
 Key input is read from stdin on the **main isolate** via a non-blocking byte stream and the same key mapping as [`Console.readKey`](https://pub.dev/documentation/dart_console/latest/dart_console/Console/readKey.html) (see `lib/src/key_buffer_parser.dart`). Stdin is not reliably available to secondary isolates, so input must stay on the main isolate. `ProgramOptions.tickInterval` schedules [TickMsg](lib/src/msg.dart) on a timer; because the loop is not blocked on synchronous reads, ticks run between key events for spinners and similar animations.
@@ -62,9 +68,9 @@ Imperative helpers for scripts:
 - `promptConfirm(question)` → `Future<bool?>`
 - `promptInput(label)` → `Future<String?>`
 
-## Components (starter set)
+## Components
 
-Under `lib/src/bubbles/`: [`SpinnerModel`](lib/src/bubbles/spinner.dart), [`ProgressModel`](lib/src/bubbles/progress.dart), [`TextInputModel`](lib/src/bubbles/text_input.dart), [`SelectListModel`](lib/src/bubbles/select_list.dart), and minimal [`TuiStyle`](lib/src/bubbles/style.dart) ANSI helpers.
+Under `lib/src/bubbles/`: [`SpinnerModel`](lib/src/bubbles/spinner.dart), [`ProgressModel`](lib/src/bubbles/progress.dart), [`TextInputModel`](lib/src/bubbles/text_input.dart), [`SelectListModel`](lib/src/bubbles/select_list.dart), [`PaginatorModel`](lib/src/bubbles/paginator.dart), [`HelpModel`](lib/src/bubbles/help.dart), plus composable [`Style`](lib/src/bubbles/style.dart) and compatibility [`TuiStyle`](lib/src/bubbles/style.dart) helpers.
 
 ## Debugging
 

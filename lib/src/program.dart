@@ -9,13 +9,22 @@ import 'package:dart_console/dart_console.dart' as dc;
 import 'package:meta/meta.dart';
 
 import 'cmd.dart';
-import 'key_buffer_parser.dart';
-import 'key_util.dart';
+import 'input_decoder.dart';
 import 'model.dart';
 import 'msg.dart';
+import 'renderer.dart';
 import 'view.dart';
 
 typedef ProgramOption = void Function(Program program);
+
+Stream<List<int>>? _stdinBroadcastCache;
+
+Stream<List<int>> _stdinBroadcast() {
+  return _stdinBroadcastCache ??= stdin.asBroadcastStream(
+    onListen: (subscription) => subscription.resume(),
+    onCancel: (subscription) => subscription.pause(),
+  );
+}
 
 /// Compatibility options while migrating toward option-function API.
 @immutable
@@ -39,6 +48,7 @@ ProgramOption withContext(Future<void> Function() cancellation) {
   };
 }
 
+@Deprecated('Use withContext(...)')
 ProgramOption WithContext(Future<void> Function() cancellation) =>
     withContext(cancellation);
 
@@ -49,6 +59,7 @@ ProgramOption withInput(Stream<List<int>>? input) {
   };
 }
 
+@Deprecated('Use withInput(...)')
 ProgramOption WithInput(Stream<List<int>>? input) => withInput(input);
 
 ProgramOption withOutput(IOSink output) {
@@ -57,6 +68,7 @@ ProgramOption withOutput(IOSink output) {
   };
 }
 
+@Deprecated('Use withOutput(...)')
 ProgramOption WithOutput(IOSink output) => withOutput(output);
 
 ProgramOption withEnvironment(Map<String, String> env) {
@@ -65,6 +77,7 @@ ProgramOption withEnvironment(Map<String, String> env) {
   };
 }
 
+@Deprecated('Use withEnvironment(...)')
 ProgramOption WithEnvironment(Map<String, String> env) => withEnvironment(env);
 
 ProgramOption withoutSignalHandler() => (p) => p._disableSignalHandler = true;
@@ -82,14 +95,21 @@ ProgramOption withWindowSize(int width, int height) {
   };
 }
 
+@Deprecated('Use withoutSignalHandler()')
 ProgramOption WithoutSignalHandler() => withoutSignalHandler();
+@Deprecated('Use withoutCatchPanics()')
 ProgramOption WithoutCatchPanics() => withoutCatchPanics();
+@Deprecated('Use withoutRenderer()')
 ProgramOption WithoutRenderer() => withoutRenderer();
+@Deprecated('Use withFilter(...)')
 ProgramOption WithFilter(Msg? Function(Model model, Msg msg) filter) =>
     withFilter(filter);
+@Deprecated('Use withFps(...)')
 ProgramOption WithFps(int fps) => withFps(fps);
+@Deprecated('Use withColorProfile(...)')
 ProgramOption WithColorProfile(ColorProfile profile) =>
     withColorProfile(profile);
+@Deprecated('Use withWindowSize(...)')
 ProgramOption WithWindowSize(int width, int height) =>
     withWindowSize(width, height);
 
@@ -131,11 +151,7 @@ final class Program {
   Timer? _renderTicker;
   StreamSubscription<List<int>>? _inputSub;
   StreamSubscription<ProcessSignal>? _sigSub;
-  bool _altScreenEnabled = false;
-  bool _cursorHidden = false;
-  bool _focusReportingEnabled = false;
-  bool _bracketedPasteEnabled = false;
-  MouseMode _mouseMode = MouseMode.none;
+  TeaRenderer? _renderer;
 
   Future<Model> run(Model initial) async {
     final (_, model) = await _runCore(initial);
@@ -168,19 +184,7 @@ final class Program {
     if (_disableRenderer) return;
     _renderTicker?.cancel();
     _renderTicker = null;
-    _output.write('\x1b[?25h');
-    _output.write('\x1b[?1049l');
-    _output.write('\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l');
-    _output.write('\x1b[?1004l');
-    _output.write('\x1b[?2004l');
-    _cursorHidden = false;
-    _altScreenEnabled = false;
-    _focusReportingEnabled = false;
-    _bracketedPasteEnabled = false;
-    _mouseMode = MouseMode.none;
-    if (resetRenderer) {
-      _output.write('\x1b[H\x1b[2J');
-    }
+    _renderer?.release(reset: resetRenderer);
     _console.rawMode = false;
   }
 
@@ -191,9 +195,7 @@ final class Program {
     _startRenderTicker();
     final m = _runningModel;
     if (m != null) {
-      final v = m.view();
-      _configureTerminalForView(v);
-      _render(v);
+      _renderer?.restore(m.view());
     }
   }
 
@@ -244,55 +246,8 @@ final class Program {
       }
     }
 
-    void configureTerminalForView(View v) {
-      final wantsAlt = v.altScreen || _compatOptions.altScreen;
-      if (wantsAlt != _altScreenEnabled) {
-        _output.write(wantsAlt ? '\x1b[?1049h' : '\x1b[?1049l');
-        _altScreenEnabled = wantsAlt;
-      }
-
-      final wantsHiddenCursor = v.cursor == null && _compatOptions.hideCursor;
-      if (wantsHiddenCursor != _cursorHidden) {
-        _output.write(wantsHiddenCursor ? '\x1b[?25l' : '\x1b[?25h');
-        _cursorHidden = wantsHiddenCursor;
-      }
-
-      if (v.reportFocus != _focusReportingEnabled) {
-        _output.write(v.reportFocus ? '\x1b[?1004h' : '\x1b[?1004l');
-        _focusReportingEnabled = v.reportFocus;
-      }
-
-      final wantsBracketedPaste = !v.disableBracketedPasteMode;
-      if (wantsBracketedPaste != _bracketedPasteEnabled) {
-        _output.write(wantsBracketedPaste ? '\x1b[?2004h' : '\x1b[?2004l');
-        _bracketedPasteEnabled = wantsBracketedPaste;
-      }
-
-      if (v.mouseMode != _mouseMode) {
-        _output.write('\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l');
-        switch (v.mouseMode) {
-          case MouseMode.none:
-            break;
-          case MouseMode.cellMotion:
-            _output.write('\x1b[?1002h\x1b[?1006h');
-            break;
-          case MouseMode.allMotion:
-            _output.write('\x1b[?1003h\x1b[?1006h');
-            break;
-        }
-        _mouseMode = v.mouseMode;
-      }
-    }
-
     void render(View v) {
-      if (_disableRenderer) return;
-      configureTerminalForView(v);
-      if (v.windowTitle.isNotEmpty) {
-        _output.write('\x1b]0;${v.windowTitle}\x07');
-      }
-      _output.write('\x1b[H\x1b[2J');
-      _output.write(v.content);
-      _logSink?.writeln('--- frame ---\n${v.content}');
+      _renderer?.render(v);
     }
 
     void scheduleResizeMsg() {
@@ -357,12 +312,10 @@ final class Program {
           _output.write('\x1b]52;p;?\x07');
           return;
         case ClearScreenMsg():
-          _output.write('\x1b[H\x1b[2J');
+          _renderer?.clearScreen();
           return;
         case PrintLineMsg():
-          if (!_altScreenEnabled) {
-            _output.writeln(msg.messageBody);
-          }
+          _renderer?.insertAbove(msg.messageBody);
           return;
         case BatchMsg():
           for (final c in msg.cmds) {
@@ -384,6 +337,14 @@ final class Program {
 
     try {
       _logSink = _compatOptions.logFile?.openWrite(mode: FileMode.append);
+      _renderer = _disableRenderer
+          ? NilRenderer()
+          : AnsiRenderer(
+              output: _output,
+              logSink: _logSink,
+              defaultAltScreen: _compatOptions.altScreen,
+              defaultHideCursor: _compatOptions.hideCursor,
+            );
       if (!_disableRenderer) {
         _console.rawMode = true;
       }
@@ -398,14 +359,12 @@ final class Program {
       enqueue(EnvMsg(_environment));
 
       if (!_disableInput) {
-        final source = _input ?? stdin.asBroadcastStream();
-        final keyBuffer = <int>[];
+        final source = _input ?? _stdinBroadcast();
+        final decoder = TerminalInputDecoder();
         _inputSub = source.listen(
           (bytes) {
-            keyBuffer.addAll(bytes);
-            dc.Key? parsed;
-            while ((parsed = parseKeyFromBuffer(keyBuffer)) != null) {
-              enqueue(KeyPressMsg(toTeaKey(parsed!)));
+            for (final msg in decoder.feed(bytes)) {
+              enqueue(msg);
             }
           },
           cancelOnError: true,
@@ -462,14 +421,8 @@ final class Program {
     _inputSub = null;
     unawaited(_sigSub?.cancel());
     _sigSub = null;
-    if (_cursorHidden) {
-      _output.write('\x1b[?25h');
-      _cursorHidden = false;
-    }
-    if (_altScreenEnabled) {
-      _output.write('\x1b[?1049l');
-      _altScreenEnabled = false;
-    }
+    _renderer?.close();
+    _renderer = null;
     if (!_disableRenderer) {
       _console.rawMode = false;
     }
@@ -479,17 +432,8 @@ final class Program {
     _finished?.complete();
   }
 
-  void _configureTerminalForView(View v) {
-    final wantsAlt = v.altScreen || _compatOptions.altScreen;
-    if (wantsAlt != _altScreenEnabled) {
-      _output.write(wantsAlt ? '\x1b[?1049h' : '\x1b[?1049l');
-      _altScreenEnabled = wantsAlt;
-    }
-  }
-
   void _render(View v) {
-    _output.write('\x1b[H\x1b[2J');
-    _output.write(v.content);
+    _renderer?.render(v);
   }
 
   void _startRenderTicker([void Function(View v)? customRender]) {

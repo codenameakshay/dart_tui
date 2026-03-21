@@ -13,3 +13,5 @@ export 'src/bubbles/select_list.dart';
 export 'src/bubbles/spinner.dart';
 export 'src/bubbles/style.dart';
 export 'src/bubbles/text_input.dart';
+export 'src/bubbles/paginator.dart';
+export 'src/bubbles/help.dart';

@@ -18,13 +18,11 @@ final class ShoppingModel extends TeaModel {
     required this.choices,
     this.cursor = 0,
     Set<int>? selected,
-    this.quitting = false,
   }) : selected = selected ?? <int>{};
 
   final List<String> choices;
   final int cursor;
   final Set<int> selected;
-  final bool quitting;
 
   @override
   (TeaModel, Cmd?) update(Msg msg) {
