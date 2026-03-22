@@ -12,5 +12,6 @@ export 'bubbles/stopwatch.dart';
 export 'bubbles/table.dart';
 export 'bubbles/text_area.dart';
 export 'bubbles/text_input.dart';
+export 'bubbles/themes.dart';
 export 'bubbles/timer.dart';
 export 'bubbles/viewport.dart';

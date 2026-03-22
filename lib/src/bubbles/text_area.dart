@@ -4,6 +4,7 @@ import '../cmd.dart';
 import '../model.dart';
 import '../msg.dart';
 import '../view.dart';
+import 'text_input.dart' show InputStyles;
 
 /// Multi-line text editor bubble.
 ///
@@ -19,6 +20,7 @@ final class TextAreaModel extends TeaModel {
     this.charLimit = 0,
     this.focused = true,
     this.placeholder = '',
+    this.styles = InputStyles.defaults,
   });
 
   final String value;
@@ -30,6 +32,7 @@ final class TextAreaModel extends TeaModel {
   final int charLimit;
   final bool focused;
   final String placeholder;
+  final InputStyles styles;
 
   /// Split [value] into lines.
   List<String> get lines => value.split('\n');
@@ -44,6 +47,7 @@ final class TextAreaModel extends TeaModel {
     int? charLimit,
     bool? focused,
     String? placeholder,
+    InputStyles? styles,
   }) =>
       TextAreaModel(
         value: value ?? this.value,
@@ -55,6 +59,7 @@ final class TextAreaModel extends TeaModel {
         charLimit: charLimit ?? this.charLimit,
         focused: focused ?? this.focused,
         placeholder: placeholder ?? this.placeholder,
+        styles: styles ?? this.styles,
       );
 
   /// Insert [text] at the current cursor position.
@@ -209,12 +214,12 @@ final class TextAreaModel extends TeaModel {
   View view() {
     final ls = lines;
     if (ls.isEmpty || (ls.length == 1 && ls[0].isEmpty && !focused)) {
-      return newView('\x1b[2m$placeholder\x1b[0m');
+      return newView(styles.placeholder.render(placeholder));
     }
 
     final visibleStart = scrollOffset;
     final visibleEnd = (scrollOffset + maxHeight).clamp(0, ls.length);
     final visible = ls.sublist(visibleStart, visibleEnd);
-    return newView(visible.join('\n'));
+    return newView(visible.map(styles.text.render).join('\n'));
   }
 }

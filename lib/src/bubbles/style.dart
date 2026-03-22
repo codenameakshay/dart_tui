@@ -17,6 +17,9 @@ final class Style {
     this.adaptiveBackground,
     this.isBold = false,
     this.isDim = false,
+    this.isItalic = false,
+    this.isUnderline = false,
+    this.isStrikethrough = false,
     this.padding = const EdgeInsets.all(0),
     this.margin = const EdgeInsets.all(0),
     this.border = Border.none,
@@ -38,6 +41,9 @@ final class Style {
   final AdaptiveColor? adaptiveBackground;
   final bool isBold;
   final bool isDim;
+  final bool isItalic;
+  final bool isUnderline;
+  final bool isStrikethrough;
   final EdgeInsets padding;
   final EdgeInsets margin;
   final Border border;
@@ -60,6 +66,9 @@ final class Style {
       copyWith(backgroundRgb: RgbColor(r, g, b));
   Style bold([bool value = true]) => copyWith(isBold: value);
   Style dim([bool value = true]) => copyWith(isDim: value);
+  Style italic([bool value = true]) => copyWith(isItalic: value);
+  Style underline([bool value = true]) => copyWith(isUnderline: value);
+  Style strikethrough([bool value = true]) => copyWith(isStrikethrough: value);
   Style withPadding(EdgeInsets value) => copyWith(padding: value);
   Style withMargin(EdgeInsets value) => copyWith(margin: value);
   Style withBorder(Border value) => copyWith(border: value);
@@ -86,6 +95,9 @@ final class Style {
     AdaptiveColor? adaptiveBackground,
     bool? isBold,
     bool? isDim,
+    bool? isItalic,
+    bool? isUnderline,
+    bool? isStrikethrough,
     EdgeInsets? padding,
     EdgeInsets? margin,
     Border? border,
@@ -107,6 +119,9 @@ final class Style {
       adaptiveBackground: adaptiveBackground ?? this.adaptiveBackground,
       isBold: isBold ?? this.isBold,
       isDim: isDim ?? this.isDim,
+      isItalic: isItalic ?? this.isItalic,
+      isUnderline: isUnderline ?? this.isUnderline,
+      isStrikethrough: isStrikethrough ?? this.isStrikethrough,
       padding: padding ?? this.padding,
       margin: margin ?? this.margin,
       border: border ?? this.border,
@@ -289,6 +304,9 @@ final class Style {
 
     if (isBold) open.write('\x1b[1m');
     if (isDim) open.write('\x1b[2m');
+    if (isItalic) open.write('\x1b[3m');
+    if (isUnderline) open.write('\x1b[4m');
+    if (isStrikethrough) open.write('\x1b[9m');
 
     // Resolve effective foreground/background considering adaptive colors and profile
     final effectiveFg = _resolveColor(
@@ -509,6 +527,38 @@ double _colorDist(RgbColor a, RgbColor b) {
   final dg = (a.g - b.g).toDouble();
   final db = (a.b - b.b).toDouble();
   return dr * dr + dg * dg + db * db;
+}
+
+// ── Color utility functions ────────────────────────────────────────────────────
+
+/// Lighten [c] by [amount] (0.0–1.0): blend toward white.
+RgbColor lighten(RgbColor c, double amount) {
+  final t = amount.clamp(0.0, 1.0);
+  return RgbColor(
+    (c.r + (255 - c.r) * t).round().clamp(0, 255),
+    (c.g + (255 - c.g) * t).round().clamp(0, 255),
+    (c.b + (255 - c.b) * t).round().clamp(0, 255),
+  );
+}
+
+/// Darken [c] by [amount] (0.0–1.0): blend toward black.
+RgbColor darken(RgbColor c, double amount) {
+  final t = amount.clamp(0.0, 1.0);
+  return RgbColor(
+    (c.r * (1 - t)).round().clamp(0, 255),
+    (c.g * (1 - t)).round().clamp(0, 255),
+    (c.b * (1 - t)).round().clamp(0, 255),
+  );
+}
+
+/// Linearly interpolate between [a] and [b] by [t] (0.0 = all a, 1.0 = all b).
+RgbColor blend(RgbColor a, RgbColor b, double t) {
+  final s = t.clamp(0.0, 1.0);
+  return RgbColor(
+    (a.r + (b.r - a.r) * s).round().clamp(0, 255),
+    (a.g + (b.g - a.g) * s).round().clamp(0, 255),
+    (a.b + (b.b - a.b) * s).round().clamp(0, 255),
+  );
 }
 
 // ── Width helpers ─────────────────────────────────────────────────────────────

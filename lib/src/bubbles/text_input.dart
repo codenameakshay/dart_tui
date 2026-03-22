@@ -2,6 +2,7 @@ import '../cmd.dart';
 import '../model.dart';
 import '../msg.dart';
 import '../view.dart';
+import 'style.dart';
 
 /// How the text input renders its value.
 enum EchoMode {
@@ -13,6 +14,55 @@ enum EchoMode {
 
   /// None: display nothing (value is tracked but not shown).
   none,
+}
+
+/// Style configuration for [TextInputModel] and [TextAreaModel].
+final class InputStyles {
+  const InputStyles({
+    this.label = const Style(),
+    this.focusedLabel = const Style(),
+    this.text = const Style(),
+    this.placeholder = const Style(),
+    this.suggestion = const Style(),
+  });
+
+  /// Applied to the label when unfocused.
+  final Style label;
+
+  /// Applied to the label when the field is focused.
+  final Style focusedLabel;
+
+  /// Applied to the typed text.
+  final Style text;
+
+  /// Applied to the placeholder when value is empty and unfocused.
+  final Style placeholder;
+
+  /// Applied to the dimmed autocomplete suggestion suffix.
+  final Style suggestion;
+
+  /// Beautiful defaults using the Catppuccin Mocha palette.
+  static const InputStyles defaults = InputStyles(
+    label: Style(
+      foregroundRgb: RgbColor(166, 173, 200), // Subtext0
+    ),
+    focusedLabel: Style(
+      foregroundRgb: RgbColor(203, 166, 247), // Mauve
+      isBold: true,
+    ),
+    text: Style(
+      foregroundRgb: RgbColor(205, 214, 244), // Text
+    ),
+    placeholder: Style(
+      foregroundRgb: RgbColor(108, 112, 134), // Overlay0
+      isDim: true,
+      isItalic: true,
+    ),
+    suggestion: Style(
+      foregroundRgb: RgbColor(108, 112, 134), // Overlay0
+      isDim: true,
+    ),
+  );
 }
 
 /// Single-line text field with full Bubbletea-compatible feature set.
@@ -27,6 +77,7 @@ final class TextInputModel extends TeaModel {
     this.focused = true,
     this.validate,
     this.suggestions = const [],
+    this.styles = InputStyles.defaults,
   });
 
   final String value;
@@ -51,6 +102,8 @@ final class TextInputModel extends TeaModel {
   /// dimmed after the cursor; Tab accepts it.
   final List<String> suggestions;
 
+  final InputStyles styles;
+
   TextInputModel copyWith({
     String? value,
     int? cursorPos,
@@ -61,6 +114,7 @@ final class TextInputModel extends TeaModel {
     bool? focused,
     bool Function(String)? validate,
     List<String>? suggestions,
+    InputStyles? styles,
   }) =>
       TextInputModel(
         value: value ?? this.value,
@@ -72,6 +126,7 @@ final class TextInputModel extends TeaModel {
         focused: focused ?? this.focused,
         validate: validate ?? this.validate,
         suggestions: suggestions ?? this.suggestions,
+        styles: styles ?? this.styles,
       );
 
   String? get _activeSuggestion {
@@ -148,7 +203,7 @@ final class TextInputModel extends TeaModel {
   View view() {
     if (!focused && value.isEmpty) {
       final display = label.isEmpty ? placeholder : '$label $placeholder';
-      return newView('\x1b[2m$display\x1b[0m'); // dim placeholder
+      return newView(styles.placeholder.render(display));
     }
 
     String displayValue;
@@ -162,11 +217,12 @@ final class TextInputModel extends TeaModel {
     }
 
     final suggestion = _activeSuggestion;
-    final suffix = (echoMode == EchoMode.normal && suggestion != null)
-        ? '\x1b[2m${suggestion.substring(value.length)}\x1b[0m'
+    final suggestionSuffix = (echoMode == EchoMode.normal && suggestion != null)
+        ? styles.suggestion.render(suggestion.substring(value.length))
         : '';
 
-    final prefix = label.isEmpty ? '' : '$label ';
-    return newView('$prefix$displayValue$suffix');
+    final labelStyle = focused ? styles.focusedLabel : styles.label;
+    final prefix = label.isEmpty ? '' : '${labelStyle.render(label)} ';
+    return newView('$prefix${styles.text.render(displayValue)}$suggestionSuffix');
   }
 }
