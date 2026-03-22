@@ -40,7 +40,7 @@ final class CanvasShowcaseModel extends TeaModel {
     final canvas = Canvas(w, h);
 
     // ── Layer 0: background fill ──────────────────────────────────────────
-    final bg = Style(backgroundRgb: const RgbColor(18, 18, 30))
+    final bg = const Style(backgroundRgb: RgbColor(18, 18, 30))
         .withWidth(w)
         .withHeight(h);
     canvas.paint(0, 0, bg.render(''), zIndex: 0);
@@ -49,7 +49,7 @@ final class CanvasShowcaseModel extends TeaModel {
     final leftBorder = const Style(
       foregroundRgb: RgbColor(88, 91, 112), // Surface2
       border: Border.rounded,
-    ).withWidth(30).withHeight(10).withPadding(EdgeInsets.all(1));
+    ).withWidth(30).withHeight(10).withPadding(const EdgeInsets.all(1));
 
     final leftContent = '''${gradientText('Canvas Compositing', [
           const RgbColor(203, 166, 247),
@@ -68,7 +68,7 @@ ${const Style(foregroundRgb: RgbColor(205, 214, 244)).render('Higher z → draws
     final rightPanel = const Style(
       foregroundRgb: RgbColor(137, 180, 250), // Blue
       border: Border.box,
-    ).withWidth(28).withHeight(10).withPadding(EdgeInsets.all(1));
+    ).withWidth(28).withHeight(10).withPadding(const EdgeInsets.all(1));
 
     canvas.paint(38, 2, rightPanel.render(_zDemoContent()), zIndex: 1);
 
@@ -82,7 +82,7 @@ ${const Style(foregroundRgb: RgbColor(205, 214, 244)).render('Higher z → draws
       '  ✦  dart_tui Canvas  ✦  ',
       [
         RgbColor(r1, g1, b1),
-        RgbColor(203, 166, 247),
+        const RgbColor(203, 166, 247),
         RgbColor((255 - r1).clamp(0, 255), g1, b1),
       ],
     );
@@ -91,7 +91,7 @@ ${const Style(foregroundRgb: RgbColor(205, 214, 244)).render('Higher z → draws
       backgroundRgb: RgbColor(30, 30, 50),
       border: Border.thick,
       foregroundRgb: RgbColor(203, 166, 247),
-    ).withWidth(34).withPadding(EdgeInsets.all(1));
+    ).withWidth(34).withPadding(const EdgeInsets.all(1));
 
     canvas.paint(18, 14, bannerStyle.render(bannerText), zIndex: 2);
 
@@ -99,7 +99,7 @@ ${const Style(foregroundRgb: RgbColor(205, 214, 244)).render('Higher z → draws
     final accentBox = const Style(
       foregroundRgb: RgbColor(166, 227, 161), // Green
       border: Border.rounded,
-    ).withWidth(14).withHeight(5).withPadding(EdgeInsets.all(0));
+    ).withWidth(14).withHeight(5).withPadding(const EdgeInsets.all(0));
 
     canvas.paint(14, 12,
         accentBox.render(const Style(

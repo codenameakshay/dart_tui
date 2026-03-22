@@ -10,13 +10,13 @@ Future<void> main() async {
       altScreen: true,
       tickInterval: Duration(milliseconds: 100),
     ),
-  ).run(ComposableModel());
+  ).run(_ComposableModel());
 }
 
 enum _Focus { timer, spinner }
 
-final class ComposableModel extends TeaModel {
-  ComposableModel({
+final class _ComposableModel extends TeaModel {
+  _ComposableModel({
     TimerModel? timer,
     SpinnerModel? spinner,
     this.focus = _Focus.timer,
@@ -35,12 +35,12 @@ final class ComposableModel extends TeaModel {
   final SpinnerModel spinner;
   final _Focus focus;
 
-  ComposableModel _copyWith({
+  _ComposableModel _copyWith({
     TimerModel? timer,
     SpinnerModel? spinner,
     _Focus? focus,
   }) =>
-      ComposableModel(
+      _ComposableModel(
         timer: timer ?? this.timer,
         spinner: spinner ?? this.spinner,
         focus: focus ?? this.focus,

@@ -6,7 +6,7 @@ import 'package:dart_tui/dart_tui.dart';
 Future<void> main() async {
   await Program(
     options: const ProgramOptions(altScreen: true),
-  ).run(ViewsModel());
+  ).run(_ViewsModel());
 }
 
 enum _Phase { list, progress, done }
@@ -20,8 +20,8 @@ const _items = [
   'package-d v3.1.4',
 ];
 
-final class ViewsModel extends TeaModel {
-  ViewsModel({
+final class _ViewsModel extends TeaModel {
+  _ViewsModel({
     this.phase = _Phase.list,
     this.cursor = 0,
     this.fraction = 0.0,
@@ -31,12 +31,12 @@ final class ViewsModel extends TeaModel {
   final int cursor;
   final double fraction;
 
-  ViewsModel _copyWith({
+  _ViewsModel _copyWith({
     _Phase? phase,
     int? cursor,
     double? fraction,
   }) =>
-      ViewsModel(
+      _ViewsModel(
         phase: phase ?? this.phase,
         cursor: cursor ?? this.cursor,
         fraction: fraction ?? this.fraction,

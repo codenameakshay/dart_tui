@@ -16,9 +16,9 @@ void main() {
   final sunset = gradientText(
     '  ⬛ Sunset  — hot orange fading to deep violet  ⬛',
     [
-      RgbColor(255, 94, 58),   // hot red-orange
-      RgbColor(255, 166, 77),  // amber
-      RgbColor(200, 80, 192),  // violet
+      const RgbColor(255, 94, 58),   // hot red-orange
+      const RgbColor(255, 166, 77),  // amber
+      const RgbColor(200, 80, 192),  // violet
     ],
   );
   print(sunset);
@@ -28,9 +28,9 @@ void main() {
   final ocean = gradientText(
     '  ⬛ Ocean   — deep navy rising to aqua-teal     ⬛',
     [
-      RgbColor(10, 30, 120),   // deep navy
-      RgbColor(0, 128, 200),   // mid blue
-      RgbColor(0, 220, 200),   // aqua teal
+      const RgbColor(10, 30, 120),   // deep navy
+      const RgbColor(0, 128, 200),   // mid blue
+      const RgbColor(0, 220, 200),   // aqua teal
     ],
   );
   print(ocean);
@@ -40,9 +40,9 @@ void main() {
   final catppuccin = gradientText(
     '  ⬛ Mocha   — Catppuccin Mauve to Sapphire       ⬛',
     [
-      RgbColor(203, 166, 247), // Mauve
-      RgbColor(137, 180, 250), // Blue
-      RgbColor(116, 199, 236), // Sapphire
+      const RgbColor(203, 166, 247), // Mauve
+      const RgbColor(137, 180, 250), // Blue
+      const RgbColor(116, 199, 236), // Sapphire
     ],
   );
   print(catppuccin);
@@ -52,12 +52,12 @@ void main() {
   final rainbow = gradientText(
     '  ⬛ Rainbow — the full spectrum in one line      ⬛',
     [
-      RgbColor(255, 0, 0),     // red
-      RgbColor(255, 165, 0),   // orange
-      RgbColor(255, 255, 0),   // yellow
-      RgbColor(0, 200, 0),     // green
-      RgbColor(0, 100, 255),   // blue
-      RgbColor(148, 0, 211),   // violet
+      const RgbColor(255, 0, 0),     // red
+      const RgbColor(255, 165, 0),   // orange
+      const RgbColor(255, 255, 0),   // yellow
+      const RgbColor(0, 200, 0),     // green
+      const RgbColor(0, 100, 255),   // blue
+      const RgbColor(148, 0, 211),   // violet
     ],
   );
   print(rainbow);
@@ -67,9 +67,9 @@ void main() {
   final bgGrad = gradientBackground(
     '  ⬛ BG Grad — background colors, white text      ⬛',
     [
-      RgbColor(30, 30, 80),    // dark indigo
-      RgbColor(80, 30, 120),   // purple
-      RgbColor(180, 30, 100),  // crimson
+      const RgbColor(30, 30, 80),    // dark indigo
+      const RgbColor(80, 30, 120),   // purple
+      const RgbColor(180, 30, 100),  // crimson
     ],
     foreground: const Style(foregroundRgb: RgbColor(240, 240, 255)),
   );

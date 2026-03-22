@@ -196,12 +196,12 @@ void main() {
       final model = TreeModel(
         root: sampleRoot,
         height: 20,
-        styles: TreeStyles(
-          connector: const Style(),
-          label: const Style(),
-          selectedLabel: const Style(),
-          expandedIcon: const Style(),
-          collapsedIcon: const Style(),
+        styles: const TreeStyles(
+          connector: Style(),
+          label: Style(),
+          selectedLabel: Style(),
+          expandedIcon: Style(),
+          collapsedIcon: Style(),
         ),
       );
       expect(model.view().content, contains('▾'));

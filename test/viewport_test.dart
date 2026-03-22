@@ -1,10 +1,6 @@
 import 'package:dart_tui/dart_tui.dart';
 import 'package:test/test.dart';
 
-/// Helper: create a [KeyPressMsg] for a single printable character.
-KeyPressMsg _char(String ch) =>
-    KeyPressMsg(TeaKey(code: KeyCode.rune, text: ch));
-
 void main() {
   group('ViewportModel', () {
     final content = List.generate(20, (i) => 'line $i').join('\n');

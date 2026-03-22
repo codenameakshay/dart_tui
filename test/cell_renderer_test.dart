@@ -3,9 +3,9 @@ import 'dart:io';
 
 import 'package:test/test.dart';
 
-// Internal imports — use direct lib paths to avoid duplicate-type conflicts
-import '../lib/src/renderer.dart';
-import '../lib/src/view.dart';
+// Internal imports — use package paths to access src directly
+import 'package:dart_tui/src/renderer.dart';
+import 'package:dart_tui/src/view.dart';
 
 void main() {
   group('CellRenderer', () {
@@ -71,7 +71,7 @@ class _StringSink implements IOSink {
   final StringBuffer _buf;
   @override void write(Object? obj) => _buf.write(obj);
   @override void writeln([Object? obj = '']) => _buf.writeln(obj);
-  @override void writeAll(Iterable objects, [String separator = '']) =>
+  @override void writeAll(Iterable<Object?> objects, [String separator = '']) =>
       _buf.writeAll(objects, separator);
   @override void writeCharCode(int charCode) => _buf.writeCharCode(charCode);
   @override Future<void> flush() async {}

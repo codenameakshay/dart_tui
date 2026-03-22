@@ -86,8 +86,8 @@ void main() {
     });
 
     test('ansi profile degrades RGB to ansi16', () {
-      final s = Style(
-        foregroundRgb: const RgbColor(255, 0, 0),
+      final s = const Style(
+        foregroundRgb: RgbColor(255, 0, 0),
         profile: ColorProfile.ansi,
       );
       final rendered = s.render('text');

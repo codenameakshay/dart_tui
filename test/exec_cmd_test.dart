@@ -5,13 +5,11 @@ void main() {
   test('execProcess with inheritStdio=false delivers exit code via onExit', () async {
     // Note: Full integration test requires a running Program. This tests the
     // ExecMsg object is constructed correctly.
-    var called = false;
     final cmd = execProcess(
       'echo',
       ['hello'],
       inheritStdio: false,
       onExit: (exitCode) {
-        called = true;
         expect(exitCode, 0);
         return null;
       },
