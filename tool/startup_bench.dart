@@ -87,7 +87,11 @@ Future<void> _benchOne(
       : path.replaceFirst('example/', '').replaceFirst('.dart', '');
 
   if (printHeader) {
-    final mode = dill ? 'kernel snapshot' : aot ? 'AOT' : 'JIT source';
+    final mode = dill
+        ? 'kernel snapshot'
+        : aot
+            ? 'AOT'
+            : 'JIT source';
     print('Benchmarking: $path  [$mode]');
     print('');
   }
@@ -122,8 +126,7 @@ Future<int> _measureStartup(
 }) async {
   List<String> command;
   if (aot) {
-    final name =
-        path.replaceFirst('example/', '').replaceFirst('.dart', '');
+    final name = path.replaceFirst('example/', '').replaceFirst('.dart', '');
     command = ['tool/bin/$name'];
   } else if (dill) {
     command = ['fvm', 'dart', 'run', path];

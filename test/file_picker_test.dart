@@ -4,8 +4,7 @@ import 'package:dart_tui/dart_tui.dart';
 import 'package:test/test.dart';
 
 /// Helper: create a [KeyPressMsg] for a special key.
-KeyPressMsg _special(KeyCode code) =>
-    KeyPressMsg(TeaKey(code: code));
+KeyPressMsg _special(KeyCode code) => KeyPressMsg(TeaKey(code: code));
 
 void main() {
   group('FilePickerModel', () {
@@ -60,8 +59,8 @@ void main() {
       final (loaded, _) = picker.update(loadMsg!);
 
       // Navigate to parent using backspace key
-      final (afterBack, _) = (loaded as FilePickerModel).update(
-          _special(KeyCode.backspace));
+      final (afterBack, _) =
+          (loaded as FilePickerModel).update(_special(KeyCode.backspace));
       expect((afterBack as FilePickerModel).currentDir,
           isNot(equals(tempDir.path)));
     });

@@ -71,7 +71,8 @@ final class SelectListModel extends TeaModel {
         final c = _safeCursor;
         final next = c > 0 ? c - 1 : 0;
         return (
-          SelectListModel(items: items, cursor: next, title: title, styles: styles),
+          SelectListModel(
+              items: items, cursor: next, title: title, styles: styles),
           null
         );
       case 'down':
@@ -79,7 +80,8 @@ final class SelectListModel extends TeaModel {
         final c = _safeCursor;
         final next = c < items.length - 1 ? c + 1 : items.length - 1;
         return (
-          SelectListModel(items: items, cursor: next, title: title, styles: styles),
+          SelectListModel(
+              items: items, cursor: next, title: title, styles: styles),
           null
         );
       default:
@@ -97,7 +99,8 @@ final class SelectListModel extends TeaModel {
     final cur = _safeCursor;
     for (var i = 0; i < items.length; i++) {
       if (i == cur) {
-        b.writeln('${styles.cursor.render('›')} ${styles.selectedItem.render(items[i])}');
+        b.writeln(
+            '${styles.cursor.render('›')} ${styles.selectedItem.render(items[i])}');
       } else {
         b.writeln('  ${styles.normalItem.render(items[i])}');
       }

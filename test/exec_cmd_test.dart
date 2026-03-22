@@ -2,7 +2,8 @@ import 'package:dart_tui/dart_tui.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test('execProcess with inheritStdio=false delivers exit code via onExit', () async {
+  test('execProcess with inheritStdio=false delivers exit code via onExit',
+      () async {
     // Note: Full integration test requires a running Program. This tests the
     // ExecMsg object is constructed correctly.
     final cmd = execProcess(

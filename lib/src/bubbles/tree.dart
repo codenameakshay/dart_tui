@@ -145,8 +145,8 @@ final class TreeModel extends TeaModel {
       path: const [],
     ));
     if (root.isExpanded) {
-      _addChildren(result, root.children, depth: 1, parentIsLast: const [],
-          parentPath: const []);
+      _addChildren(result, root.children,
+          depth: 1, parentIsLast: const [], parentPath: const []);
     }
     return result;
   }
@@ -190,8 +190,8 @@ final class TreeModel extends TeaModel {
     if (_flat.isEmpty) return this;
     final flat = _flat[cur];
     if (flat.node.isLeaf) return this;
-    final newRoot = _updateNodeAtPath(root, flat.path,
-        (n) => n.copyWith(isExpanded: !n.isExpanded));
+    final newRoot = _updateNodeAtPath(
+        root, flat.path, (n) => n.copyWith(isExpanded: !n.isExpanded));
     return _copyWith(root: newRoot, cursor: cur);
   }
 
@@ -200,8 +200,8 @@ final class TreeModel extends TeaModel {
     if (_flat.isEmpty) return this;
     final flat = _flat[cur];
     if (flat.node.isLeaf || flat.node.isExpanded) return this;
-    final newRoot = _updateNodeAtPath(
-        root, flat.path, (n) => n.copyWith(isExpanded: true));
+    final newRoot =
+        _updateNodeAtPath(root, flat.path, (n) => n.copyWith(isExpanded: true));
     return _copyWith(root: newRoot, cursor: cur);
   }
 
@@ -296,15 +296,12 @@ final class TreeModel extends TeaModel {
       if (flat.depth > 0) {
         // Ancestor bars
         for (var d = 0; d < flat.depth - 1; d++) {
-          final ancestorIsLast = d < flat.parentIsLast.length
-              ? flat.parentIsLast[d]
-              : false;
-          prefix.write(
-              styles.connector.render(ancestorIsLast ? '   ' : '│  '));
+          final ancestorIsLast =
+              d < flat.parentIsLast.length ? flat.parentIsLast[d] : false;
+          prefix.write(styles.connector.render(ancestorIsLast ? '   ' : '│  '));
         }
         // Branch connector for this node
-        prefix.write(
-            styles.connector.render(flat.isLast ? '└─ ' : '├─ '));
+        prefix.write(styles.connector.render(flat.isLast ? '└─ ' : '├─ '));
       }
 
       // Expand/collapse icon (only for non-leaf nodes)
@@ -317,8 +314,9 @@ final class TreeModel extends TeaModel {
 
       // Label
       final labelText = '$icon${node.label}';
-      final label =
-          isSelected ? styles.selectedLabel.render(labelText) : styles.label.render(labelText);
+      final label = isSelected
+          ? styles.selectedLabel.render(labelText)
+          : styles.label.render(labelText);
 
       b.write('$prefix$label');
       if (i < end - 1) b.writeln();

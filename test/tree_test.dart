@@ -208,7 +208,10 @@ void main() {
     });
 
     test('collapse icon shown for collapsed non-leaf', () {
-      final model = TreeModel(root: sampleRoot, cursor: 1, height: 20,
+      final model = TreeModel(
+        root: sampleRoot,
+        cursor: 1,
+        height: 20,
         styles: const TreeStyles(
           connector: Style(),
           label: Style(),

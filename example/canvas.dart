@@ -101,10 +101,12 @@ ${const Style(foregroundRgb: RgbColor(205, 214, 244)).render('Higher z → draws
       border: Border.rounded,
     ).withWidth(14).withHeight(5).withPadding(const EdgeInsets.all(0));
 
-    canvas.paint(14, 12,
-        accentBox.render(const Style(
-                foregroundRgb: RgbColor(166, 227, 161), isDim: true)
-            .render(' z:3 overlap')),
+    canvas.paint(
+        14,
+        12,
+        accentBox.render(
+            const Style(foregroundRgb: RgbColor(166, 227, 161), isDim: true)
+                .render(' z:3 overlap')),
         zIndex: 3);
 
     // ── Status bar ────────────────────────────────────────────────────────
@@ -132,8 +134,8 @@ ${muted.render('z=3')} ${const Style(foregroundRgb: RgbColor(166, 227, 161)).ren
   static double _sin(double x) {
     // Clamp to one period and approximate
     x = x % (2 * 3.14159);
-    return x < 3.14159 ? (4 * x * (3.14159 - x)) / (3.14159 * 3.14159)
+    return x < 3.14159
+        ? (4 * x * (3.14159 - x)) / (3.14159 * 3.14159)
         : -(4 * (x - 3.14159) * (2 * 3.14159 - x)) / (3.14159 * 3.14159);
   }
 }
-

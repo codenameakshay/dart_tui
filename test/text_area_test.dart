@@ -6,8 +6,7 @@ KeyPressMsg _char(String ch) =>
     KeyPressMsg(TeaKey(code: KeyCode.rune, text: ch));
 
 /// Helper: create a [KeyPressMsg] for a special key by [KeyCode].
-KeyPressMsg _special(KeyCode code) =>
-    KeyPressMsg(TeaKey(code: code));
+KeyPressMsg _special(KeyCode code) => KeyPressMsg(TeaKey(code: code));
 
 void main() {
   group('TextAreaModel', () {
@@ -31,7 +30,8 @@ void main() {
     });
 
     test('charLimit blocks input', () {
-      final ta = TextAreaModel(value: 'ab', charLimit: 2, cursorRow: 0, cursorCol: 2);
+      final ta =
+          TextAreaModel(value: 'ab', charLimit: 2, cursorRow: 0, cursorCol: 2);
       final (next, _) = ta.update(_char('c'));
       expect((next as TextAreaModel).value, 'ab');
     });

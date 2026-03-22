@@ -16,7 +16,7 @@ FFMPEG   := $(HOME)/ffmpeg-local
 DART     := fvm dart
 TAPES    := $(wildcard example/tapes/*.tape)
 
-.PHONY: help test analyze run kernels run-fast bench gifs new-example clean
+.PHONY: help test analyze format run kernels run-fast bench gifs new-example clean
 
 # ── Help ───────────────────────────────────────────────────────────────────────
 help:
@@ -26,6 +26,7 @@ help:
 	@echo "  Development"
 	@echo "    make test                    Run all unit tests"
 	@echo "    make analyze                 Run dart analyze on lib/"
+	@echo "    make format                  Check formatting (non-zero exit if changes needed)"
 	@echo "    make run EXAMPLE=foo         Run example/foo.dart (JIT source)"
 	@echo "    make run-fast EXAMPLE=foo    Run tool/bin/foo.dill (kernel snapshot)"
 	@echo ""
@@ -52,6 +53,9 @@ test:
 
 analyze:
 	$(DART) analyze lib/
+
+format:
+	$(DART) format --output=none --set-exit-if-changed .
 
 # ── Running examples ───────────────────────────────────────────────────────────
 run:

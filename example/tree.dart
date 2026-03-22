@@ -94,7 +94,8 @@ final class _TreeShowcaseModel extends TeaModel {
         const Style(
           foregroundRgb: RgbColor(88, 91, 112),
           isDim: true,
-        ).render('  ↑↓/jk navigate · Enter/Space toggle · →l expand · ←h collapse · q quit');
+        ).render(
+            '  ↑↓/jk navigate · Enter/Space toggle · →l expand · ←h collapse · q quit');
 
     return newView('$header\n\n${tree.view().content}\n');
   }

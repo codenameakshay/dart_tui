@@ -81,7 +81,7 @@ final class Program {
   Program({
     ProgramOptions options = const ProgramOptions(),
     List<ProgramOption> programOptions = const [],
-  })  : _compatOptions = options {
+  }) : _compatOptions = options {
     for (final opt in programOptions) {
       opt(this);
     }
@@ -185,8 +185,7 @@ final class Program {
     _runningModel = initial;
 
     // Opt-in startup phase timer: set DART_TUI_BENCH=1 to enable.
-    final benchEnabled =
-        Platform.environment['DART_TUI_BENCH'] == '1';
+    final benchEnabled = Platform.environment['DART_TUI_BENCH'] == '1';
     final benchSw = benchEnabled ? (Stopwatch()..start()) : null;
     void bench(String label) {
       if (benchSw == null) return;

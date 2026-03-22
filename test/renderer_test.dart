@@ -66,7 +66,8 @@ void main() {
   });
 
   group('insertAbove in alt-screen mode', () {
-    test('emits save-cursor, scroll-up, and restore-cursor escape sequences', () {
+    test('emits save-cursor, scroll-up, and restore-cursor escape sequences',
+        () {
       final buf = StringBuffer();
       final sink = _StringSink(buf);
       final renderer = AnsiRenderer(
@@ -80,9 +81,9 @@ void main() {
       buf.clear();
       renderer.insertAbove('test line');
       final output = buf.toString();
-      expect(output, contains('\x1b[s'));   // save cursor
-      expect(output, contains('\x1b[S'));   // scroll up
-      expect(output, contains('\x1b[u'));   // restore cursor
+      expect(output, contains('\x1b[s')); // save cursor
+      expect(output, contains('\x1b[S')); // scroll up
+      expect(output, contains('\x1b[u')); // restore cursor
     });
   });
 }

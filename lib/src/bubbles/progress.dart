@@ -60,8 +60,7 @@ final class ProgressModel extends TeaModel {
     final bar = styles.filled.render('█' * filled) +
         styles.empty.render('░' * (width - filled));
     final pct = (fraction * 100).round();
-    final labelPart =
-        label.isEmpty ? '' : '${styles.label.render(label)} ';
+    final labelPart = label.isEmpty ? '' : '${styles.label.render(label)} ';
     return newView('$labelPart$bar ${styles.percent.render('$pct%')}');
   }
 }

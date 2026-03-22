@@ -163,9 +163,8 @@ final class TableModel extends TeaModel {
         return cellStyle.render(truncated);
       });
       final line = cells.join(' │ ');
-      b.write(isSelected
-          ? '${styles.selectedRow.render('›')} $line'
-          : '  $line');
+      b.write(
+          isSelected ? '${styles.selectedRow.render('›')} $line' : '  $line');
       if (i < end - 1) b.writeln();
     }
 

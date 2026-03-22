@@ -63,7 +63,8 @@ void main() {
       final later = start.add(const Duration(milliseconds: 500));
       final sw = StopwatchModel(running: true, lastTick: start);
       final (next, _) = sw.update(TickMsg(later));
-      expect((next as StopwatchModel).elapsed, const Duration(milliseconds: 500));
+      expect(
+          (next as StopwatchModel).elapsed, const Duration(milliseconds: 500));
     });
 
     test('does not advance when stopped', () {

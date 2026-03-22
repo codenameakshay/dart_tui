@@ -223,6 +223,7 @@ final class TextInputModel extends TeaModel {
 
     final labelStyle = focused ? styles.focusedLabel : styles.label;
     final prefix = label.isEmpty ? '' : '${labelStyle.render(label)} ';
-    return newView('$prefix${styles.text.render(displayValue)}$suggestionSuffix');
+    return newView(
+        '$prefix${styles.text.render(displayValue)}$suggestionSuffix');
   }
 }
