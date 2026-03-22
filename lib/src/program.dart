@@ -410,6 +410,9 @@ final class Program {
       // Query terminal for synchronized updates support (DEC mode 2026)
       if (!_disableInput) {
         _output.write('\x1b[?2026\$y');
+        // OSC 11: auto-detect terminal background color.
+        // The response arrives as BackgroundColorMsg in the event loop.
+        _output.write('\x1b]11;?\x07');
       }
       enqueue(ColorProfileMsg(_profile));
       enqueue(EnvMsg(_environment));

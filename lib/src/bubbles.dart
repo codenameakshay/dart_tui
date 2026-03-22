@@ -1,6 +1,7 @@
 /// Bubbles component library barrel export.
 library;
 
+export 'bubbles/canvas.dart';
 export 'bubbles/file_picker.dart';
 export 'bubbles/help.dart';
 export 'bubbles/key_map.dart';
@@ -14,4 +15,5 @@ export 'bubbles/text_area.dart';
 export 'bubbles/text_input.dart';
 export 'bubbles/themes.dart';
 export 'bubbles/timer.dart';
+export 'bubbles/tree.dart';
 export 'bubbles/viewport.dart';

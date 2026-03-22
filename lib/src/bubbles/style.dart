@@ -1,3 +1,5 @@
+import 'package:characters/characters.dart';
+
 import '../msg.dart';
 
 /// Horizontal text alignment.
@@ -839,4 +841,85 @@ abstract final class TuiStyle {
 
   static String wrap(String s, {String open = '', String close = reset}) =>
       '$open$s$close';
+}
+
+// ── Gradient text functions ────────────────────────────────────────────────────
+
+/// Render [text] with a per-character horizontal foreground color gradient
+/// smoothly blended across [colors].
+///
+/// [colors] must have at least 2 entries. The gradient is computed in true-color
+/// RGB space; each grapheme cluster receives its own `\x1b[38;2;r;g;bm` code.
+/// Use [gradientBackground] for background gradients.
+///
+/// Example:
+/// ```dart
+/// gradientText('Hello, world!', [RgbColor(255,0,128), RgbColor(0,200,255)])
+/// ```
+String gradientText(String text, List<RgbColor> colors) {
+  assert(colors.length >= 2, 'gradientText requires at least 2 colors');
+  final chars = text.characters.toList();
+  if (chars.isEmpty) return '';
+  final b = StringBuffer();
+  final n = colors.length - 1; // number of segments
+  for (var i = 0; i < chars.length; i++) {
+    final t = chars.length == 1 ? 0.0 : i / (chars.length - 1);
+    final seg = (t * n).floor().clamp(0, n - 1);
+    final localT = (t * n) - seg;
+    final c = blend(colors[seg], colors[seg + 1], localT);
+    b.write('\x1b[38;2;${c.r};${c.g};${c.b}m${chars[i]}');
+  }
+  b.write('\x1b[0m');
+  return b.toString();
+}
+
+/// Render [text] with a per-character horizontal background color gradient.
+///
+/// Like [gradientText] but applies colors to the background (`\x1b[48;2;...`).
+/// An optional [foreground] [Style] is applied to the whole string.
+String gradientBackground(
+  String text,
+  List<RgbColor> colors, {
+  Style? foreground,
+}) {
+  assert(colors.length >= 2, 'gradientBackground requires at least 2 colors');
+  final chars = text.characters.toList();
+  if (chars.isEmpty) return '';
+  final fgCode = foreground != null ? _extractFgCode(foreground) : '';
+  final b = StringBuffer();
+  final n = colors.length - 1;
+  for (var i = 0; i < chars.length; i++) {
+    final t = chars.length == 1 ? 0.0 : i / (chars.length - 1);
+    final seg = (t * n).floor().clamp(0, n - 1);
+    final localT = (t * n) - seg;
+    final c = blend(colors[seg], colors[seg + 1], localT);
+    b.write('\x1b[48;2;${c.r};${c.g};${c.b}m$fgCode${chars[i]}');
+  }
+  b.write('\x1b[0m');
+  return b.toString();
+}
+
+/// Extract the foreground ANSI code string from a [Style] (no layout applied).
+String _extractFgCode(Style s) {
+  if (s.foregroundRgb != null) {
+    final c = s.foregroundRgb!;
+    return '\x1b[38;2;${c.r};${c.g};${c.b}m';
+  }
+  if (s.foreground256 != null) return '\x1b[38;5;${s.foreground256}m';
+  if (s.isBold) return '\x1b[1m';
+  return '';
+}
+
+// ── Background detection helper ────────────────────────────────────────────────
+
+/// Returns `true` if the packed RGB integer [rgb] (as returned by
+/// [BackgroundColorMsg.rgb]) represents a dark background.
+///
+/// Uses the ITU-R BT.601 luminance formula; values below 128 are considered dark.
+bool isDarkRgb(int rgb) {
+  final r = (rgb >> 16) & 0xff;
+  final g = (rgb >> 8) & 0xff;
+  final b = rgb & 0xff;
+  final lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return lum < 128;
 }
