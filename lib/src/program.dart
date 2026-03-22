@@ -489,6 +489,13 @@ final class Program {
         }
       }
     } finally {
+      // Await stdin subscription cancellation explicitly so stdin is fully
+      // released before _shutdown() marks the program done. Without this,
+      // the Dart event loop keeps running after main() returns (waiting for
+      // the unawaited cancel future), leaving the terminal hanging until Ctrl-C.
+      final inputSub = _inputSub;
+      _inputSub = null;
+      await inputSub?.cancel();
       _shutdown();
       if (!_disableRenderer) {
         // Move to a fresh line so the shell prompt appears cleanly after exit,

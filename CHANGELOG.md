@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.0.3
+
+### Bug fixes
+
+- **Terminal hang on exit**: awaiting the stdin subscription cancel in the shutdown path so the Dart event loop is fully released before the process exits. Previously the `unawaited` cancel could leave stdin holding the event loop open, requiring a manual Ctrl-C to regain the shell prompt.
+
+## 1.0.2
+
+### Bug fixes
+
+- **Terminal not restored on quit**: added `_output.writeln()` + `await _output.flush()` in the `finally` block so ANSI reset sequences (show cursor, exit alt-screen) are flushed to the terminal before the shell regains control.
+
+## 1.0.1
+
+### Performance improvements
+
+- **Enter / LF key fix**: `0x0a` (LF / `\n`) was silently decoded as `ctrl+j` and dropped by all components. It is now correctly mapped to `KeyCode.enter`, matching Linux/WSL terminal behaviour.
+- **Batch render loop**: messages are now drained without re-rendering between each one; a single render fires per batch. Eliminates up to 16 ms of FPS-throttle lag per key press.
+- **Unawaited commands**: `runCmd` is now fire-and-forget so command results arrive as the next queued message without blocking key event processing.
+- **Deferred capability queries**: `CSI ?2026$y` (synchronized-updates query) and `OSC 11` (background-color query) are sent after the first rendered frame, so the initial visible output is not delayed.
+- **Kernel snapshot build**: `tool/build.sh --kernel` compiles examples to `.dill` kernel snapshots (~550 ms startup vs ~1 050 ms JIT source on WSL2).
+- **Makefile**: added targets for `test`, `analyze`, `run`, `run-fast`, `kernels`, `bench`, `gifs`, `new-example`, and more.
+- **48 GIFs re-recorded** from kernel snapshots for faster, cleaner recordings.
+
 ## 1.0.0
 
 ### New features
