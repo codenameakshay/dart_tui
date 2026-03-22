@@ -3,7 +3,6 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:dart_console/dart_console.dart' as dc;
 import 'package:meta/meta.dart';
 
 import 'cmd.dart';
@@ -80,17 +79,14 @@ ProgramOption withWindowSize(int width, int height) {
 
 final class Program {
   Program({
-    dc.Console? console,
     ProgramOptions options = const ProgramOptions(),
     List<ProgramOption> programOptions = const [],
-  })  : _console = console ?? dc.Console(),
-        _compatOptions = options {
+  })  : _compatOptions = options {
     for (final opt in programOptions) {
       opt(this);
     }
   }
 
-  final dc.Console _console;
   final ProgramOptions _compatOptions;
 
   IOSink _output = stdout;
@@ -118,6 +114,15 @@ final class Program {
   StreamSubscription<List<int>>? _inputSub;
   StreamSubscription<ProcessSignal>? _sigSub;
   TeaRenderer? _renderer;
+
+  void _setRawMode(bool raw) {
+    try {
+      stdin.echoMode = !raw;
+      stdin.lineMode = !raw;
+    } on StdinException {
+      // stdin is not a TTY (e.g. in tests or piped input) — ignore.
+    }
+  }
 
   Future<Model> run(Model initial) async {
     final (_, model) = await _runCore(initial);
@@ -149,13 +154,13 @@ final class Program {
     if (!_running) return;
     if (_disableRenderer) return;
     _renderer?.release(reset: resetRenderer);
-    _console.rawMode = false;
+    _setRawMode(false);
   }
 
   Future<void> restoreTerminal() async {
     if (!_running) return;
     if (_disableRenderer) return;
-    _console.rawMode = true;
+    _setRawMode(true);
     final m = _runningModel;
     if (m != null) {
       _renderer?.restore(m.view());
@@ -237,8 +242,10 @@ final class Program {
     }
 
     void scheduleResizeMsg() {
-      final width = _width ?? _console.windowWidth;
-      final height = _height ?? _console.windowHeight;
+      final width =
+          _width ?? (stdout.hasTerminal ? stdout.terminalColumns : 80);
+      final height =
+          _height ?? (stdout.hasTerminal ? stdout.terminalLines : 24);
       enqueue(WindowSizeMsg(width, height));
     }
 
@@ -390,7 +397,7 @@ final class Program {
                   defaultHideCursor: _compatOptions.hideCursor,
                 );
       if (!_disableRenderer) {
-        _console.rawMode = true;
+        _setRawMode(true);
       }
       bench('raw_mode');
 
@@ -481,7 +488,7 @@ final class Program {
     _renderer?.close();
     _renderer = null;
     if (!_disableRenderer) {
-      _console.rawMode = false;
+      _setRawMode(false);
     }
     unawaited(_logSink?.flush());
     unawaited(_logSink?.close());

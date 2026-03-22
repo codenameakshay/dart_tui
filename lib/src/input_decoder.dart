@@ -1,8 +1,6 @@
-import 'package:dart_console/dart_console.dart' as dc;
 import 'dart:convert';
 
 import 'key_buffer_parser.dart';
-import 'key_util.dart';
 import 'msg.dart';
 
 final class TerminalInputDecoder {
@@ -81,9 +79,9 @@ final class TerminalInputDecoder {
         continue;
       }
 
-      final dc.Key? key = parseKeyFromBuffer(_buffer);
+      final TeaKey? key = parseKeyFromBuffer(_buffer);
       if (key != null) {
-        out.add(KeyPressMsg(toTeaKey(key)));
+        out.add(KeyPressMsg(key));
         continue;
       }
 

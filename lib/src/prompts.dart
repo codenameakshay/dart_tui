@@ -1,5 +1,3 @@
-import 'package:dart_console/dart_console.dart';
-
 import 'cmd.dart';
 import 'model.dart';
 import 'msg.dart';
@@ -11,33 +9,30 @@ import 'view.dart';
 /// Single-choice list; returns the selected string, or `null` if cancelled.
 Future<String?> promptSelect(
   List<String> choices, {
-  Console? console,
   ProgramOptions options = const ProgramOptions(),
   String title = 'Choose one',
 }) async {
   if (choices.isEmpty) return null;
   final model = _SelectPromptModel(choices: choices, title: title);
-  return Program(console: console, options: options).runForResult(model);
+  return Program(options: options).runForResult(model);
 }
 
 /// Yes / no; returns `null` on cancel.
 Future<bool?> promptConfirm(
   String question, {
-  Console? console,
   ProgramOptions options = const ProgramOptions(),
 }) async {
   final model = _ConfirmPromptModel(question: question);
-  return Program(console: console, options: options).runForResult(model);
+  return Program(options: options).runForResult(model);
 }
 
 /// Single-line text; returns `null` on cancel.
 Future<String?> promptInput(
   String label, {
-  Console? console,
   ProgramOptions options = const ProgramOptions(),
 }) async {
   final model = _InputPromptModel(label: label);
-  return Program(console: console, options: options).runForResult(model);
+  return Program(options: options).runForResult(model);
 }
 
 final class _SelectPromptModel extends TeaModel
