@@ -3,7 +3,7 @@ description: >-
   Elm-style terminal UI framework for Dart. Port of Charmbracelet Bubble Tea:
   Model–Update–View architecture, async commands, composable components, and
   a full Bubbles component library.
-version: 1.0.0
+version: 1.0.0+1
 homepage: https://github.com/codenameakshay/dart_tui
 repository: https://github.com/codenameakshay/dart_tui
 issue_tracker: https://github.com/codenameakshay/dart_tui/issues

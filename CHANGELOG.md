@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.0+1
+
+### Bug fixes
+
+- **Terminal hang on exit**: awaiting the stdin subscription cancel in the shutdown path so the Dart event loop is fully released before the process exits. Previously the `unawaited` cancel could leave stdin holding the event loop open, requiring a manual Ctrl-C to regain the shell prompt.
+- **Terminal not restored on quit**: flushing ANSI reset sequences (show cursor, exit alt-screen) before the process exits so the shell prompt appears on a clean line.
+
+### Other changes
+
+- **Enter / LF key fix**: `0x0a` (LF / `\n`) now correctly maps to `KeyCode.enter`, fixing silent key drops on Linux/WSL terminals that send LF instead of CR for Enter.
+- **Batch render loop**: all pending messages are drained before each render; a single render fires per batch, eliminating up to 16 ms of FPS-throttle lag per key press.
+- **Deferred capability queries**: `CSI ?2026$y` and `OSC 11` are sent after the first rendered frame so startup is not delayed.
+- **Makefile**: `make format` (dart format check), `make test`, `make analyze`, `make run/run-fast/kernels/bench/gifs/new-example`.
+- **Analyzer clean**: resolved all `strict_raw_type`, `unused_local_variable`, `prefer_const_constructors`, `library_private_types_in_public_api`, and `avoid_relative_lib_imports` warnings.
+
 ## 1.0.0
 
 ### New features
