@@ -6,7 +6,7 @@ Set Height 300
 Set Theme "Dracula"
 Set PlaybackSpeed 1.0
 
-Type "fvm dart run example/autocomplete.dart"
+Type "fvm dart run tool/bin/autocomplete.dill"
 Enter
 Sleep 500ms
 Type "re"

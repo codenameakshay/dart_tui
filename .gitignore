@@ -4,6 +4,9 @@
 build/
 pubspec.lock
 
+# Build artifacts (kernel snapshots, AOT binaries)
+tool/bin/
+
 # IDE
 .idea/
 *.iml

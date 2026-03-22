@@ -6,7 +6,7 @@ Set Height 500
 Set Theme "Dracula"
 Set PlaybackSpeed 1.0
 
-Type "fvm dart run example/tree.dart"
+Type "fvm dart run tool/bin/tree.dill"
 Enter
 Sleep 1s
 Down

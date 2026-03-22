@@ -6,7 +6,7 @@ Set Height 500
 Set Theme "Dracula"
 Set PlaybackSpeed 1.0
 
-Type "fvm dart run example/pager.dart"
+Type "fvm dart run tool/bin/pager.dill"
 Enter
 Sleep 500ms
 Down

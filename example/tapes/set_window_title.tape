@@ -6,7 +6,7 @@ Set Height 300
 Set Theme "Dracula"
 Set PlaybackSpeed 1.0
 
-Type "fvm dart run example/set_window_title.dart"
+Type "fvm dart run tool/bin/set_window_title.dill"
 Enter
 Sleep 1s
 Type "q"

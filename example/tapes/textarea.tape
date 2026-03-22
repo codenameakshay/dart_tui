@@ -6,7 +6,7 @@ Set Height 400
 Set Theme "Dracula"
 Set PlaybackSpeed 1.0
 
-Type "fvm dart run example/textarea.dart"
+Type "fvm dart run tool/bin/textarea.dill"
 Enter
 Sleep 500ms
 Type "Hello, World!"

@@ -249,22 +249,25 @@ final class Program {
       enqueue(WindowSizeMsg(width, height));
     }
 
-    Future<void> handleMsg(Msg rawMsg) async {
+    // Process one message: update model / fire side-effects.
+    // Returns true when the view may have changed and a re-render is needed.
+    // Does NOT call render() — the event loop renders once per drained batch.
+    Future<bool> applyMsg(Msg rawMsg) async {
       var msg = rawMsg;
       final model = _runningModel!;
       if (_filter != null) {
         final filtered = _filter!(model, msg);
-        if (filtered == null) return;
+        if (filtered == null) return false;
         msg = filtered;
       }
 
       switch (msg) {
         case QuitMsg():
           _running = false;
-          return;
+          return false;
         case InterruptMsg():
           _running = false;
-          return;
+          return false;
         case SuspendMsg():
           await releaseTerminal(resetRenderer: true);
           if (!Platform.isWindows) {
@@ -278,63 +281,63 @@ final class Program {
           }
           await restoreTerminal();
           enqueue(ResumeMsg());
-          return;
+          return false; // ResumeMsg will trigger re-render next batch
         case RequestWindowSizeMsg():
           scheduleResizeMsg();
-          return;
+          return false;
         case RequestForegroundColorMsg():
           _output.write('\x1b]10;?\x07');
           if (_disableInput) enqueue(ForegroundColorMsg(0xFFFFFF));
-          return;
+          return false;
         case RequestBackgroundColorMsg():
           _output.write('\x1b]11;?\x07');
           if (_disableInput) enqueue(BackgroundColorMsg(0x000000));
-          return;
+          return false;
         case RequestCursorColorMsg():
           _output.write('\x1b]12;?\x07');
           if (_disableInput) enqueue(CursorColorMsg(0xFFFFFF));
-          return;
+          return false;
         case RequestCursorPositionMsg():
           _output.write('\x1b[6n');
           if (_disableInput) enqueue(CursorPositionMsg(x: 0, y: 0));
-          return;
+          return false;
         case RequestTerminalVersionMsg():
           _output.write('\x1b[>0c');
           if (_disableInput) enqueue(TerminalVersionMsg('unknown'));
-          return;
+          return false;
         case RequestCapabilityMsg():
           final encoded = _hexEncode(msg.name);
           _output.write('\x1bP+q$encoded\x1b\\');
           if (_disableInput) enqueue(CapabilityMsg('${msg.name}=unknown'));
-          return;
+          return false;
         case SetClipboardMsg():
           _output.write('\x1b]52;c;${_base64(msg.value)}\x07');
-          return;
+          return false;
         case ReadClipboardMsg():
           _output.write('\x1b]52;c;?\x07');
-          return;
+          return false;
         case SetPrimaryClipboardMsg():
           _output.write('\x1b]52;p;${_base64(msg.value)}\x07');
-          return;
+          return false;
         case ReadPrimaryClipboardMsg():
           _output.write('\x1b]52;p;?\x07');
-          return;
+          return false;
         case ClearScreenMsg():
           _renderer?.clearScreen();
-          return;
+          return true;
         case PrintLineMsg():
           _renderer?.insertAbove(msg.messageBody);
-          return;
+          return true;
         case BatchMsg():
           for (final c in msg.cmds) {
             unawaited(runCmd(c));
           }
-          return;
+          return false;
         case SequenceMsg():
           for (final c in msg.cmds) {
             await runCmd(c);
           }
-          return;
+          return false;
         case ExecMsg():
           await releaseTerminal(resetRenderer: true);
           try {
@@ -364,7 +367,7 @@ final class Program {
           } finally {
             await restoreTerminal();
           }
-          return;
+          return true;
         default:
       }
 
@@ -375,8 +378,10 @@ final class Program {
       }
       final (nextModel, cmd) = model.update(msg);
       _runningModel = nextModel;
-      await runCmd(cmd);
-      await render(_runningModel!.view());
+      // Fire cmd asynchronously so its result message is queued and processed
+      // in the next event-loop batch, unblocking key-event handling.
+      unawaited(runCmd(cmd));
+      return true;
     }
 
     try {
@@ -407,13 +412,6 @@ final class Program {
       }
 
       scheduleResizeMsg();
-      // Query terminal for synchronized updates support (DEC mode 2026)
-      if (!_disableInput) {
-        _output.write('\x1b[?2026\$y');
-        // OSC 11: auto-detect terminal background color.
-        // The response arrives as BackgroundColorMsg in the event loop.
-        _output.write('\x1b]11;?\x07');
-      }
       enqueue(ColorProfileMsg(_profile));
       enqueue(EnvMsg(_environment));
       bench('terminal_queries');
@@ -446,6 +444,16 @@ final class Program {
       // the initial view is already visible on screen.
       await render(_runningModel!.view());
       bench('first_frame');
+
+      // Send capability queries AFTER the first frame so the first visible
+      // output reaches the terminal without being delayed by query bytes.
+      if (!_disableInput) {
+        _output.write('\x1b[?2026\$y');
+        // OSC 11: auto-detect terminal background color.
+        // The response arrives as BackgroundColorMsg in the event loop.
+        _output.write('\x1b]11;?\x07');
+      }
+
       if (initCmd != null) {
         unawaited(runCmd(initCmd));
       }
@@ -460,13 +468,21 @@ final class Program {
       }
 
       while (_running) {
+        // Drain all pending messages without rendering between them.
+        // This ensures rapid key events are processed immediately without
+        // each one incurring the FPS-throttle delay.
+        var needsRender = false;
         while (queue.isNotEmpty && _running) {
-          await handleMsg(queue.removeFirst());
+          needsRender |= await applyMsg(queue.removeFirst());
           final m = _runningModel;
           if (m is OutcomeModel && m.outcome != null) {
             _running = false;
             break;
           }
+        }
+        // Render once for the entire drained batch.
+        if (needsRender && _running) {
+          await render(_runningModel!.view());
         }
         if (_running) {
           await waitForActivity();

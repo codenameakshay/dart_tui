@@ -6,7 +6,7 @@ Set Height 450
 Set Theme "Dracula"
 Set PlaybackSpeed 1.0
 
-Type "fvm dart run example/table.dart"
+Type "fvm dart run tool/bin/table.dill"
 Enter
 Sleep 500ms
 Down

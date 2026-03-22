@@ -6,7 +6,7 @@ Set Height 350
 Set Theme "Dracula"
 Set PlaybackSpeed 1.0
 
-Type "fvm dart run example/realtime.dart"
+Type "fvm dart run tool/bin/realtime.dill"
 Enter
 Sleep 4s
 Type "q"

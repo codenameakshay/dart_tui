@@ -48,8 +48,14 @@ void main() {
     expect(k.code, KeyCode.backspace);
   });
 
-  test('parseKeyFromBuffer parses enter', () {
+  test('parseKeyFromBuffer parses enter (CR)', () {
     final b = <int>[0x0d];
+    final k = parseKeyFromBuffer(b)!;
+    expect(k.code, KeyCode.enter);
+  });
+
+  test('parseKeyFromBuffer parses enter (LF, Linux/WSL terminals)', () {
+    final b = <int>[0x0a];
     final k = parseKeyFromBuffer(b)!;
     expect(k.code, KeyCode.enter);
   });

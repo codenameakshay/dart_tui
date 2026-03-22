@@ -6,7 +6,7 @@ Set Height 350
 Set Theme "Dracula"
 Set PlaybackSpeed 1.0
 
-Type "fvm dart run example/isbn_form.dart"
+Type "fvm dart run tool/bin/isbn_form.dill"
 Enter
 Sleep 500ms
 Type "978-3-16-148410-0"

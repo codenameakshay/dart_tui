@@ -6,7 +6,7 @@ Set Height 500
 Set Theme "Dracula"
 Set PlaybackSpeed 1.0
 
-Type "fvm dart run example/canvas.dart"
+Type "fvm dart run tool/bin/canvas.dill"
 Enter
 Sleep 4s
 Type "q"

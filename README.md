@@ -1,25 +1,41 @@
 # dart_tui
 
 [![pub.dev](https://img.shields.io/pub/v/dart_tui.svg)](https://pub.dev/packages/dart_tui)
+[![Dart SDK](https://img.shields.io/badge/dart-%3E%3D3.5-blue)](https://dart.dev)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Elm-style terminal UI framework for Dart, inspired by [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
-Build interactive CLI applications with:
+Build rich, interactive CLI applications with a clean **Model–Update–View** architecture, a full component library, and Lipgloss-quality styling — all in pure Dart.
 
-- **Model–Update–View** architecture (same as Elm / Bubble Tea)
-- **Async commands** (`Cmd`) for I/O, timers, and process execution
-- **Composable components** — spinners, progress bars, text inputs, tables, viewports, and more
-- **Cell-level diff rendering** for flicker-free output
-- **Synchronized updates** (CSI `?2026`) on supported terminals
+![showcase](example/tapes/output/showcase.gif)
+
+---
+
+## Features
+
+- **Model–Update–View** — same architecture as Elm and Bubble Tea; pure, testable state
+- **Async commands** (`Cmd`) for timers, HTTP, subprocesses, and any async work
+- **20+ ready-made components** — spinners, progress bars, text inputs, tables, trees, viewports, and more
+- **Lipgloss-inspired styling** — true-color RGB, borders, padding, alignment, gradients
+- **Canvas compositing** — paint styled blocks at arbitrary (x, y) positions with z-index layering
+- **Cell-level diff renderer** — only changed cells are written; zero flicker
+- **Synchronized updates** (`CSI ?2026`) for terminals that support them
+- **Auto background detection** — OSC 11 query fires at startup; your model receives `BackgroundColorMsg`
+- **Fast startup** — kernel snapshots cut warm-JIT from ~1 s to ~500 ms; AOT compiles to native
 
 ---
 
 ## Installation
 
 ```yaml
+# pubspec.yaml
 dependencies:
   dart_tui: ^1.0.0
+```
+
+```bash
+dart pub get
 ```
 
 ---
@@ -29,7 +45,7 @@ dependencies:
 ```dart
 import 'package:dart_tui/dart_tui.dart';
 
-Future<void> main() async {
+void main() async {
   await Program(
     options: const ProgramOptions(altScreen: true),
   ).run(CounterModel());
@@ -46,10 +62,8 @@ final class CounterModel extends TeaModel {
   (Model, Cmd?) update(Msg msg) {
     if (msg is _TickMsg) {
       if (count >= 5) return (this, () => quit());
-      return (
-        CounterModel(count: count + 1),
-        tick(const Duration(seconds: 1), (_) => _TickMsg()),
-      );
+      return (CounterModel(count: count + 1),
+          tick(const Duration(seconds: 1), (_) => _TickMsg()));
     }
     if (msg is KeyMsg && (msg.key == 'q' || msg.key == 'ctrl+c')) {
       return (this, () => quit());
@@ -68,46 +82,51 @@ final class _TickMsg extends Msg {}
 
 ## Core concepts
 
+### Model–Update–View
+
+```
+┌──────────────┐   Msg    ┌──────────────┐
+│    Model     │ ──────▶  │    update    │
+│  (your state)│          │  (pure fn)   │
+└──────────────┘          └──────┬───────┘
+        ▲                        │ (Model, Cmd?)
+        │                        ▼
+        │                 ┌──────────────┐
+        └──── render ───  │     view     │
+                          │  (pure fn)   │
+                          └──────────────┘
+```
+
 | Concept | Description |
 |---------|-------------|
 | `Model` | Immutable state. Implement `init()`, `update(Msg)`, `view()`. |
 | `Msg` | Tagged event: key press, window resize, tick, custom data. |
-| `Cmd` | `FutureOr<Msg?> Function()` — async side-effect that delivers a message. |
-| `View` | Declared output string plus optional cursor, mouse mode, window title, alt-screen flag. |
-| `Program` | Runs the event loop; manages terminal raw mode, renderer, and signal handling. |
+| `Cmd` | `FutureOr<Msg?> Function()` — async side-effect that delivers one message back. |
+| `View` | Declared output string plus optional cursor position, mouse mode, window title. |
+| `Program` | Owns the event loop, terminal raw mode, renderer, and signal handling. |
 
-### Model
-
-```dart
-abstract class Model {
-  Cmd? init() => null;                     // startup command
-  (Model, Cmd?) update(Msg msg);           // state transition
-  View view();                             // render
-}
-```
-
-Return a value from prompt-style flows:
+### Returning a value (prompt-style)
 
 ```dart
 abstract class OutcomeModel<T> implements Model {
-  T? get outcome;  // non-null → program stops and returns this value
+  T? get outcome; // non-null → program exits and returns this value
 }
 
-final result = await Program().runForResult<String>(MyPromptModel());
+final String? result = await Program().runForResult<String>(MyPromptModel());
 ```
 
-### Cmd
+### Commands
 
 ```dart
-// Common helpers
+// Built-in helpers
 Msg quit()
 Msg interrupt()
-Cmd tick(Duration d, Msg Function(DateTime) fn)      // one-shot delay
-Cmd every(Duration d, Msg Function(DateTime) fn)     // wall-clock aligned
-Cmd? batch(List<Cmd?> cmds)                          // concurrent
-Cmd? sequence(List<Cmd?> cmds)                       // sequential
+Cmd tick(Duration d, Msg Function(DateTime) fn)       // one-shot delay
+Cmd every(Duration d, Msg Function(DateTime) fn)      // repeating, wall-clock aligned
+Cmd? batch(List<Cmd?> cmds)                           // concurrent
+Cmd? sequence(List<Cmd?> cmds)                        // sequential
 Cmd execProcess(String exe, List<String> args, {...}) // external process
-Cmd println([Object? value])                          // print above TUI
+Cmd requestBackgroundColor()                          // fire OSC 11 query manually
 ```
 
 ### Program options
@@ -121,9 +140,9 @@ Program(
     logFile: File('debug.log'),
   ),
   programOptions: [
-    withFps(60),
-    withCellRenderer(),          // enable cell-level diff renderer
-    withFilter((model, msg) {    // intercept/transform messages
+    withFps(60),              // default 60, max 120
+    withCellRenderer(),       // cell-level diff (less flicker on older terminals)
+    withFilter((model, msg) { // intercept / transform messages
       if (msg is QuitMsg) return null; // suppress
       return msg;
     }),
@@ -133,139 +152,376 @@ Program(
 
 ---
 
-## Component library
+## Styling
 
-All components live under `package:dart_tui/dart_tui.dart` (re-exported from `lib/src/bubbles/`).
-
-| Component | Description |
-|-----------|-------------|
-| `SpinnerModel` | Animated indeterminate spinner driven by `TickMsg` |
-| `ProgressModel` | Determinate progress bar (0.0–1.0) |
-| `TextInputModel` | Single-line input: cursor, charLimit, EchoMode, validate, suggestions |
-| `TextAreaModel` | Multi-line editor with scroll and line-kill commands |
-| `SelectListModel` | Vertical list with keyboard cursor |
-| `PaginatorModel` | Page indicator (dots or custom label) |
-| `TableModel` | Scrollable table with column headers and row cursor |
-| `ViewportModel` | Scrollable content pane with soft-wrap |
-| `TimerModel` | Countdown timer: `start()`/`stop()`/`reset()`, `remaining`, `finished` |
-| `StopwatchModel` | Elapsed time: `start()`/`stop()`/`reset()` |
-| `HelpModel` | Compact/full keybinding help UI |
-| `KeyMap` / `KeyBinding` | Declarative keybinding registry |
-| `FilePickerModel` | Async directory browser with extension filtering |
-| `Style` | Lipgloss-inspired text styling: colors, dimensions, alignment, borders |
-
-### Style system
+Inspired by [Lipgloss](https://github.com/charmbracelet/lipgloss). All styling is composable and immutable.
 
 ```dart
-final title = Style(fg: '#FF5F87', bold: true, width: 40, align: Align.center)
-    .render('Hello, World!');
+// True-color foreground, bold, 40-char centered block
+final title = const Style(
+  foregroundRgb: RgbColor(203, 166, 247), // Catppuccin Mauve
+  isBold: true,
+  width: 40,
+  align: Align.center,
+).render('Hello, dart_tui!');
+
+// Borders + padding
+final box = const Style(
+  border: Border.rounded,
+  foregroundRgb: RgbColor(137, 180, 250),
+).withWidth(30).withPadding(EdgeInsets.all(1)).render(content);
 
 // Layout helpers
-final ui = joinHorizontal(AlignVertical.top, [leftPane, rightPane]);
-final centered = place(termWidth, termHeight, Align.center, AlignVertical.middle, content);
+final ui  = joinHorizontal(AlignVertical.top, [leftPane, rightPane]);
+final mid = place(termWidth, termHeight, Align.center, AlignVertical.middle, content);
 ```
+
+### Gradient text
+
+```dart
+// Per-character true-color gradient across any number of colors
+final rainbow = gradientText('dart_tui', [
+  const RgbColor(203, 166, 247), // mauve
+  const RgbColor(116, 199, 236), // sky
+  const RgbColor(166, 227, 161), // green
+]);
+
+// Gradient background fill
+final banner = gradientBackground('  Welcome!  ', [
+  const RgbColor(30, 30, 46),
+  const RgbColor(49, 50, 68),
+], foreground: const Style(foregroundRgb: RgbColor(205, 214, 244)));
+```
+
+![gradient](example/tapes/output/gradient.gif)
+
+### Light / dark background detection
+
+`Program` sends `\x1b]11;?\x07` (OSC 11) at startup — the response arrives automatically as `BackgroundColorMsg` in your model's `update()`. Use `isDarkRgb()` to branch styles:
+
+```dart
+case BackgroundColorMsg(:final rgb):
+  final dark = isDarkRgb(rgb);
+  return (MyModel(darkTheme: dark), null);
+```
+
+---
+
+## Canvas compositing
+
+Paint styled text blocks at arbitrary `(x, y)` positions with z-index layering:
+
+```dart
+final canvas = Canvas(72, 22);
+canvas.paint(2, 2, leftPanel.render(content), zIndex: 1);
+canvas.paint(38, 2, rightPanel.render(content), zIndex: 1);
+canvas.paint(18, 14, bannerStyle.render(animatedBanner), zIndex: 2);
+// Higher zIndex draws on top of lower zIndex at overlapping cells.
+return newView(canvas.render());
+```
+
+![canvas](example/tapes/output/canvas.gif)
+
+---
+
+## Component library
+
+All components are in `package:dart_tui/dart_tui.dart`.
+
+### Spinner
+
+Animated indeterminate activity indicator, driven by `TickMsg`.
+
+```dart
+SpinnerModel(style: Spinner.dot, prefix: 'Loading ')
+```
+
+![spinner](example/tapes/output/spinner.gif)
+
+### Progress bar
+
+Determinate progress (0.0–1.0) with `█`/`░` fill and configurable width/label.
+
+```dart
+ProgressModel(progress: 0.65, width: 40, showPercent: true)
+```
+
+![progress_bar](example/tapes/output/progress_bar.gif)
+
+### Text input
+
+Single-line input with cursor, charLimit, EchoMode (password), validate, tab-completion suggestions.
+
+```dart
+TextInputModel(placeholder: 'Type something…', charLimit: 80)
+```
+
+![textinput](example/tapes/output/textinput.gif)
+
+### Text area
+
+Multi-line editor with scroll, line-kill (`Ctrl+K`), and word movement.
+
+![textarea](example/tapes/output/textarea.gif)
+
+### Select list
+
+Vertical list with keyboard cursor (`↑↓ / jk`). Embeds into parent models for menu flows.
+
+```dart
+SelectListModel(items: ['Option A', 'Option B', 'Option C'], height: 8)
+```
+
+![list_default](example/tapes/output/list_default.gif)
+
+### Table
+
+Scrollable data table with configurable headers, column widths, per-row/per-cell styling.
+
+```dart
+TableModel(
+  columns: [TableColumn('City', 20), TableColumn('Pop', 12)],
+  rows: data,
+  styles: TableStyles(
+    header: const Style(isBold: true, isUnderline: true),
+    styleFunc: (row, col) => col == 1 ? rightAlign : null,
+  ),
+)
+```
+
+![table](example/tapes/output/table.gif)
+
+### Tree
+
+Hierarchical expandable list with Unicode box-drawing connectors. Navigate with `↑↓ / jk`, toggle with `Enter / Space`, expand/collapse with `→l / ←h`.
+
+```dart
+TreeModel(
+  root: TreeNode(label: 'Languages', isExpanded: true, children: [
+    TreeNode(label: 'Dart', children: [TreeNode(label: 'Flutter')]),
+    TreeNode(label: 'Go', children: [TreeNode(label: 'Bubble Tea')]),
+  ]),
+  height: 20,
+)
+```
+
+![tree](example/tapes/output/tree.gif)
+
+### Viewport
+
+Scrollable content pane with soft-wrap; useful for long text, logs, or file content.
+
+```dart
+ViewportModel(content: longText, height: 20, wrap: true)
+```
+
+![pager](example/tapes/output/pager.gif)
+
+### Timer & Stopwatch
+
+```dart
+TimerModel(duration: Duration(minutes: 5))   // countdown; .finished, .remaining
+StopwatchModel()                              // elapsed time; .start()/.stop()/.reset()
+```
+
+![timer](example/tapes/output/timer.gif)
+
+### Paginator
+
+Compact page indicator (dots or numeric) for multi-page flows.
+
+```dart
+PaginatorModel(totalPages: 5, activePage: 0)
+```
+
+![paginator](example/tapes/output/paginator.gif)
+
+### Help
+
+Compact / full keybinding reference panel built from a `KeyMap`.
+
+```dart
+final keyMap = KeyMap([
+  KeyBinding(['↑', 'k'], 'move up'),
+  KeyBinding(['↓', 'j'], 'move down'),
+  KeyBinding(['enter'], 'select'),
+  KeyBinding(['q'], 'quit'),
+]);
+HelpModel.fromKeyMap(keyMap)
+```
+
+![help](example/tapes/output/help.gif)
+
+### File picker
+
+Async directory browser with configurable extension filter and keyboard navigation.
+
+```dart
+FilePickerModel(
+  initialDirectory: Directory.current,
+  extensions: {'.dart', '.yaml'},
+)
+```
+
+![file_picker](example/tapes/output/file_picker.gif)
 
 ---
 
 ## Examples
 
-The `example/` directory contains 41 runnable examples:
+48 runnable examples covering every feature:
 
-| File | What it shows |
-|------|---------------|
-| `simple.dart` | Tick-driven countdown |
-| `window_size.dart` | Terminal dimensions |
-| `fullscreen.dart` | Alt-screen mode |
-| `set_window_title.dart` | OSC window title |
-| `altscreen_toggle.dart` | Toggle alt-screen |
-| `vanish.dart` | Single keystroke, no residual output |
+| Example | What it shows |
+|---------|---------------|
+| `simple.dart` | Tick-driven countdown, minimal model |
 | `textinput.dart` | Single-line text input |
 | `textinputs.dart` | Multi-field form with Tab focus |
 | `textarea.dart` | Multi-line editor |
-| `autocomplete.dart` | Input with tab-completion |
-| `list_simple.dart` | SelectListModel |
+| `autocomplete.dart` | Tab-completion suggestions |
+| `list_simple.dart` | Basic SelectListModel |
 | `list_default.dart` | List with selection state |
-| `result.dart` | OutcomeModel returning a value |
-| `paginator.dart` | Dot-style page indicator |
 | `table.dart` | City data table |
-| `package_manager.dart` | Spinner + progress multi-step |
+| `tree.dart` | Expandable language/framework tree |
 | `spinner.dart` | Animated spinner |
-| `spinners.dart` | Multiple spinner styles |
+| `spinners.dart` | All built-in spinner styles |
 | `progress_bar.dart` | Interactive progress bar |
 | `progress_animated.dart` | Auto-incrementing progress |
-| `composable_views.dart` | Timer + spinner composition |
-| `tabs.dart` | Tabbed interface |
-| `views.dart` | Two-phase view transition |
-| `pager.dart` | Scrollable pager with ViewportModel |
-| `print_key.dart` | Key introspection |
-| `cursor_style.dart` | Cursor shape / blink |
-| `mouse.dart` | Mouse event logging |
-| `realtime.dart` | Background async command |
-| `send_msg.dart` | External `program.send()` |
+| `pager.dart` | Scrollable viewport |
+| `file_picker.dart` | Directory browser |
+| `help.dart` | HelpModel + KeyMap |
 | `timer.dart` | Countdown timer |
 | `stopwatch.dart` | Elapsed-time stopwatch |
-| `focus_blur.dart` | Focus/blur events |
-| `prevent_quit.dart` | Filter to intercept QuitMsg |
-| `sequence.dart` | batch() vs sequence() |
-| `exec_cmd.dart` | External editor via execProcess() |
-| `pipe.dart` | Piped stdin |
-| `http.dart` | HTTP with spinner |
-| `file_picker.dart` | FilePickerModel |
-| `help.dart` | HelpModel + KeyMap |
-| `color_profile.dart` | ColorProfileMsg and adaptive colors |
+| `paginator.dart` | Page dot indicator |
+| `gradient.dart` | Per-character gradient text |
+| `canvas.dart` | Canvas compositing with z-index |
+| `color_profile.dart` | ColorProfile + BackgroundColorMsg |
+| `package_manager.dart` | Spinner + progress multi-step |
+| `composable_views.dart` | Timer + spinner composition |
+| `tabs.dart` | Tabbed interface |
+| `mouse.dart` | Mouse click / scroll events |
+| `exec_cmd.dart` | External editor via execProcess |
+| `http.dart` | HTTP fetch with spinner |
+| `result.dart` | OutcomeModel returning a value |
 | `isbn_form.dart` | Validated TextInputModel |
+| `showcase.dart` | Full-featured gallery |
+| `all_features.dart` | Component integration demo |
+| *(+ 16 more)* | `window_size`, `fullscreen`, `cursor_style`, `pipe`, `send_msg`, `realtime`, `prevent_quit`, `sequence`, `focus_blur`, `vanish`, `print_key`, `views`, `set_window_title`, `altscreen_toggle`, `prompts_chain`, `shopping_list` |
 
-Run any example with:
+Run any example:
 
 ```bash
+# JIT (source, slower first run)
 dart run example/simple.dart
+
+# Kernel snapshot (~2× faster startup)
+make kernel EXAMPLE=simple
+dart run tool/bin/simple.dill
 ```
 
-## Benchmark command startup
+---
 
-Use the benchmark wrapper to consistently measure:
+## Development
 
-- `first_visible_ms`: time from process start to first printable output visible in terminal
-- `total_runtime_ms`: time from process start to process exit
+### Prerequisites
 
-Run with multiple iterations (default 5 runs, 1 warmup):
+- Dart SDK ≥ 3.5 (or Flutter SDK via [fvm](https://fvm.app))
+- [VHS](https://github.com/charmbracelet/vhs) — only needed to re-record GIFs
+
+### Makefile targets
 
 ```bash
-python3 tool/bench_command.py -- fvm dart run example/showcase.dart
+make test                     # run all unit tests
+make analyze                  # dart analyze lib/
+make run EXAMPLE=simple       # run example/simple.dart (JIT)
+make kernels                  # compile all examples to .dill snapshots
+make run-fast EXAMPLE=simple  # run tool/bin/simple.dill (kernel snapshot)
+make bench EXAMPLE=simple     # startup benchmark (3 runs, reports median)
+make gifs                     # build kernels then re-record all GIFs
+make gif EXAMPLE=simple       # re-record one GIF
+make new-example NAME=my_app  # scaffold example/my_app.dart from template
+make clean                    # remove tool/bin/ build artifacts
 ```
 
-Control runs/warmups and write machine-readable output:
+### Creating a new example
 
 ```bash
-python3 tool/bench_command.py -n 10 --warmup 2 \
-  --json-out .dart_tool/bench/showcase.json \
-  -- fvm dart run example/showcase.dart
+make new-example NAME=my_feature
+# → creates example/my_feature.dart with a minimal TeaModel scaffold
+make run EXAMPLE=my_feature
 ```
 
-If you need to see child output live during benchmarking:
+The generated file has everything wired up: `Program`, `TeaModel`, key handling, and a styled view. Add your state and logic from there.
+
+### Fast startup with kernel snapshots
+
+Pre-compile examples to skip JIT at runtime:
 
 ```bash
-python3 tool/bench_command.py --passthrough -- fvm dart run example/showcase.dart
+# Build one
+bash tool/build.sh --kernel example/simple.dart
+
+# Build all
+bash tool/build.sh --kernel
+
+# Benchmark
+fvm dart run tool/startup_bench.dart --dill tool/bin/simple.dill
 ```
 
-Optional shell helper:
+Typical results:
+
+| Mode | Startup |
+|------|---------|
+| JIT source (cold) | ~1 400 ms |
+| JIT source (warm) | ~1 050 ms |
+| **Kernel snapshot** | **~550 ms** |
+| AOT (`dart compile exe`) | ~100 ms |
+
+*Measured on WSL2 / Linux. Native Linux: ~350 ms kernel, ~80 ms AOT.*
+
+### Re-recording GIFs
 
 ```bash
-dtbench() {
-  python3 tool/bench_command.py -n "${1:-7}" --warmup 1 -- "${@:2}"
-}
-# Example:
-dtbench 7 fvm dart run example/showcase.dart
+make gifs          # builds all kernels, then records all 48 GIFs
+make gif EXAMPLE=showcase   # record one
 ```
 
-For a full gallery with all examples and recordings, see [`example/README.md`](example/README.md).
+Requires [VHS](https://github.com/charmbracelet/vhs) and [ffmpeg](https://ffmpeg.org) on your PATH (or at `~/go-packages/bin/vhs` and `~/ffmpeg-local`).
 
-### GIF previews
+---
 
-![simple](example/tapes/output/simple.gif)
-![spinner](example/tapes/output/spinner.gif)
-![table](example/tapes/output/table.gif)
-![showcase](example/tapes/output/showcase.gif)
+## Architecture notes
+
+### Event loop
+
+```
+stdin bytes
+    │
+    ▼
+TerminalInputDecoder
+    │ (KeyPressMsg, WindowSizeMsg, BackgroundColorMsg, …)
+    ▼
+Queue<Msg>
+    │
+    ▼  drain all pending messages first
+for msg in queue:
+    model = model.update(msg)
+    fire cmd (unawaited — result enqueues next message)
+    │
+    ▼  render once per batch (FPS-throttled)
+renderer.render(model.view())
+```
+
+Key properties:
+- All pending messages are drained before each render — rapid key presses never block each other
+- Commands are fire-and-forget; their result arrives as the next message
+- The FPS cap (default 60) only throttles *screen output*, not message processing
+
+### Renderers
+
+| Renderer | Strategy | When to use |
+|----------|----------|-------------|
+| `AnsiRenderer` (default) | Line-level diff | Most terminals |
+| `CellRenderer` | Cell-level diff (per grapheme cluster) | Terminals without `?2026` sync |
 
 ---
 

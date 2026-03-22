@@ -6,7 +6,7 @@ Set Height 400
 Set Theme "Dracula"
 Set PlaybackSpeed 1.0
 
-Type "fvm dart run example/altscreen_toggle.dart"
+Type "fvm dart run tool/bin/altscreen_toggle.dill"
 Enter
 Sleep 800ms
 Space

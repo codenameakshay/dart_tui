@@ -6,7 +6,7 @@ Set Height 350
 Set Theme "Dracula"
 Set PlaybackSpeed 1.0
 
-Type "fvm dart run example/textinputs.dart"
+Type "fvm dart run tool/bin/textinputs.dill"
 Enter
 Sleep 500ms
 Type "Jane Doe"

@@ -6,7 +6,7 @@ Set Height 400
 Set Theme "Dracula"
 Set PlaybackSpeed 1.0
 
-Type "fvm dart run example/color_profile.dart"
+Type "fvm dart run tool/bin/color_profile.dill"
 Enter
 Sleep 2s
 Type "q"

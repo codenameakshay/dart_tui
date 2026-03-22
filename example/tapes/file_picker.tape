@@ -6,7 +6,7 @@ Set Height 500
 Set Theme "Dracula"
 Set PlaybackSpeed 1.0
 
-Type "fvm dart run example/file_picker.dart"
+Type "fvm dart run tool/bin/file_picker.dill"
 Enter
 Sleep 1s
 Down

@@ -16,6 +16,7 @@ TeaKey? parseKeyFromBuffer(List<int> buffer) {
     buffer.removeAt(0);
     return switch (b0) {
       0x09 => const TeaKey(code: KeyCode.tab), // HT / Tab
+      0x0a => const TeaKey(code: KeyCode.enter), // LF / Enter (Linux/WSL)
       0x0d => const TeaKey(code: KeyCode.enter), // CR / Enter
       _ => TeaKey(
           code: KeyCode.rune,

@@ -6,7 +6,7 @@ Set Height 400
 Set Theme "Dracula"
 Set PlaybackSpeed 1.0
 
-Type "fvm dart run example/composable_views.dart"
+Type "fvm dart run tool/bin/composable_views.dill"
 Enter
 Sleep 4s
 Type "q"

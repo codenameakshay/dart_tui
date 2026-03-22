@@ -6,6 +6,6 @@ Set Height 300
 Set Theme "Dracula"
 Set PlaybackSpeed 1.0
 
-Type "fvm dart run example/progress_animated.dart"
+Type "fvm dart run tool/bin/progress_animated.dill"
 Enter
 Sleep 8s

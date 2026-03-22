@@ -6,7 +6,7 @@ Set Height 450
 Set Theme "Dracula"
 Set PlaybackSpeed 1.0
 
-Type "fvm dart run example/print_key.dart"
+Type "fvm dart run tool/bin/print_key.dill"
 Enter
 Sleep 500ms
 Type "a"

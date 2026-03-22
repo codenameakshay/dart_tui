@@ -7,12 +7,13 @@
 /// compile) vs warm (cached kernel) times.
 ///
 /// Usage:
-///   fvm dart run tool/startup_bench.dart example/simple.dart
-///   fvm dart run tool/startup_bench.dart --all
-///   fvm dart run tool/startup_bench.dart --aot example/simple.dart
+///   fvm dart run tool/startup_bench.dart example/simple.dart        # JIT (source)
+///   fvm dart run tool/startup_bench.dart --dill tool/bin/simple.dill # kernel snapshot
+///   fvm dart run tool/startup_bench.dart --aot example/simple.dart   # AOT (native exe)
+///   fvm dart run tool/startup_bench.dart --all                        # all examples (JIT)
 ///
-/// The --aot flag assumes the example has already been compiled with:
-///   fvm dart compile exe example/simple.dart -o tool/bin/simple
+/// Build kernel snapshots first with:
+///   bash tool/build.sh --kernel example/simple.dart
 library;
 
 import 'dart:io';
@@ -24,13 +25,21 @@ Future<void> main(List<String> args) async {
   }
 
   final isAot = args.contains('--aot');
+  final isDill = args.contains('--dill');
   final allExamples = args.contains('--all');
-  final filteredArgs = args.where((a) => a != '--aot' && a != '--all').toList();
+  final filteredArgs =
+      args.where((a) => a != '--aot' && a != '--dill' && a != '--all').toList();
 
   if (allExamples) {
-    await _benchAll(aot: isAot);
+    await _benchAll(aot: isAot, dill: isDill);
   } else if (filteredArgs.isNotEmpty) {
-    await _benchOne(filteredArgs.first, aot: isAot, runs: 2, printHeader: true);
+    await _benchOne(
+      filteredArgs.first,
+      aot: isAot,
+      dill: isDill,
+      runs: 3,
+      printHeader: true,
+    );
   } else {
     _usage();
     exit(1);
@@ -40,11 +49,12 @@ Future<void> main(List<String> args) async {
 void _usage() {
   print('usage:');
   print('  fvm dart run tool/startup_bench.dart example/simple.dart');
-  print('  fvm dart run tool/startup_bench.dart --all');
+  print('  fvm dart run tool/startup_bench.dart --dill tool/bin/simple.dill');
   print('  fvm dart run tool/startup_bench.dart --aot example/simple.dart');
+  print('  fvm dart run tool/startup_bench.dart --all');
 }
 
-Future<void> _benchAll({bool aot = false}) async {
+Future<void> _benchAll({bool aot = false, bool dill = false}) async {
   final examples = Directory('example')
       .listSync()
       .whereType<File>()
@@ -56,58 +66,69 @@ Future<void> _benchAll({bool aot = false}) async {
   const nameWidth = 30;
   const msWidth = 10;
   final header =
-      '${'example'.padRight(nameWidth)}  ${'cold (ms)'.padLeft(msWidth)}  ${'warm (ms)'.padLeft(msWidth)}';
+      '${'example'.padRight(nameWidth)}  ${'run1 (ms)'.padLeft(msWidth)}  ${'run2 (ms)'.padLeft(msWidth)}  ${'run3 (ms)'.padLeft(msWidth)}';
   print(header);
   print('-' * header.length);
 
   for (final path in examples) {
-    await _benchOne(path, aot: aot, runs: 2, printHeader: false);
+    await _benchOne(path, aot: aot, dill: dill, runs: 3, printHeader: false);
   }
 }
 
 Future<void> _benchOne(
   String path, {
   required bool aot,
+  required bool dill,
   required int runs,
   required bool printHeader,
 }) async {
-  final name = path.replaceFirst('example/', '').replaceFirst('.dart', '');
+  final name = dill
+      ? path.replaceFirst('tool/bin/', '').replaceFirst('.dill', '')
+      : path.replaceFirst('example/', '').replaceFirst('.dart', '');
 
   if (printHeader) {
-    print('Benchmarking: $path');
+    final mode = dill ? 'kernel snapshot' : aot ? 'AOT' : 'JIT source';
+    print('Benchmarking: $path  [$mode]');
     print('');
   }
 
   final results = <int>[];
   for (var i = 0; i < runs; i++) {
-    final ms = await _measureStartup(path, aot: aot);
+    final ms = await _measureStartup(path, aot: aot, dill: dill);
     results.add(ms);
   }
 
   if (printHeader) {
-    print('  cold run : ${results[0]} ms');
-    if (results.length > 1) print('  warm run : ${results[1]} ms');
+    for (var i = 0; i < results.length; i++) {
+      print('  run ${i + 1}: ${results[i]} ms');
+    }
+    final median = _median(results);
+    print('  median : $median ms');
   } else {
     const nameWidth = 30;
     const msWidth = 10;
-    final cold = results[0].toString().padLeft(msWidth);
-    final warm = results.length > 1 ? results[1].toString().padLeft(msWidth) : '         -';
-    print('${name.padRight(nameWidth)}  $cold  $warm');
+    final cols = results.map((r) => r.toString().padLeft(msWidth)).join('  ');
+    print('${name.padRight(nameWidth)}  $cols');
   }
 }
 
 /// Starts the example process, waits for first stdout byte, and returns the
 /// elapsed milliseconds. Sends Ctrl-C after receiving the first byte so the
 /// process doesn't linger.
-Future<int> _measureStartup(String dartFile, {bool aot = false}) async {
+Future<int> _measureStartup(
+  String path, {
+  bool aot = false,
+  bool dill = false,
+}) async {
   List<String> command;
   if (aot) {
-    final name = dartFile
-        .replaceFirst('example/', '')
-        .replaceFirst('.dart', '');
+    final name =
+        path.replaceFirst('example/', '').replaceFirst('.dart', '');
     command = ['tool/bin/$name'];
+  } else if (dill) {
+    command = ['fvm', 'dart', 'run', path];
   } else {
-    command = ['fvm', 'dart', 'run', dartFile];
+    command = ['fvm', 'dart', 'run', path];
   }
 
   final sw = Stopwatch()..start();
@@ -126,7 +147,7 @@ Future<int> _measureStartup(String dartFile, {bool aot = false}) async {
       },
     );
   } catch (e) {
-    stderr.writeln('Failed to start $dartFile: $e');
+    stderr.writeln('Failed to start $path: $e');
     return -1;
   }
 
@@ -150,4 +171,11 @@ Future<int> _measureStartup(String dartFile, {bool aot = false}) async {
   );
 
   return elapsed;
+}
+
+int _median(List<int> values) {
+  final sorted = [...values]..sort();
+  final mid = sorted.length ~/ 2;
+  if (sorted.length.isOdd) return sorted[mid];
+  return ((sorted[mid - 1] + sorted[mid]) / 2).round();
 }

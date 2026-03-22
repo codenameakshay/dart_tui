@@ -6,7 +6,7 @@ Set Height 300
 Set Theme "Dracula"
 Set PlaybackSpeed 1.0
 
-Type "fvm dart run example/vanish.dart"
+Type "fvm dart run tool/bin/vanish.dill"
 Enter
 Sleep 1s
 Enter
