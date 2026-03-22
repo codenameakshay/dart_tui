@@ -26,7 +26,7 @@ help:
 	@echo "  Development"
 	@echo "    make test                    Run all unit tests"
 	@echo "    make analyze                 Run dart analyze on lib/"
-	@echo "    make format                  Check formatting (non-zero exit if changes needed)"
+	@echo "    make format                  Run formatting"
 	@echo "    make run EXAMPLE=foo         Run example/foo.dart (JIT source)"
 	@echo "    make run-fast EXAMPLE=foo    Run tool/bin/foo.dill (kernel snapshot)"
 	@echo ""
@@ -55,7 +55,7 @@ analyze:
 	$(DART) analyze lib/
 
 format:
-	$(DART) format --output=none --set-exit-if-changed .
+	$(DART) format .
 
 # ── Running examples ───────────────────────────────────────────────────────────
 run:
