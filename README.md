@@ -221,6 +221,43 @@ Run any example with:
 dart run example/simple.dart
 ```
 
+## Benchmark command startup
+
+Use the benchmark wrapper to consistently measure:
+
+- `first_visible_ms`: time from process start to first printable output visible in terminal
+- `total_runtime_ms`: time from process start to process exit
+
+Run with multiple iterations (default 5 runs, 1 warmup):
+
+```bash
+python3 tool/bench_command.py -- fvm dart run example/showcase.dart
+```
+
+Control runs/warmups and write machine-readable output:
+
+```bash
+python3 tool/bench_command.py -n 10 --warmup 2 \
+  --json-out .dart_tool/bench/showcase.json \
+  -- fvm dart run example/showcase.dart
+```
+
+If you need to see child output live during benchmarking:
+
+```bash
+python3 tool/bench_command.py --passthrough -- fvm dart run example/showcase.dart
+```
+
+Optional shell helper:
+
+```bash
+dtbench() {
+  python3 tool/bench_command.py -n "${1:-7}" --warmup 1 -- "${@:2}"
+}
+# Example:
+dtbench 7 fvm dart run example/showcase.dart
+```
+
 For a full gallery with all examples and recordings, see [`example/README.md`](example/README.md).
 
 ### GIF previews

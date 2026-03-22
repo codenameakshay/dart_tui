@@ -179,6 +179,17 @@ final class Program {
     _finished = Completer<void>();
     _runningModel = initial;
 
+    // Opt-in startup phase timer: set DART_TUI_BENCH=1 to enable.
+    final benchEnabled =
+        Platform.environment['DART_TUI_BENCH'] == '1';
+    final benchSw = benchEnabled ? (Stopwatch()..start()) : null;
+    void bench(String label) {
+      if (benchSw == null) return;
+      stderr.writeln('[bench] +${benchSw.elapsedMilliseconds}ms\t$label');
+    }
+
+    bench('start');
+
     final queue = Queue<Msg>();
     Completer<void>? wake;
 
@@ -381,6 +392,7 @@ final class Program {
       if (!_disableRenderer) {
         _console.rawMode = true;
       }
+      bench('raw_mode');
 
       if (!_disableSignalHandler && !Platform.isWindows) {
         _sigSub =
@@ -394,6 +406,7 @@ final class Program {
       }
       enqueue(ColorProfileMsg(_profile));
       enqueue(EnvMsg(_environment));
+      bench('terminal_queries');
 
       if (!_disableInput) {
         final source = _input ?? _stdinBroadcast();
@@ -407,6 +420,7 @@ final class Program {
           cancelOnError: true,
         );
       }
+      bench('input_ready');
 
       if (_compatOptions.tickInterval != null) {
         _tickTimer?.cancel();
@@ -416,8 +430,15 @@ final class Program {
       }
 
       final initCmd = _runningModel!.init();
-      await runCmd(initCmd);
+      bench('init_cmd_created');
+      // Render the first frame immediately before firing the init command.
+      // This matches Bubbletea's behaviour: Init() runs concurrently while
+      // the initial view is already visible on screen.
       await render(_runningModel!.view());
+      bench('first_frame');
+      if (initCmd != null) {
+        unawaited(runCmd(initCmd));
+      }
 
       final externalCancellation = _externalCancellation;
       if (externalCancellation != null) {
