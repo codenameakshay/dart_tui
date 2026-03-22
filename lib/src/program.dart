@@ -490,6 +490,13 @@ final class Program {
       }
     } finally {
       _shutdown();
+      if (!_disableRenderer) {
+        // Move to a fresh line so the shell prompt appears cleanly after exit,
+        // then flush so all ANSI reset sequences (show cursor, exit alt-screen)
+        // actually reach the terminal before the shell gets control.
+        _output.writeln();
+        await _output.flush();
+      }
     }
 
     return (_killed ? StateError('program killed') : null, _runningModel!);
