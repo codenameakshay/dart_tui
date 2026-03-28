@@ -203,6 +203,17 @@ final class Program {
       wake = null;
     }
 
+    // [send] pushes to [_msgs]; bridge it into the same queue as stdin/ticks.
+    // Without this listener, async side-effects (e.g. HTTP progress/completion)
+    // never reach [applyMsg].
+    final StreamSubscription<Msg> externalMsgSub = _msgs.stream.listen(
+      (Msg msg) {
+        if (_running) {
+          enqueue(msg);
+        }
+      },
+    );
+
     Future<void> waitForActivity() async {
       while (_running && queue.isEmpty) {
         wake = Completer<void>();
@@ -488,6 +499,7 @@ final class Program {
         }
       }
     } finally {
+      await externalMsgSub.cancel();
       // Await stdin subscription cancellation explicitly so stdin is fully
       // released before _shutdown() marks the program done. Without this,
       // the Dart event loop keeps running after main() returns (waiting for
