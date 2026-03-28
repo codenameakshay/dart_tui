@@ -91,6 +91,25 @@ final class TerminalInputDecoder {
     return out;
   }
 
+  /// Whether the decoder is holding a single `ESC` byte that might be either a
+  /// lone Escape key or the start of a sequence (e.g. arrow keys) not yet read.
+  ///
+  /// The [Program] schedules a short timer after input; if no further bytes
+  /// arrive, it calls [takeLoneEscapeIfStillPending] to emit [KeyPressMsg] for
+  /// Escape without breaking split `ESC [`… sequences across stdin chunks.
+  bool get hasPendingLoneEscape =>
+      !_inPaste &&
+      _buffer.length == 1 &&
+      _buffer[0] == 0x1b;
+
+  /// If [hasPendingLoneEscape] is still true, consume the byte and return a
+  /// single [KeyPressMsg] for Escape; otherwise returns an empty list.
+  List<Msg> takeLoneEscapeIfStillPending() {
+    if (!hasPendingLoneEscape) return const <Msg>[];
+    _buffer.clear();
+    return <Msg>[KeyPressMsg(const TeaKey(code: KeyCode.escape))];
+  }
+
   void _consume(int count) {
     _buffer.removeRange(0, count);
   }

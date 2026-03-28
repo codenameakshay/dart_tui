@@ -111,6 +111,7 @@ final class Program {
   bool _killed = false;
   Completer<void>? _finished;
   Timer? _tickTimer;
+  Timer? _loneEscTimer;
   StreamSubscription<List<int>>? _inputSub;
   StreamSubscription<ProcessSignal>? _sigSub;
   TeaRenderer? _renderer;
@@ -431,8 +432,19 @@ final class Program {
         final decoder = TerminalInputDecoder();
         _inputSub = source.listen(
           (bytes) {
+            _loneEscTimer?.cancel();
+            _loneEscTimer = null;
             for (final msg in decoder.feed(bytes)) {
               enqueue(msg);
+            }
+            if (decoder.hasPendingLoneEscape) {
+              _loneEscTimer = Timer(const Duration(milliseconds: 10), () {
+                _loneEscTimer = null;
+                if (!_running) return;
+                for (final msg in decoder.takeLoneEscapeIfStillPending()) {
+                  enqueue(msg);
+                }
+              });
             }
           },
           cancelOnError: true,
@@ -525,6 +537,8 @@ final class Program {
     _running = false;
     _tickTimer?.cancel();
     _tickTimer = null;
+    _loneEscTimer?.cancel();
+    _loneEscTimer = null;
     unawaited(_inputSub?.cancel());
     _inputSub = null;
     unawaited(_sigSub?.cancel());
