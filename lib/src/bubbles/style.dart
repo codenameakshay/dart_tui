@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:characters/characters.dart';
 
 import '../msg.dart';
@@ -571,15 +572,38 @@ final _ansiEscapeRe = RegExp(r'\x1b(?:\[[0-9;?]*[A-Za-z]|[\]O][^\x07]*\x07?)');
 String _stripAnsiStyle(String s) => s.replaceAll(_ansiEscapeRe, '');
 
 /// Visible display width of [s] (number of printable characters after stripping ANSI).
-int _visibleWidth(String s) => _stripAnsiStyle(s).length;
+/// Handles double-width characters (CJK).
+int _visibleWidth(String s) {
+  final stripped = _stripAnsiStyle(s);
+  var width = 0;
+  for (final char in stripped.characters) {
+    final code = char.runes.first;
+    // Basic CJK / full-width heuristic
+    // Based on East Asian Width properties
+    if (code >= 0x1100 &&
+        (code <= 0x11ff || // Hangul Jamo
+            (code >= 0x2e80 && code <= 0x9fff) || // CJK Radicals .. CJK Unified Ideographs
+            (code >= 0xac00 && code <= 0xd7af) || // Hangul Syllables
+            (code >= 0xf900 && code <= 0xfaff) || // CJK Compatibility Ideographs
+            (code >= 0xfe30 && code <= 0xfe4f) || // CJK Compatibility Forms
+            (code >= 0xff00 && code <= 0xff60) || // Fullwidth Forms
+            (code >= 0x1f300 && code <= 0x1f9ff))) {
+      // Emojis and CJK
+      width += 2;
+    } else {
+      width += 1;
+    }
+  }
+  return width;
+}
 
 /// Truncate [s] to at most [maxWidth] visible characters, preserving ANSI codes.
 String _truncateVisible(String s, int maxWidth) {
   if (_visibleWidth(s) <= maxWidth) return s;
-  var count = 0;
+  var currentWidth = 0;
   final b = StringBuffer();
   var i = 0;
-  while (i < s.length && count < maxWidth) {
+  while (i < s.length && currentWidth < maxWidth) {
     if (s[i] == '\x1b') {
       // consume escape sequence
       final match = _ansiEscapeRe.matchAsPrefix(s, i);
@@ -589,9 +613,16 @@ String _truncateVisible(String s, int maxWidth) {
         continue;
       }
     }
-    b.write(s[i]);
-    count++;
-    i++;
+
+    final remaining = s.substring(i);
+    final char = remaining.characters.first;
+    final charWidth = _visibleWidth(char);
+
+    if (currentWidth + charWidth > maxWidth) break;
+
+    b.write(char);
+    currentWidth += charWidth;
+    i += char.length;
   }
   return b.toString();
 }

@@ -1,3 +1,4 @@
+import 'package:characters/characters.dart';
 import '../cmd.dart';
 import '../model.dart';
 import '../msg.dart';
@@ -140,38 +141,37 @@ final class TextInputModel extends TeaModel {
   @override
   (Model, Cmd?) update(Msg msg) {
     if (msg is! KeyMsg) return (this, null);
+    final chars = value.characters.toList();
     switch (msg.key) {
       case 'backspace':
         if (value.isEmpty || cursorPos == 0) return (this, null);
-        final newValue =
-            value.substring(0, cursorPos - 1) + value.substring(cursorPos);
-        return (copyWith(value: newValue, cursorPos: cursorPos - 1), null);
+        final nextChars = List<String>.from(chars)..removeAt(cursorPos - 1);
+        return (copyWith(value: nextChars.join(), cursorPos: cursorPos - 1), null);
 
       case 'delete':
-        if (cursorPos >= value.length) return (this, null);
-        final newValue =
-            value.substring(0, cursorPos) + value.substring(cursorPos + 1);
-        return (copyWith(value: newValue), null);
+        if (cursorPos >= chars.length) return (this, null);
+        final nextChars = List<String>.from(chars)..removeAt(cursorPos);
+        return (copyWith(value: nextChars.join()), null);
 
       case 'left':
         if (cursorPos == 0) return (this, null);
         return (copyWith(cursorPos: cursorPos - 1), null);
 
       case 'right':
-        if (cursorPos >= value.length) return (this, null);
+        if (cursorPos >= chars.length) return (this, null);
         return (copyWith(cursorPos: cursorPos + 1), null);
 
       case 'home':
         return (copyWith(cursorPos: 0), null);
 
       case 'end':
-        return (copyWith(cursorPos: value.length), null);
+        return (copyWith(cursorPos: chars.length), null);
 
       case 'tab':
         final suggestion = _activeSuggestion;
         if (suggestion != null) {
           return (
-            copyWith(value: suggestion, cursorPos: suggestion.length),
+            copyWith(value: suggestion, cursorPos: suggestion.characters.length),
             null
           );
         }
@@ -188,12 +188,11 @@ final class TextInputModel extends TeaModel {
 
       default:
         if (!focused) return (this, null);
-        if (msg.key.length == 1) {
-          if (charLimit > 0 && value.length >= charLimit) return (this, null);
-          final newValue = value.substring(0, cursorPos) +
-              msg.key +
-              value.substring(cursorPos);
-          return (copyWith(value: newValue, cursorPos: cursorPos + 1), null);
+        if (msg.key.length >= 1) {
+          // In dart_tui, msg.key for runes is the actual string
+          if (charLimit > 0 && chars.length >= charLimit) return (this, null);
+          final nextChars = List<String>.from(chars)..insert(cursorPos, msg.key);
+          return (copyWith(value: nextChars.join(), cursorPos: cursorPos + 1), null);
         }
         return (this, null);
     }
@@ -201,6 +200,7 @@ final class TextInputModel extends TeaModel {
 
   @override
   View view() {
+    final chars = value.characters.toList();
     if (!focused && value.isEmpty) {
       final display = label.isEmpty ? placeholder : '$label $placeholder';
       return newView(styles.placeholder.render(display));
@@ -211,19 +211,49 @@ final class TextInputModel extends TeaModel {
       case EchoMode.normal:
         displayValue = value;
       case EchoMode.password:
-        displayValue = '•' * value.length;
+        displayValue = '•' * chars.length;
       case EchoMode.none:
         displayValue = '';
     }
 
     final suggestion = _activeSuggestion;
     final suggestionSuffix = (echoMode == EchoMode.normal && suggestion != null)
-        ? styles.suggestion.render(suggestion.substring(value.length))
+        ? styles.suggestion.render(suggestion.characters.skip(chars.length).join())
         : '';
 
     final labelStyle = focused ? styles.focusedLabel : styles.label;
     final prefix = label.isEmpty ? '' : '${labelStyle.render(label)} ';
-    return newView(
-        '$prefix${styles.text.render(displayValue)}$suggestionSuffix');
+    
+    final view = newView('$prefix${styles.text.render(displayValue)}$suggestionSuffix');
+    
+    if (focused) {
+      // Calculate cursor position in cells, not characters
+      final prefixWidth = _estimateWidth(label.isEmpty ? '' : '$label ');
+      final textBeforeCursor = chars.sublist(0, cursorPos).join();
+      final cursorX = prefixWidth + _estimateWidth(textBeforeCursor);
+      view.cursor = Cursor(x: cursorX, y: 0, shape: CursorShape.bar);
+    }
+    
+    return view;
+  }
+
+  static int _estimateWidth(String s) {
+    var width = 0;
+    for (final char in s.characters) {
+      final code = char.runes.first;
+      if (code >= 0x1100 &&
+          (code <= 0x11ff ||
+              (code >= 0x2e80 && code <= 0x9fff) ||
+              (code >= 0xac00 && code <= 0xd7af) ||
+              (code >= 0xf900 && code <= 0xfaff) ||
+              (code >= 0xfe30 && code <= 0xfe4f) ||
+              (code >= 0xff00 && code <= 0xff60) ||
+              (code >= 0x1f300 && code <= 0x1f9ff))) {
+        width += 2;
+      } else {
+        width += 1;
+      }
+    }
+    return width;
   }
 }
