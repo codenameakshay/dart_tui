@@ -16,8 +16,9 @@ Build rich, interactive CLI applications with a clean **Model–Update–View** 
 
 - **Model–Update–View** — same architecture as Elm and Bubble Tea; pure, testable state
 - **Async commands** (`Cmd`) for timers, HTTP, subprocesses, and any async work
-- **20+ ready-made components** — spinners, progress bars, text inputs, tables, trees, viewports, and more
-- **Lipgloss-inspired styling** — true-color RGB, borders, padding, alignment, gradients
+- **25+ ready-made components** — spinners, progress bars, text inputs, tables, trees, list with fuzzy filter, tabbed views, and more
+- **Lipgloss-inspired styling** — true-color RGB, borders with titles, padding, word-wrap, gradients, SGR attributes
+- **Style inheritance** — `Style.inherit(parent)` fills unset fields; `CompleteColor` for per-profile color downgrade
 - **Canvas compositing** — paint styled blocks at arbitrary (x, y) positions with z-index layering
 - **Cell-level diff renderer** — only changed cells are written; zero flicker
 - **Synchronized updates** (`CSI ?2026`) for terminals that support them
@@ -31,7 +32,7 @@ Build rich, interactive CLI applications with a clean **Model–Update–View** 
 ```yaml
 # pubspec.yaml
 dependencies:
-  dart_tui: ^1.0.0
+  dart_tui: ^1.1.0
 ```
 
 ```bash
@@ -127,6 +128,16 @@ Cmd? batch(List<Cmd?> cmds)                           // concurrent
 Cmd? sequence(List<Cmd?> cmds)                        // sequential
 Cmd execProcess(String exe, List<String> args, {...}) // external process
 Cmd requestBackgroundColor()                          // fire OSC 11 query manually
+
+// Terminal control
+Msg enterAltScreen()       // switch to alt screen buffer
+Msg exitAltScreen()        // return to primary screen
+Msg hideCursor()           // hide terminal cursor
+Msg showCursor()           // show terminal cursor
+Cmd setWindowTitle(title)  // set window/tab title via OSC
+Msg clearScrollArea()      // clear screen and scrollback
+Cmd scrollUp([int n = 1])  // scroll viewport up n lines
+Cmd scrollDown([int n = 1])// scroll viewport down n lines
 ```
 
 ### Program options
@@ -165,16 +176,86 @@ final title = const Style(
   align: Align.center,
 ).render('Hello, dart_tui!');
 
-// Borders + padding
+// Borders + padding + title
 final box = const Style(
   border: Border.rounded,
-  foregroundRgb: RgbColor(137, 180, 250),
-).withWidth(30).withPadding(EdgeInsets.all(1)).render(content);
+  borderForeground: RgbColor(137, 180, 250),
+  borderTitle: ' My Box ',
+  borderTitleAlignment: Align.center,
+  padding: EdgeInsets.symmetric(vertical: 0, horizontal: 1),
+  width: 40,
+).render(content);
+
+// Word-wrap at 40 columns
+final wrapped = const Style(
+  foregroundRgb: RgbColor(205, 214, 244),
+  wordWrap: true,
+  width: 42,
+  border: Border.box,
+).render(longText);
 
 // Layout helpers
 final ui  = joinHorizontal(AlignVertical.top, [leftPane, rightPane]);
 final mid = place(termWidth, termHeight, Align.center, AlignVertical.middle, content);
 ```
+
+### SGR text attributes
+
+```dart
+const Style(isBold: true)          // bold
+const Style(isDim: true)           // dim / faint
+const Style(isItalic: true)        // italic
+const Style(isUnderline: true)     // underline
+const Style(isStrikethrough: true) // strikethrough
+const Style(isReverse: true)       // swap fg/bg
+const Style(isBlink: true)         // blinking text
+const Style(isOverline: true)      // overline decoration
+```
+
+![sgr_attrs](example/tapes/output/sgr_attrs.gif)
+
+### Style inheritance
+
+```dart
+const base = Style(
+  foregroundRgb: RgbColor(203, 166, 247),
+  isBold: true,
+  isItalic: true,
+);
+const child = Style(
+  foregroundRgb: RgbColor(166, 227, 161), // overrides fg
+);
+// child.inherit(base) → green + bold + italic
+final resolved = child.inherit(base);
+```
+
+### Border styles
+
+All 6 border variants plus per-character foreground/background coloring and an embedded title:
+
+```dart
+Border.box      // ┌─┐ └─┘ │
+Border.rounded  // ╭─╮ ╰─╯ │
+Border.thick    // ┏━┓ ┗━┛ ┃
+Border.double   // ╔═╗ ╚═╝ ║
+Border.hidden   // space-padded (preserves geometry)
+Border.none     // no border
+```
+
+![border_style](example/tapes/output/border_style.gif)
+
+### Word wrap
+
+```dart
+const Style(
+  wordWrap: true,
+  width: 40,
+  border: Border.rounded,
+  borderTitle: ' Notes ',
+).render(longText);
+```
+
+![word_wrap](example/tapes/output/word_wrap.gif)
 
 ### Gradient text
 
@@ -274,6 +355,41 @@ SelectListModel(items: ['Option A', 'Option B', 'Option C'], height: 8)
 
 ![list_default](example/tapes/output/list_default.gif)
 
+### List with fuzzy filter
+
+Full-featured list component with incremental fuzzy/subsequence filtering, descriptions, status bar, and per-element styling.
+
+```dart
+ListModel(
+  items: [
+    ListItem(title: 'Apple', description: 'A crisp red fruit'),
+    ListItem(title: 'Banana', description: 'A yellow tropical fruit'),
+  ],
+  title: 'Fruit Picker',
+  height: 8,
+  showDescription: true,
+  showStatusBar: true,
+)
+// Press / to enter filter mode, type to narrow, Esc to clear.
+```
+
+![list_filter](example/tapes/output/list_filter.gif)
+
+### Tabs
+
+Tabbed interface with customisable `TabsStyles` for active/inactive labels, divider, and content area.
+
+```dart
+TabsModel(tabs: [
+  ('Home',     'Welcome content here'),
+  ('Profile',  'Name: Alice\nEmail: alice@example.com'),
+  ('Settings', 'Theme: Dark\nFont: 14px'),
+])
+// Navigate: ← / → / h / l / Tab / Shift+Tab
+```
+
+![tabs](example/tapes/output/tabs.gif)
+
 ### Table
 
 Scrollable data table with configurable headers, column widths, per-row/per-cell styling.
@@ -369,7 +485,7 @@ FilePickerModel(
 
 ## Examples
 
-48 runnable examples covering every feature:
+52 runnable examples covering every feature:
 
 | Example | What it shows |
 |---------|---------------|
@@ -380,6 +496,7 @@ FilePickerModel(
 | `autocomplete.dart` | Tab-completion suggestions |
 | `list_simple.dart` | Basic SelectListModel |
 | `list_default.dart` | List with selection state |
+| `list_filter.dart` | ListModel with fuzzy filtering |
 | `table.dart` | City data table |
 | `tree.dart` | Expandable language/framework tree |
 | `spinner.dart` | Animated spinner |
@@ -397,7 +514,10 @@ FilePickerModel(
 | `color_profile.dart` | ColorProfile + BackgroundColorMsg |
 | `package_manager.dart` | Spinner + progress multi-step |
 | `composable_views.dart` | Timer + spinner composition |
-| `tabs.dart` | Tabbed interface |
+| `tabs.dart` | TabsModel tabbed interface |
+| `border_style.dart` | All Border variants + titles + colors |
+| `word_wrap.dart` | Style.wordWrap at multiple widths |
+| `sgr_attrs.dart` | SGR text attributes + Style.inherit() |
 | `mouse.dart` | Mouse click / scroll events |
 | `exec_cmd.dart` | External editor via execProcess |
 | `http.dart` | HTTP fetch with spinner |
@@ -481,11 +601,11 @@ Typical results:
 ### Re-recording GIFs
 
 ```bash
-make gifs          # builds all kernels, then records all 48 GIFs
+make gifs          # builds all kernels, then records all 52 GIFs
 make gif EXAMPLE=showcase   # record one
 ```
 
-Requires [VHS](https://github.com/charmbracelet/vhs) and [ffmpeg](https://ffmpeg.org) on your PATH (or at `/opt/homebrew/bin/vhs` and `~/ffmpeg-local`).
+Requires [VHS](https://github.com/charmbracelet/vhs) and [ffmpeg](https://ffmpeg.org) on your PATH (or at `~/go-packages/bin/vhs` and `~/ffmpeg-local`).
 
 ---
 
