@@ -77,6 +77,29 @@ ProgramOption withWindowSize(int width, int height) {
   };
 }
 
+/// Enter the alternate screen buffer at startup.
+ProgramOption withAltScreen() => (p) => p._altScreen = true;
+
+/// Hide the terminal cursor at startup (default behaviour).
+/// Pass `false` to keep the cursor visible.
+ProgramOption withHideCursor([bool hide = true]) =>
+    (p) => p._hideCursor = hide;
+
+/// Emit tick messages on a fixed [interval].
+ProgramOption withTickInterval(Duration interval) =>
+    (p) => p._tickInterval = interval;
+
+/// Enable cell-motion mouse tracking at startup (button events + drag).
+ProgramOption withMouseCellMotion() =>
+    (p) => p._defaultMouseMode = MouseMode.cellMotion;
+
+/// Enable all-motion mouse tracking at startup (includes hover).
+ProgramOption withMouseAllMotion() =>
+    (p) => p._defaultMouseMode = MouseMode.allMotion;
+
+/// Enable terminal focus/blur reporting at startup.
+ProgramOption withReportFocus() => (p) => p._defaultReportFocus = true;
+
 final class Program {
   Program({
     ProgramOptions options = const ProgramOptions(),
@@ -103,6 +126,13 @@ final class Program {
   bool _disableCatchPanics = false;
   bool _disableSignalHandler = false;
   bool _useCellRenderer = false;
+
+  // New first-class ProgramOption fields (override compat ProgramOptions when set).
+  bool? _altScreen;
+  bool? _hideCursor;
+  Duration? _tickInterval;
+  MouseMode _defaultMouseMode = MouseMode.none;
+  bool _defaultReportFocus = false;
 
   IOSink? _logSink;
   Model? _runningModel;
@@ -419,20 +449,27 @@ final class Program {
 
     try {
       _logSink = _compatOptions.logFile?.openWrite(mode: FileMode.append);
+      // New ProgramOption values override the compat ProgramOptions struct.
+      final effectiveAltScreen = _altScreen ?? _compatOptions.altScreen;
+      final effectiveHideCursor = _hideCursor ?? _compatOptions.hideCursor;
       _renderer = _disableRenderer
           ? NilRenderer()
           : _useCellRenderer
               ? CellRenderer(
                   output: _output,
                   logSink: _logSink,
-                  defaultAltScreen: _compatOptions.altScreen,
-                  defaultHideCursor: _compatOptions.hideCursor,
+                  defaultAltScreen: effectiveAltScreen,
+                  defaultHideCursor: effectiveHideCursor,
+                  defaultMouseMode: _defaultMouseMode,
+                  defaultReportFocus: _defaultReportFocus,
                 )
               : AnsiRenderer(
                   output: _output,
                   logSink: _logSink,
-                  defaultAltScreen: _compatOptions.altScreen,
-                  defaultHideCursor: _compatOptions.hideCursor,
+                  defaultAltScreen: effectiveAltScreen,
+                  defaultHideCursor: effectiveHideCursor,
+                  defaultMouseMode: _defaultMouseMode,
+                  defaultReportFocus: _defaultReportFocus,
                 );
       if (!_disableRenderer) {
         _setRawMode(true);
@@ -474,9 +511,11 @@ final class Program {
       }
       bench('input_ready');
 
-      if (_compatOptions.tickInterval != null) {
+      final effectiveTickInterval =
+          _tickInterval ?? _compatOptions.tickInterval;
+      if (effectiveTickInterval != null) {
         _tickTimer?.cancel();
-        _tickTimer = Timer.periodic(_compatOptions.tickInterval!, (_) {
+        _tickTimer = Timer.periodic(effectiveTickInterval, (_) {
           enqueue(TickMsg(DateTime.now()));
         });
       }

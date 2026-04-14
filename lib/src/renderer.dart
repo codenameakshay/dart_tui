@@ -52,15 +52,21 @@ final class AnsiRenderer implements TeaRenderer {
     IOSink? logSink,
     required bool defaultAltScreen,
     required bool defaultHideCursor,
+    MouseMode defaultMouseMode = MouseMode.none,
+    bool defaultReportFocus = false,
   })  : _output = output,
         _logSink = logSink,
         _defaultAltScreen = defaultAltScreen,
-        _defaultHideCursor = defaultHideCursor;
+        _defaultHideCursor = defaultHideCursor,
+        _defaultMouseMode = defaultMouseMode,
+        _defaultReportFocus = defaultReportFocus;
 
   final IOSink _output;
   final IOSink? _logSink;
   final bool _defaultAltScreen;
   final bool _defaultHideCursor;
+  final MouseMode _defaultMouseMode;
+  final bool _defaultReportFocus;
 
   bool _altScreenEnabled = false;
   bool _cursorHidden = false;
@@ -205,9 +211,10 @@ final class AnsiRenderer implements TeaRenderer {
       _cursorHidden = wantsHiddenCursor;
     }
 
-    if (v.reportFocus != _focusReportingEnabled) {
-      _output.write(v.reportFocus ? '\x1b[?1004h' : '\x1b[?1004l');
-      _focusReportingEnabled = v.reportFocus;
+    final wantsFocus = v.reportFocus || _defaultReportFocus;
+    if (wantsFocus != _focusReportingEnabled) {
+      _output.write(wantsFocus ? '\x1b[?1004h' : '\x1b[?1004l');
+      _focusReportingEnabled = wantsFocus;
     }
 
     final wantsBracketedPaste = !v.disableBracketedPasteMode;
@@ -216,9 +223,15 @@ final class AnsiRenderer implements TeaRenderer {
       _bracketedPasteEnabled = wantsBracketedPaste;
     }
 
-    if (v.mouseMode != _mouseMode) {
+    // Effective mouse mode is the higher of the per-frame view mode and the
+    // startup default (so withMouseCellMotion() stays on even when the View
+    // returns MouseMode.none).
+    final effectiveMouseMode = v.mouseMode.index >= _defaultMouseMode.index
+        ? v.mouseMode
+        : _defaultMouseMode;
+    if (effectiveMouseMode != _mouseMode) {
       _output.write('\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l');
-      switch (v.mouseMode) {
+      switch (effectiveMouseMode) {
         case MouseMode.none:
           break;
         case MouseMode.cellMotion:
@@ -228,7 +241,7 @@ final class AnsiRenderer implements TeaRenderer {
           _output.write('\x1b[?1003h\x1b[?1006h');
           break;
       }
-      _mouseMode = v.mouseMode;
+      _mouseMode = effectiveMouseMode;
     }
   }
 }
@@ -263,15 +276,21 @@ final class CellRenderer implements TeaRenderer {
     IOSink? logSink,
     required bool defaultAltScreen,
     required bool defaultHideCursor,
+    MouseMode defaultMouseMode = MouseMode.none,
+    bool defaultReportFocus = false,
   })  : _output = output,
         _logSink = logSink,
         _defaultAltScreen = defaultAltScreen,
-        _defaultHideCursor = defaultHideCursor;
+        _defaultHideCursor = defaultHideCursor,
+        _defaultMouseMode = defaultMouseMode,
+        _defaultReportFocus = defaultReportFocus;
 
   final IOSink _output;
   final IOSink? _logSink;
   final bool _defaultAltScreen;
   final bool _defaultHideCursor;
+  final MouseMode _defaultMouseMode;
+  final bool _defaultReportFocus;
 
   bool _altScreenEnabled = false;
   bool _cursorHidden = false;
@@ -470,9 +489,10 @@ final class CellRenderer implements TeaRenderer {
       _cursorHidden = wantsHiddenCursor;
     }
 
-    if (v.reportFocus != _focusReportingEnabled) {
-      _output.write(v.reportFocus ? '\x1b[?1004h' : '\x1b[?1004l');
-      _focusReportingEnabled = v.reportFocus;
+    final wantsFocus = v.reportFocus || _defaultReportFocus;
+    if (wantsFocus != _focusReportingEnabled) {
+      _output.write(wantsFocus ? '\x1b[?1004h' : '\x1b[?1004l');
+      _focusReportingEnabled = wantsFocus;
     }
 
     final wantsBracketedPaste = !v.disableBracketedPasteMode;
@@ -481,9 +501,15 @@ final class CellRenderer implements TeaRenderer {
       _bracketedPasteEnabled = wantsBracketedPaste;
     }
 
-    if (v.mouseMode != _mouseMode) {
+    // Effective mouse mode is the higher of the per-frame view mode and the
+    // startup default (so withMouseCellMotion() stays on even when the View
+    // returns MouseMode.none).
+    final effectiveMouseMode = v.mouseMode.index >= _defaultMouseMode.index
+        ? v.mouseMode
+        : _defaultMouseMode;
+    if (effectiveMouseMode != _mouseMode) {
       _output.write('\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l');
-      switch (v.mouseMode) {
+      switch (effectiveMouseMode) {
         case MouseMode.none:
           break;
         case MouseMode.cellMotion:
@@ -493,7 +519,7 @@ final class CellRenderer implements TeaRenderer {
           _output.write('\x1b[?1003h\x1b[?1006h');
           break;
       }
-      _mouseMode = v.mouseMode;
+      _mouseMode = effectiveMouseMode;
     }
   }
 }
