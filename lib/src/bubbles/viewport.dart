@@ -30,14 +30,15 @@ final class ViewportModel extends TeaModel {
     if (!softWrap) return lines;
     final result = <String>[];
     for (final line in lines) {
-      final stripped = line.replaceAll(RegExp(r'\x1b\[[0-9;]*m'), ''); // Simple ANSI strip for wrap
+      final stripped = line.replaceAll(
+          RegExp(r'\x1b\[[0-9;]*m'), ''); // Simple ANSI strip for wrap
       if (_estimateWidth(stripped) <= width || width <= 0) {
         result.add(line);
       } else {
         var currentLine = StringBuffer();
         var currentLineWidth = 0;
         final chars = line.characters;
-        
+
         for (final char in chars) {
           final charWidth = _estimateWidth(char);
           if (currentLineWidth + charWidth > width) {

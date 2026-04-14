@@ -1,5 +1,140 @@
 # Changelog
 
+## 1.2.0
+
+### New components
+
+- **`CursorModel`** (`bubbles/cursor.dart`): in-line blinking cursor widget with three display modes — `CursorMode.block` (`█`), `CursorMode.underline` (`_`), and `CursorMode.bar` (`|`). Toggles visibility on every `TickMsg` when `blink: true`. Useful for building custom text editors, prompts, or any UI that needs a visible insertion point independent of the real terminal cursor. Supports `focus()`/`blur()` to pause blinking, and `withMode()`/`withBlink()` builders.
+
+- **`MultiSelectModel`** (`bubbles/multi_select.dart`): scrollable checkbox list supporting multiple concurrent selections. Navigate with `↑↓ / jk`, toggle with `Space` or `x`, select/deselect all with `a`, confirm with `Enter`. Features:
+  - `wrap: bool` — cursor wraps at list boundaries
+  - `height` — viewport limiting
+  - `showStatusBar` — `"N/Total selected"` footer
+  - `selectedValues` getter — returns custom `value` or falls back to `label`
+  - `MultiSelectStyles` for full per-element theming (Catppuccin Mocha defaults)
+
+### New `ProgramOption` functions
+
+Seven new fluent option functions complement the existing `ProgramOptions` struct:
+
+```dart
+withAltScreen()                                    // enter alt-screen buffer at startup
+withHideCursor([bool hide = true])                 // hide/show terminal cursor at startup
+withTickInterval(Duration interval)                // emit TickMsg at a fixed interval
+withMouseCellMotion()                              // enable button-event mouse tracking
+withMouseAllMotion()                               // enable all-motion mouse tracking
+withReportFocus()                                  // emit FocusMsg / BlurMsg on window focus
+withWindowSize(int width, int height)              // inject fixed dimensions (useful in tests)
+```
+
+These compose with `ProgramOptions` and take precedence over it; `defaultMouseMode` and `defaultReportFocus` act as floor values so per-`View` overrides still work.
+
+### Style additions
+
+- **`Border.normal`** — ASCII-art border (`+`, `-`, `|`) for environments without Unicode box-drawing support.
+- **Per-side border flags** — `Border` now has `showTop`, `showRight`, `showBottom`, `showLeft` (all default `true`). Use `Style.withBorderSides({top, right, bottom, left})` or the pre-built helpers `Border.topOnly`, `Border.bottomOnly`, `Border.sidesOnly` to draw partial borders.
+- **`Border.copyWith()`** — produce modified `Border` instances without recreating all fields.
+- **`tabWidth: int`** field on `Style` (default `4`) — `\t` characters are expanded to spaces before rendering. Use `Style.withTabWidth(n)` fluent builder.
+- **`marginBackground: RgbColor?`** field on `Style` — fills the margin area with a solid ANSI background colour. Use `Style.withMarginBackground(color)` fluent builder.
+- **`getWidth(String)`** (public) — visible terminal column width after stripping ANSI and counting double-wide characters.
+- **`getHeight(String)`** (public) — number of newline-delimited lines.
+- **`truncate(String, int)`** (public) — drop trailing visible columns to fit `maxWidth`; ANSI-safe.
+- **`truncateLeft(String, int)`** (public) — drop leading visible columns; ANSI codes in the kept portion are preserved.
+
+### Component navigation & mouse improvements
+
+- **`ListModel`** — added `pgup` / `ctrl+b`, `pgdown` / `ctrl+f`, `home` / `g`, `end` / `G` key bindings; `viewOffsetY` field for click-to-select mouse handling; mouse wheel scrolling.
+- **`SelectListModel`** — added `wrap: bool` (cursor wraps at list boundaries).
+- **`TableModel`** — added `viewOffsetY` and mouse handling (wheel up/down, left-click to select with header offset).
+- **`TreeModel`** — added `viewOffsetY` and mouse handling (wheel scroll, left-click to move cursor); fixed `' '` space key mapping to `'space'` keystroke.
+
+### New examples
+
+| Example | What it shows |
+|---------|---------------|
+| `cursor_model.dart` | `CursorModel` — all three blink modes side-by-side, toggle blink with `b` |
+| `multi_select.dart` | `MultiSelectModel` — toggle, select-all, confirm, display result |
+
+### Tests
+
+10 new test files, 160+ new test cases:
+
+| File | Coverage |
+|------|----------|
+| `spinner_test.dart` | SpinnerModel state transitions |
+| `select_list_test.dart` | SelectListModel navigation, wrap, view |
+| `progress_test.dart` | ProgressModel rendering and clamping |
+| `help_test.dart` | HelpModel expand/collapse, KeyMap |
+| `paginator_test.dart` | PaginatorModel navigation, bounds, view |
+| `cursor_model_test.dart` | CursorModel blink, focus, modes, view |
+| `multi_select_test.dart` | MultiSelectModel toggle, select-all, wrap, view |
+| `program_options_test.dart` | Integration: each ProgramOption emits correct ANSI sequences |
+| `input_decoder_test.dart` | TerminalInputDecoder — 48 edge-case / fuzz-style tests |
+| `style_properties_test.dart` | Property-based invariants for getWidth, getHeight, truncate, Style.render, joinH/V, stripAnsi |
+
+### Other
+
+- All 54 VHS GIFs regenerated from current kernel snapshots.
+
+---
+
+## 1.1.0
+
+### New features
+
+- **`ListModel`** (`bubbles/list.dart`): full-featured scrollable list with fuzzy/subsequence filtering, keyboard navigation (`↑↓ / jk`), filter mode (`/` to enter, `Esc` / `Backspace` to exit), viewport scrolling, optional descriptions, status bar (`x/y items`), and `FullListStyles` for per-element theming.
+- **`TabsModel`** (`bubbles/tabs.dart`): tabbed-interface component with `(label, content)` pairs, `←/→ / h/l / Tab / Shift+Tab` navigation, and `TabsStyles` for active/inactive/divider/content theming.
+- **SGR attributes** — three new text decorations on `Style`:
+  - `isReverse` (SGR 7) — swap foreground and background
+  - `isBlink` (SGR 5) — blinking text
+  - `isOverline` (SGR 53) — overline decoration
+- **`Style.inherit(parent)`** — fills every `null` field from a parent `Style`, enabling clean style composition without property repetition. All boolean SGR fields (`isBold`, `isDim`, `isItalic`, `isUnderline`, `isStrikethrough`, `isReverse`, `isBlink`, `isOverline`) changed from `bool` → `bool?` to support three-valued inheritance semantics.
+- **`underlineSpaces`** / **`strikethroughSpaces`** — control whether underline / strikethrough decorations extend over padding spaces (default `true`, matching Lipgloss).
+- **`borderForeground`** / **`borderBackground`** — independent `RgbColor` tinting for border characters, separate from text content color.
+- **`borderTitle`** / **`borderTitleAlignment`** — embed a title string in the top border edge with `Align.left` / `.center` / `.right` positioning.
+- **`wordWrap`** — `Style(wordWrap: true)` wraps at word boundaries before padding/border/constraint are applied; respects the `width` constraint.
+- **`transform`** — `Style(transform: fn)` applies an arbitrary `String Function(String)` to the rendered content (useful for upper-casing, truncation, etc.).
+- **`CompleteColor`** — per-profile color specification: `CompleteColor(trueColor: …, ansi256: …, ansi: …)`; used via `foregroundComplete` / `backgroundComplete` on `Style` for correct downgrade at each profile level.
+- **`Border.hidden`** — a visible-but-blank border (spaces) that preserves box geometry without drawing any characters.
+- **`EdgeInsets.symmetric({vertical, horizontal})`** and **`EdgeInsets.only({top, right, bottom, left})`** — additional named constructors matching Flutter conventions.
+- **Layout helpers** now accept enums instead of raw `double` fractions:
+  - `joinHorizontal(AlignVertical, List<String>)` — was `double`
+  - `joinVertical(Align, List<String>)` — was `double`
+  - `place(width, height, Align, AlignVertical, content)` — was two `double` args
+  - `placeHorizontal(width, Align, content)` — new helper
+  - `placeVertical(height, AlignVertical, content)` — new helper
+- **Terminal control Cmd helpers** (`cmd.dart`):
+  - `enterAltScreen()` / `exitAltScreen()` — emit `EnterAltScreenMsg` / `ExitAltScreenMsg`
+  - `hideCursor()` / `showCursor()` — emit `HideCursorMsg` / `ShowCursorMsg`
+  - `setWindowTitle(title)` — `Cmd` that emits `SetWindowTitleMsg`
+  - `clearScrollArea()` — emits `ClearScrollAreaMsg`
+  - `scrollUp([n = 1])` / `scrollDown([n = 1])` — `Cmd` that emits `ScrollMsg`
+- **Renderer interface** extended: `setAltScreen(bool)`, `setCursorVisibility(bool)`, `scroll(int, {bool up})` added to `TeaRenderer` and implemented by `AnsiRenderer`, `CellRenderer`, and `NilRenderer`.
+- **`stripAnsi(String)`** — public utility that strips all ANSI escape sequences from a string; previously internal-only.
+
+### New examples
+
+| Example | What it shows |
+|---------|---------------|
+| `word_wrap.dart` | `Style.wordWrap` at multiple widths with box, rounded, and thick borders + border title |
+| `border_style.dart` | All 6 `Border` variants, `borderForeground` / `borderBackground`, and all three `borderTitle` alignments |
+| `sgr_attrs.dart` | All 8 SGR text attributes; `Style.inherit()` composition |
+| `list_filter.dart` | `ListModel` with fuzzy filtering, descriptions, status bar, and selection |
+
+`tabs.dart` updated to use the exported `TabsModel` bubble instead of an inline reimplementation.
+
+### Tests
+
+9 new test files, 90+ new test cases:
+`style_sgr_test.dart`, `style_border_test.dart`, `style_wordwrap_test.dart`, `canvas_test.dart`, `gradient_test.dart`, `adaptive_color_test.dart`, `cmd_terminal_test.dart`, `list_model_test.dart`, `tabs_model_test.dart`.
+
+### Breaking changes
+
+- `joinHorizontal`, `joinVertical`, and `place` now accept enum arguments (`AlignVertical`, `Align`) instead of raw `double` fractions. Migrate: `0.0 → AlignVertical.top`, `0.5 → AlignVertical.middle`, `1.0 → AlignVertical.bottom`; `0.0 → Align.left`, `0.5 → Align.center`, `1.0 → Align.right`.
+- All boolean SGR fields on `Style` (`isBold`, `isDim`, `isItalic`, `isUnderline`, `isStrikethrough`) changed from `bool` (default `false`) to `bool?` (default `null`). Existing code that reads these fields may need a null-aware comparison (`style.isBold == true` or `style.isBold ?? false`).
+
+---
+
 ## 1.0.0+1
 
 ### Bug fixes
