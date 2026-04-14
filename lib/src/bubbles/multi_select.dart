@@ -170,7 +170,7 @@ final class MultiSelectModel extends TeaModel {
             : (wrap ? 0 : items.length - 1);
         return (_copy(cursor: next), null);
 
-      case ' ':
+      case 'space':
       case 'x':
         return (_toggleAt(cur), null);
 

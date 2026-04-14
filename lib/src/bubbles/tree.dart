@@ -296,7 +296,7 @@ final class TreeModel extends TeaModel {
       case 'j':
         return (_moveCursor(1), null);
       case 'enter':
-      case ' ':
+      case 'space':
         return (_toggleAtCursor(), null);
       case 'right':
       case 'l':
