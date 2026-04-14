@@ -90,8 +90,8 @@ final class _ComposableModel extends TeaModel {
     final timerContent = '$timerLabel\n${timer.view().content}';
     final spinnerContent = '$spinnerLabel\n${spinner.view().content}';
 
-    final combined =
-        joinHorizontal(AlignVertical.top, [timerContent, '    ', spinnerContent]);
+    final combined = joinHorizontal(
+        AlignVertical.top, [timerContent, '    ', spinnerContent]);
 
     return newView('''
 Composable views demo

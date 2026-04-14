@@ -16,12 +16,33 @@ void main() {
   final attrs = <(String, Style)>[
     ('bold', const Style(foregroundRgb: RgbColor(203, 166, 247), isBold: true)),
     ('dim', const Style(foregroundRgb: RgbColor(205, 214, 244), isDim: true)),
-    ('italic', const Style(foregroundRgb: RgbColor(137, 180, 250), isItalic: true)),
-    ('underline', const Style(foregroundRgb: RgbColor(166, 227, 161), isUnderline: true)),
-    ('strikethrough', const Style(foregroundRgb: RgbColor(243, 139, 168), isStrikethrough: true)),
-    ('reverse', const Style(foregroundRgb: RgbColor(30, 30, 46), backgroundRgb: RgbColor(203, 166, 247), isReverse: true)),
-    ('blink', const Style(foregroundRgb: RgbColor(249, 226, 175), isBlink: true)),
-    ('overline', const Style(foregroundRgb: RgbColor(116, 199, 236), isOverline: true)),
+    (
+      'italic',
+      const Style(foregroundRgb: RgbColor(137, 180, 250), isItalic: true)
+    ),
+    (
+      'underline',
+      const Style(foregroundRgb: RgbColor(166, 227, 161), isUnderline: true)
+    ),
+    (
+      'strikethrough',
+      const Style(foregroundRgb: RgbColor(243, 139, 168), isStrikethrough: true)
+    ),
+    (
+      'reverse',
+      const Style(
+          foregroundRgb: RgbColor(30, 30, 46),
+          backgroundRgb: RgbColor(203, 166, 247),
+          isReverse: true)
+    ),
+    (
+      'blink',
+      const Style(foregroundRgb: RgbColor(249, 226, 175), isBlink: true)
+    ),
+    (
+      'overline',
+      const Style(foregroundRgb: RgbColor(116, 199, 236), isOverline: true)
+    ),
   ];
 
   for (final (name, style) in attrs) {

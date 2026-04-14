@@ -146,7 +146,10 @@ final class TextInputModel extends TeaModel {
       case 'backspace':
         if (value.isEmpty || cursorPos == 0) return (this, null);
         final nextChars = List<String>.from(chars)..removeAt(cursorPos - 1);
-        return (copyWith(value: nextChars.join(), cursorPos: cursorPos - 1), null);
+        return (
+          copyWith(value: nextChars.join(), cursorPos: cursorPos - 1),
+          null
+        );
 
       case 'delete':
         if (cursorPos >= chars.length) return (this, null);
@@ -171,7 +174,8 @@ final class TextInputModel extends TeaModel {
         final suggestion = _activeSuggestion;
         if (suggestion != null) {
           return (
-            copyWith(value: suggestion, cursorPos: suggestion.characters.length),
+            copyWith(
+                value: suggestion, cursorPos: suggestion.characters.length),
             null
           );
         }
@@ -191,8 +195,12 @@ final class TextInputModel extends TeaModel {
         if (msg.key.isNotEmpty) {
           // In dart_tui, msg.key for runes is the actual string
           if (charLimit > 0 && chars.length >= charLimit) return (this, null);
-          final nextChars = List<String>.from(chars)..insert(cursorPos, msg.key);
-          return (copyWith(value: nextChars.join(), cursorPos: cursorPos + 1), null);
+          final nextChars = List<String>.from(chars)
+            ..insert(cursorPos, msg.key);
+          return (
+            copyWith(value: nextChars.join(), cursorPos: cursorPos + 1),
+            null
+          );
         }
         return (this, null);
     }
@@ -218,14 +226,16 @@ final class TextInputModel extends TeaModel {
 
     final suggestion = _activeSuggestion;
     final suggestionSuffix = (echoMode == EchoMode.normal && suggestion != null)
-        ? styles.suggestion.render(suggestion.characters.skip(chars.length).join())
+        ? styles.suggestion
+            .render(suggestion.characters.skip(chars.length).join())
         : '';
 
     final labelStyle = focused ? styles.focusedLabel : styles.label;
     final prefix = label.isEmpty ? '' : '${labelStyle.render(label)} ';
-    
-    final view = newView('$prefix${styles.text.render(displayValue)}$suggestionSuffix');
-    
+
+    final view =
+        newView('$prefix${styles.text.render(displayValue)}$suggestionSuffix');
+
     if (focused) {
       // Calculate cursor position in cells, not characters
       final prefixWidth = _estimateWidth(label.isEmpty ? '' : '$label ');
@@ -233,7 +243,7 @@ final class TextInputModel extends TeaModel {
       final cursorX = prefixWidth + _estimateWidth(textBeforeCursor);
       view.cursor = Cursor(x: cursorX, y: 0, shape: CursorShape.bar);
     }
-    
+
     return view;
   }
 

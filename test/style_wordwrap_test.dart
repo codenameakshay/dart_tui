@@ -25,7 +25,8 @@ void main() {
     });
 
     test('long line is wrapped at word boundary', () {
-      final out = const Style(wordWrap: true, width: 10).render('hello world foo bar');
+      final out =
+          const Style(wordWrap: true, width: 10).render('hello world foo bar');
       final lines = out.split('\n');
       for (final l in lines) {
         expect(plain(l).length, lessThanOrEqualTo(10));
@@ -83,8 +84,7 @@ void main() {
       // Each line must not exceed 5 visible columns
       for (final l in lines) {
         expect(
-          l.runes
-              .fold<int>(0, (w, cp) => w + (cp > 0x1100 ? 2 : 1)),
+          l.runes.fold<int>(0, (w, cp) => w + (cp > 0x1100 ? 2 : 1)),
           lessThanOrEqualTo(5),
         );
       }

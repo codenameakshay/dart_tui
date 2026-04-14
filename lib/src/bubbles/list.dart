@@ -299,8 +299,7 @@ final class ListModel extends TeaModel {
     } else {
       // Determine viewport scroll offset
       final viewportStart = _viewportStart(cur, fi.length, height);
-      final viewportEnd =
-          (viewportStart + height).clamp(0, fi.length);
+      final viewportEnd = (viewportStart + height).clamp(0, fi.length);
 
       for (var i = viewportStart; i < viewportEnd; i++) {
         final item = fi[i];
@@ -324,9 +323,7 @@ final class ListModel extends TeaModel {
     if (showStatusBar) {
       final total = items.length;
       final shown = fi.length;
-      final label = filter.isNotEmpty
-          ? '$shown/$total items'
-          : '$total items';
+      final label = filter.isNotEmpty ? '$shown/$total items' : '$total items';
       b.write(styles.statusBar.render(label));
     }
 

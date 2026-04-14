@@ -21,7 +21,8 @@ void main() {
       expect(showCursor(), isA<ShowCursorMsg>());
     });
 
-    test('setWindowTitle() returns SetWindowTitleMsg with correct title', () async {
+    test('setWindowTitle() returns SetWindowTitleMsg with correct title',
+        () async {
       final cmd = setWindowTitle('My App');
       final msg = await Future<dynamic>.value(cmd());
       expect(msg, isA<SetWindowTitleMsg>());

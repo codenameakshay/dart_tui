@@ -98,9 +98,7 @@ final class TerminalInputDecoder {
   /// arrive, it calls [takeLoneEscapeIfStillPending] to emit [KeyPressMsg] for
   /// Escape without breaking split `ESC [`… sequences across stdin chunks.
   bool get hasPendingLoneEscape =>
-      !_inPaste &&
-      _buffer.length == 1 &&
-      _buffer[0] == 0x1b;
+      !_inPaste && _buffer.length == 1 && _buffer[0] == 0x1b;
 
   /// If [hasPendingLoneEscape] is still true, consume the byte and return a
   /// single [KeyPressMsg] for Escape; otherwise returns an empty list.

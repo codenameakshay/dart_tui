@@ -16,7 +16,8 @@ void main() {
       expect(lines.length, 3);
     });
 
-    test('middle alignment (AlignVertical.middle) distributes blank lines evenly',
+    test(
+        'middle alignment (AlignVertical.middle) distributes blank lines evenly',
         () {
       final left = 'A\nB\nC\nD';
       final right = 'x';

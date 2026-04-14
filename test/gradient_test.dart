@@ -13,7 +13,8 @@ void main() {
 
     test('empty text returns empty string', () {
       expect(
-        gradientText('', [const RgbColor(0, 0, 255), const RgbColor(255, 0, 0)]),
+        gradientText(
+            '', [const RgbColor(0, 0, 255), const RgbColor(255, 0, 0)]),
         equals(''),
       );
     });
@@ -98,8 +99,7 @@ void main() {
       final out = gradientBackground(
         'hi',
         [const RgbColor(0, 0, 0), const RgbColor(255, 255, 255)],
-        foreground:
-            const Style(foregroundRgb: RgbColor(203, 166, 247)),
+        foreground: const Style(foregroundRgb: RgbColor(203, 166, 247)),
       );
       expect(out, contains('\x1b[38;2;203;166;247m'));
     });
@@ -113,8 +113,8 @@ void main() {
 
   group('color utilities', () {
     test('blend returns interpolated color', () {
-      final result = blend(
-          const RgbColor(0, 0, 0), const RgbColor(100, 200, 50), 0.5);
+      final result =
+          blend(const RgbColor(0, 0, 0), const RgbColor(100, 200, 50), 0.5);
       expect(result.r, closeTo(50, 1));
       expect(result.g, closeTo(100, 1));
       expect(result.b, closeTo(25, 1));

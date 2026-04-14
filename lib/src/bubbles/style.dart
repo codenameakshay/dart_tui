@@ -198,8 +198,7 @@ final class Style {
       copyWith(adaptiveForeground: value);
   Style withAdaptiveBackground(AdaptiveColor value) =>
       copyWith(adaptiveBackground: value);
-  Style withTransform(String Function(String)? fn) =>
-      copyWith(transform: fn);
+  Style withTransform(String Function(String)? fn) => copyWith(transform: fn);
 
   // Unset helpers (set nullable booleans back to null for inheritance)
   Style unsetBold() => _copyWithNullBool('isBold');
@@ -973,7 +972,8 @@ int _visibleWidth(String s) {
 bool _isDoubleWidth(int code) {
   return code >= 0x1100 &&
       (code <= 0x11ff || // Hangul Jamo
-          (code >= 0x2e80 && code <= 0x9fff) || // CJK Radicals .. CJK Unified Ideographs
+          (code >= 0x2e80 &&
+              code <= 0x9fff) || // CJK Radicals .. CJK Unified Ideographs
           (code >= 0xac00 && code <= 0xd7af) || // Hangul Syllables
           (code >= 0xf900 && code <= 0xfaff) || // CJK Compatibility Ideographs
           (code >= 0xfe30 && code <= 0xfe4f) || // CJK Compatibility Forms
@@ -1111,8 +1111,7 @@ String place(
   AlignVertical vAlign,
   String content,
 ) {
-  return placeVertical(
-      height, vAlign, placeHorizontal(width, hAlign, content));
+  return placeVertical(height, vAlign, placeHorizontal(width, hAlign, content));
 }
 
 /// Center [content] horizontally within [width] columns.

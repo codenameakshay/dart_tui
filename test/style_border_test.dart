@@ -35,7 +35,9 @@ void main() {
       expect(out, contains('\x1b[48;2;0;0;255m'));
     });
 
-    test('no borderForeground/borderBackground: border chars have no color codes', () {
+    test(
+        'no borderForeground/borderBackground: border chars have no color codes',
+        () {
       final out = const Style(border: Border.rounded).render('text');
       final lines = out.split('\n');
       // Top border line should have no RGB codes

@@ -12,8 +12,7 @@ void main() {
   print('$bold  Word-Wrap Showcase$reset');
   print('');
 
-  const longText =
-      'The quick brown fox jumps over the lazy dog. '
+  const longText = 'The quick brown fox jumps over the lazy dog. '
       'This sentence is long enough to demonstrate wrapping behaviour '
       'at different column widths.';
 

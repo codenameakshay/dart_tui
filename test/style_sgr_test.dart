@@ -67,17 +67,16 @@ void main() {
     });
 
     test('child inherits foregroundRgb from parent', () {
-      final parent =
-          const Style(foregroundRgb: RgbColor(203, 166, 247));
+      final parent = const Style(foregroundRgb: RgbColor(203, 166, 247));
       final child = const Style().inherit(parent);
       final out = child.render('hi');
       expect(out, contains('\x1b[38;2;203;166;247m'));
     });
 
     test('child with own color does not adopt parent color', () {
-      final parent =
-          const Style(foregroundRgb: RgbColor(255, 0, 0));
-      final child = const Style(foregroundRgb: RgbColor(0, 255, 0)).inherit(parent);
+      final parent = const Style(foregroundRgb: RgbColor(255, 0, 0));
+      final child =
+          const Style(foregroundRgb: RgbColor(0, 255, 0)).inherit(parent);
       final out = child.render('hi');
       expect(out, contains('\x1b[38;2;0;255;0m'));
       expect(out, isNot(contains('\x1b[38;2;255;0;0m')));
@@ -104,7 +103,8 @@ void main() {
       expect(out.split('\x1b[0m').length, greaterThan(2));
     });
 
-    test('underline with underlineSpaces=true (default) wraps whole string', () {
+    test('underline with underlineSpaces=true (default) wraps whole string',
+        () {
       final out = const Style(isUnderline: true).render('hello world');
       // Standard: single open sequence, single close
       expect(out, startsWith('\x1b[4m'));

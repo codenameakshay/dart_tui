@@ -2,8 +2,7 @@
 import 'package:dart_tui/dart_tui.dart';
 import 'package:test/test.dart';
 
-KeyMsg _key(String key) =>
-    KeyPressMsg(TeaKey(code: KeyCode.rune, text: key));
+KeyMsg _key(String key) => KeyPressMsg(TeaKey(code: KeyCode.rune, text: key));
 
 KeyMsg _namedKey(String name) {
   final code = switch (name) {

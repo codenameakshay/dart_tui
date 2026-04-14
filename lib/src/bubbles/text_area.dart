@@ -140,7 +140,8 @@ final class TextAreaModel extends TeaModel {
         return (_deleteForward(), null);
 
       case 'enter':
-        if (charLimit > 0 && value.characters.length >= charLimit) return (this, null);
+        if (charLimit > 0 && value.characters.length >= charLimit)
+          return (this, null);
         final col = cursorCol.clamp(0, lineChars.length);
         final newLine = lineChars.sublist(0, col).join();
         final rest = lineChars.sublist(col).join();
