@@ -11,7 +11,7 @@
 EXAMPLE ?= simple
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
-VHS      := $(HOME)/go-packages/bin/vhs
+VHS      := /opt/homebrew/bin/vhs
 FFMPEG   := $(HOME)/ffmpeg-local
 DART     := fvm dart
 TAPES    := $(wildcard example/tapes/*.tape)

@@ -16,3 +16,6 @@ tool/bin/
 debug.log
 
 # VHS recorded GIFs
+
+# FVM Version Cache
+.fvm/

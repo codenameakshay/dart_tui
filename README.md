@@ -485,7 +485,7 @@ make gifs          # builds all kernels, then records all 48 GIFs
 make gif EXAMPLE=showcase   # record one
 ```
 
-Requires [VHS](https://github.com/charmbracelet/vhs) and [ffmpeg](https://ffmpeg.org) on your PATH (or at `~/go-packages/bin/vhs` and `~/ffmpeg-local`).
+Requires [VHS](https://github.com/charmbracelet/vhs) and [ffmpeg](https://ffmpeg.org) on your PATH (or at `/opt/homebrew/bin/vhs` and `~/ffmpeg-local`).
 
 ---
 
