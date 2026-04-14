@@ -118,6 +118,7 @@ final class TreeModel extends TeaModel {
     this.scrollOffset = 0,
     this.height = 20,
     this.styles = TreeStyles.defaults,
+    this.viewOffsetY = 0,
   }) : _flat = _buildFlatList(root);
 
   final TreeNode root;
@@ -125,6 +126,12 @@ final class TreeModel extends TeaModel {
   final int scrollOffset;
   final int height;
   final TreeStyles styles;
+
+  /// Vertical screen offset (rows) of this component's top edge.
+  ///
+  /// Set by the parent to enable click-to-select mouse handling.
+  final int viewOffsetY;
+
   final List<_FlatNode> _flat;
 
   int get _safeCursor => cursor.clamp(0, _flat.isEmpty ? 0 : _flat.length - 1);
@@ -252,12 +259,34 @@ final class TreeModel extends TeaModel {
         scrollOffset: scrollOffset ?? this.scrollOffset,
         height: height,
         styles: styles,
+        viewOffsetY: viewOffsetY,
       );
 
   // ── TeaModel ──────────────────────────────────────────────────────────────
 
   @override
   (TeaModel, Cmd?) update(Msg msg) {
+    if (msg is MouseClickMsg) {
+      switch (msg.mouse.button) {
+        case MouseButton.wheelUp:
+          return (_moveCursor(-1), null);
+        case MouseButton.wheelDown:
+          return (_moveCursor(1), null);
+        case MouseButton.left:
+          final relY = msg.mouse.y - viewOffsetY;
+          final idx = scrollOffset + relY;
+          if (idx >= 0 && idx < _flat.length) {
+            final moved = _copyWith(
+              cursor: idx,
+              scrollOffset: scrollOffset,
+            );
+            return (moved, null);
+          }
+          return (this, null);
+        default:
+          return (this, null);
+      }
+    }
     if (msg is! KeyMsg) return (this, null);
     switch (msg.key) {
       case 'up':

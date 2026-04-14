@@ -138,6 +138,7 @@ final class ListModel extends TeaModel {
     this.styles = FullListStyles.defaults,
     this.showStatusBar = true,
     this.showDescription = true,
+    this.viewOffsetY = 0,
   });
 
   /// The full list of items (unfiltered).
@@ -151,6 +152,12 @@ final class ListModel extends TeaModel {
 
   /// Maximum number of item rows to show at once (viewport height).
   final int height;
+
+  /// Vertical screen offset (rows) of this component's top edge.
+  ///
+  /// Set by the parent to enable click-to-select mouse handling. Leave at 0
+  /// when the component renders at the top of the screen.
+  final int viewOffsetY;
 
   /// Current filter query string.
   final String filter;
@@ -194,6 +201,40 @@ final class ListModel extends TeaModel {
 
   @override
   (TeaModel, Cmd?) update(Msg msg) {
+    // Mouse scroll wheel navigation
+    if (msg is MouseClickMsg) {
+      final fi = filteredItems;
+      switch (msg.mouse.button) {
+        case MouseButton.wheelUp:
+          final cur = _safeCursor;
+          return (_copy(cursor: cur > 0 ? cur - 1 : 0), null);
+        case MouseButton.wheelDown:
+          final cur = _safeCursor;
+          return (
+            _copy(cursor: cur < fi.length - 1 ? cur + 1 : fi.length - 1),
+            null,
+          );
+        case MouseButton.left:
+          // Click-to-select: map y → item index
+          final relY = msg.mouse.y - viewOffsetY;
+          // Account for title rows above the item list
+          var headerRows = 0;
+          if (title.isNotEmpty) headerRows += 2; // title + blank line
+          if (filterMode || filter.isNotEmpty) headerRows += 2; // filter + blank
+          final itemY = relY - headerRows;
+          if (itemY >= 0) {
+            final rowsPerItem = showDescription ? 2 : 1;
+            final idx = _viewportStart(_safeCursor, fi.length, height) +
+                itemY ~/ rowsPerItem;
+            if (idx >= 0 && idx < fi.length) {
+              return (_copy(cursor: idx), null);
+            }
+          }
+          return (this, null);
+        default:
+          return (this, null);
+      }
+    }
     if (msg is! KeyMsg) return (this, null);
     final fi = filteredItems;
 
@@ -287,6 +328,7 @@ final class ListModel extends TeaModel {
       styles: styles,
       showStatusBar: showStatusBar,
       showDescription: showDescription,
+      viewOffsetY: viewOffsetY,
     );
   }
 

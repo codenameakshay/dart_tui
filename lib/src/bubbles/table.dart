@@ -72,6 +72,7 @@ final class TableModel extends TeaModel {
     this.scrollOffset = 0,
     this.height = 10,
     this.styles = TableStyles.defaults,
+    this.viewOffsetY = 0,
   });
 
   final List<TableColumn> columns;
@@ -81,6 +82,13 @@ final class TableModel extends TeaModel {
   final int height;
   final TableStyles styles;
 
+  /// Vertical screen offset (rows) of this component's top edge.
+  ///
+  /// Set by the parent to enable click-to-select mouse handling. The header
+  /// occupies rows 0–1 (header + separator), so data rows start at
+  /// `viewOffsetY + 2`. Leave at 0 when the component renders at the top.
+  final int viewOffsetY;
+
   TableModel copyWith({
     List<TableColumn>? columns,
     List<List<String>>? rows,
@@ -88,6 +96,7 @@ final class TableModel extends TeaModel {
     int? scrollOffset,
     int? height,
     TableStyles? styles,
+    int? viewOffsetY,
   }) =>
       TableModel(
         columns: columns ?? this.columns,
@@ -96,6 +105,7 @@ final class TableModel extends TeaModel {
         scrollOffset: scrollOffset ?? this.scrollOffset,
         height: height ?? this.height,
         styles: styles ?? this.styles,
+        viewOffsetY: viewOffsetY ?? this.viewOffsetY,
       );
 
   TableModel _moveCursor(int delta) {
@@ -109,6 +119,27 @@ final class TableModel extends TeaModel {
 
   @override
   (Model, Cmd?) update(Msg msg) {
+    if (msg is MouseClickMsg) {
+      switch (msg.mouse.button) {
+        case MouseButton.wheelUp:
+          return (_moveCursor(-1), null);
+        case MouseButton.wheelDown:
+          return (_moveCursor(1), null);
+        case MouseButton.left:
+          // Header occupies 2 rows (header + separator line)
+          const headerRows = 2;
+          final relY = msg.mouse.y - viewOffsetY - headerRows;
+          if (relY >= 0) {
+            final idx = scrollOffset + relY;
+            if (idx >= 0 && idx < rows.length) {
+              return (_moveCursor(idx - cursor), null);
+            }
+          }
+          return (this, null);
+        default:
+          return (this, null);
+      }
+    }
     if (msg is! KeyMsg) return (this, null);
     switch (msg.key) {
       case 'up':
