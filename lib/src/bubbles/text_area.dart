@@ -202,7 +202,7 @@ final class TextAreaModel extends TeaModel {
           return (copyWith(value: ls.join('\n'), cursorCol: 0), null);
         }
         if (!focused) return (this, null);
-        if (msg.key.length >= 1) {
+        if (msg.key.isNotEmpty) {
           return (_insertText(msg.key)._scroll(cursorRow), null);
         }
         return (this, null);

@@ -188,7 +188,7 @@ final class TextInputModel extends TeaModel {
 
       default:
         if (!focused) return (this, null);
-        if (msg.key.length >= 1) {
+        if (msg.key.isNotEmpty) {
           // In dart_tui, msg.key for runes is the actual string
           if (charLimit > 0 && chars.length >= charLimit) return (this, null);
           final nextChars = List<String>.from(chars)..insert(cursorPos, msg.key);
