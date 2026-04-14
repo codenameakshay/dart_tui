@@ -58,6 +58,7 @@ final class Style {
     this.border = Border.none,
     this.borderForeground,
     this.borderBackground,
+    this.marginBackground,
     this.borderTitle = '',
     this.borderTitleAlignment = Align.left,
     this.width,
@@ -128,6 +129,10 @@ final class Style {
 
   /// Background color of the border characters.
   final RgbColor? borderBackground;
+
+  /// Optional background color applied to the margin cells (the empty space
+  /// outside the border). When `null`, margin cells are plain spaces.
+  final RgbColor? marginBackground;
 
   /// Optional title string embedded into the top border edge.
   final String borderTitle;
@@ -209,6 +214,8 @@ final class Style {
       copyWith(borderForeground: value);
   Style withBorderBackground(RgbColor value) =>
       copyWith(borderBackground: value);
+  Style withMarginBackground(RgbColor value) =>
+      copyWith(marginBackground: value);
   Style withBorderTitle(String title, {Align alignment = Align.left}) =>
       copyWith(borderTitle: title, borderTitleAlignment: alignment);
   Style withWidth(int? value) => copyWith(width: value);
@@ -263,6 +270,7 @@ final class Style {
       border: border,
       borderForeground: borderForeground,
       borderBackground: borderBackground,
+      marginBackground: marginBackground,
       borderTitle: borderTitle,
       borderTitleAlignment: borderTitleAlignment,
       width: width,
@@ -303,6 +311,7 @@ final class Style {
     Border? border,
     RgbColor? borderForeground,
     RgbColor? borderBackground,
+    RgbColor? marginBackground,
     String? borderTitle,
     Align? borderTitleAlignment,
     int? width,
@@ -341,6 +350,7 @@ final class Style {
       border: border ?? this.border,
       borderForeground: borderForeground ?? this.borderForeground,
       borderBackground: borderBackground ?? this.borderBackground,
+      marginBackground: marginBackground ?? this.marginBackground,
       borderTitle: borderTitle ?? this.borderTitle,
       borderTitleAlignment: borderTitleAlignment ?? this.borderTitleAlignment,
       width: width ?? this.width,
@@ -386,6 +396,7 @@ final class Style {
       border: border,
       borderForeground: borderForeground ?? parent.borderForeground,
       borderBackground: borderBackground ?? parent.borderBackground,
+      marginBackground: marginBackground ?? parent.marginBackground,
       borderTitle: borderTitle.isNotEmpty ? borderTitle : parent.borderTitle,
       borderTitleAlignment: borderTitleAlignment,
       width: width ?? parent.width,
@@ -626,16 +637,29 @@ final class Style {
       },
     );
     final out = <String>[];
+    // Build the ANSI open/close sequences for the margin background, if any.
+    String mOpen = '';
+    String mClose = '';
+    if (marginBackground != null) {
+      final c = marginBackground!;
+      mOpen = '\x1b[48;2;${c.r};${c.g};${c.b}m';
+      mClose = '\x1b[0m';
+    }
+    // Total row width including left+right margins
+    final totalW = margin.left + maxW + margin.right;
+    final blankRow = '$mOpen${' ' * totalW}$mClose';
     for (var i = 0; i < margin.top; i++) {
-      out.add('');
+      out.add(blankRow);
     }
     for (final line in lines) {
       final vis = _visibleWidth(line);
       final pad = maxW - vis;
-      out.add('${' ' * margin.left}$line${' ' * pad}${' ' * margin.right}');
+      final left = '$mOpen${' ' * margin.left}$mClose';
+      final right = '$mOpen${' ' * pad}${' ' * margin.right}$mClose';
+      out.add('$left$line$right');
     }
     for (var i = 0; i < margin.bottom; i++) {
-      out.add('');
+      out.add(blankRow);
     }
     return out;
   }
