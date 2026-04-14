@@ -952,6 +952,63 @@ final _ansiEscapeRe = RegExp(r'\x1b(?:\[[0-9;?]*[A-Za-z]|[\]O][^\x07]*\x07?)');
 /// Strip ANSI escape sequences from [s].
 String stripAnsi(String s) => s.replaceAll(_ansiEscapeRe, '');
 
+/// Visible display width of [s] after stripping ANSI escape sequences.
+///
+/// Handles double-width characters (CJK, full-width, some emoji ranges).
+/// This is the public counterpart of the internal [_visibleWidth] helper.
+int getWidth(String s) => _visibleWidth(s);
+
+/// Number of lines in [s] (newline-delimited).
+///
+/// A string with no newlines returns 1; an empty string returns 1.
+int getHeight(String s) => s.split('\n').length;
+
+/// Truncate [s] to at most [maxWidth] visible terminal columns from the left,
+/// preserving ANSI escape sequences.
+///
+/// If [s] already fits within [maxWidth] columns it is returned unchanged.
+String truncate(String s, int maxWidth) => _truncateVisible(s, maxWidth);
+
+/// Truncate [s] to at most [maxWidth] visible terminal columns from the
+/// right — i.e. keep the trailing portion and drop leading characters.
+///
+/// ANSI codes in the leading (dropped) section are not preserved; codes in
+/// the kept section are preserved.
+String truncateLeft(String s, int maxWidth) {
+  final stripped = stripAnsi(s);
+  final totalWidth = _visibleWidth(stripped);
+  if (totalWidth <= maxWidth) return s;
+  final drop = totalWidth - maxWidth;
+  // Walk the stripped string grapheme-by-grapheme until we've consumed [drop]
+  // visible columns, then return from that character position onward in [s].
+  var consumed = 0;
+  for (final char in stripped.characters) {
+    if (consumed >= drop) break;
+    consumed += _visibleWidth(char);
+  }
+  // Find the corresponding position in the original string by replaying
+  // from the front.  We rebuild by stripping the same leading graphemes
+  // from the raw string while skipping ANSI sequences.
+  var rawIdx = 0;
+  var rawConsumed = 0;
+  while (rawIdx < s.length && rawConsumed < drop) {
+    if (s[rawIdx] == '\x1b') {
+      final m = _ansiEscapeRe.matchAsPrefix(s, rawIdx);
+      if (m != null) {
+        rawIdx += m.group(0)!.length;
+        continue;
+      }
+    }
+    final remaining = s.substring(rawIdx);
+    final char = remaining.characters.first;
+    final w = _visibleWidth(char);
+    if (rawConsumed + w > drop) break;
+    rawConsumed += w;
+    rawIdx += char.length;
+  }
+  return s.substring(rawIdx);
+}
+
 /// Visible display width of [s] (number of printable columns after stripping ANSI).
 /// Handles double-width characters (CJK, full-width, emoji).
 int _visibleWidth(String s) {
