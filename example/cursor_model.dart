@@ -19,7 +19,8 @@ final class _CursorModelDemoModel extends TeaModel {
     CursorModel? underline,
     CursorModel? bar,
   })  : block = block ?? CursorModel(mode: CursorMode.block, blink: true),
-        underline = underline ?? CursorModel(mode: CursorMode.underline, blink: true),
+        underline =
+            underline ?? CursorModel(mode: CursorMode.underline, blink: true),
         bar = bar ?? CursorModel(mode: CursorMode.bar, blink: true);
 
   final CursorModel block;
@@ -49,7 +50,8 @@ final class _CursorModelDemoModel extends TeaModel {
           return (
             _copyWith(
               block: CursorModel(mode: CursorMode.block, blink: !block.blink),
-              underline: CursorModel(mode: CursorMode.underline, blink: !block.blink),
+              underline:
+                  CursorModel(mode: CursorMode.underline, blink: !block.blink),
               bar: CursorModel(mode: CursorMode.bar, blink: !block.blink),
             ),
             null,

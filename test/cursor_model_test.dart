@@ -67,7 +67,8 @@ void main() {
 
     test('non-Tick msgs are ignored when focused', () {
       final c = CursorModel();
-      final (next, _) = c.update(KeyPressMsg(TeaKey(code: KeyCode.rune, text: 'a')));
+      final (next, _) =
+          c.update(KeyPressMsg(const TeaKey(code: KeyCode.rune, text: 'a')));
       expect(identical(c, next), isTrue);
     });
   });

@@ -14,7 +14,8 @@ final _rng = Random(42); // fixed seed for determinism
 
 String _randomAscii({int minLen = 0, int maxLen = 80}) {
   final len = minLen + _rng.nextInt(maxLen - minLen + 1);
-  final chars = List.generate(len, (_) => String.fromCharCode(0x20 + _rng.nextInt(95)));
+  final chars =
+      List.generate(len, (_) => String.fromCharCode(0x20 + _rng.nextInt(95)));
   return chars.join();
 }
 
@@ -34,7 +35,7 @@ void _checkAll(int n, void Function(String s) property) {
 Style _plain() => const Style();
 Style _bold() => const Style(isBold: true);
 Style _padded() => const Style(padding: EdgeInsets.symmetric(horizontal: 2));
-Style _bordered() => Style(border: Border.rounded);
+Style _bordered() => const Style(border: Border.rounded);
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -102,7 +103,7 @@ void main() {
 
     test('getHeight(\$n newlines) == n + 1', () {
       for (var n = 0; n <= 20; n++) {
-        final s = 'x' + '\n' * n;
+        final s = 'x${'\n' * n}';
         expect(getHeight(s), n + 1);
       }
     });
@@ -127,7 +128,8 @@ void main() {
       });
     });
 
-    test('truncate is idempotent: truncate(truncate(s,n), n) == truncate(s,n)', () {
+    test('truncate is idempotent: truncate(truncate(s,n), n) == truncate(s,n)',
+        () {
       _checkAll(200, (s) {
         final maxW = 1 + _rng.nextInt(60);
         final once = truncate(s, maxW);

@@ -58,8 +58,8 @@ void main() {
 
     test('fromKeyMap factory creates entries from enabled bindings only', () {
       final map = _TestKeyMap([
-        KeyBinding(keys: ['q'], help: (key: 'q', description: 'Quit')),
-        KeyBinding(
+        const KeyBinding(keys: ['q'], help: (key: 'q', description: 'Quit')),
+        const KeyBinding(
           keys: ['?'],
           help: (key: '?', description: 'Help'),
           enabled: false,

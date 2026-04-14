@@ -16,13 +16,13 @@ final class _MultiSelectDemoModel extends TeaModel {
             MultiSelectModel(
               title: 'Pick your favourite languages',
               items: [
-                const MultiSelectItem(label: 'Dart',   value: 'dart'),
-                const MultiSelectItem(label: 'Go',     value: 'go'),
-                const MultiSelectItem(label: 'Rust',   value: 'rust'),
+                const MultiSelectItem(label: 'Dart', value: 'dart'),
+                const MultiSelectItem(label: 'Go', value: 'go'),
+                const MultiSelectItem(label: 'Rust', value: 'rust'),
                 const MultiSelectItem(label: 'Python', value: 'python'),
                 const MultiSelectItem(label: 'TypeScript', value: 'ts'),
                 const MultiSelectItem(label: 'Kotlin', value: 'kotlin'),
-                const MultiSelectItem(label: 'Swift',  value: 'swift'),
+                const MultiSelectItem(label: 'Swift', value: 'swift'),
               ],
               height: 10,
               showStatusBar: true,

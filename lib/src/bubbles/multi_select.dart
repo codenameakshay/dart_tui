@@ -140,12 +140,10 @@ final class MultiSelectModel extends TeaModel {
 
   final MultiSelectStyles styles;
 
-  int get _safeCursor =>
-      items.isEmpty ? 0 : cursor.clamp(0, items.length - 1);
+  int get _safeCursor => items.isEmpty ? 0 : cursor.clamp(0, items.length - 1);
 
   /// All items with [MultiSelectItem.selected] == `true`.
-  List<MultiSelectItem> get selected =>
-      items.where((i) => i.selected).toList();
+  List<MultiSelectItem> get selected => items.where((i) => i.selected).toList();
 
   /// Values of all selected items.
   List<String> get selectedValues => selected.map((i) => i._value).toList();
@@ -158,16 +156,13 @@ final class MultiSelectModel extends TeaModel {
     switch (msg.key) {
       case 'up':
       case 'k':
-        final next = cur > 0
-            ? cur - 1
-            : (wrap ? items.length - 1 : 0);
+        final next = cur > 0 ? cur - 1 : (wrap ? items.length - 1 : 0);
         return (_copy(cursor: next), null);
 
       case 'down':
       case 'j':
-        final next = cur < items.length - 1
-            ? cur + 1
-            : (wrap ? 0 : items.length - 1);
+        final next =
+            cur < items.length - 1 ? cur + 1 : (wrap ? 0 : items.length - 1);
         return (_copy(cursor: next), null);
 
       case 'space':
@@ -177,7 +172,8 @@ final class MultiSelectModel extends TeaModel {
       case 'a':
         // Toggle all: if every item is selected, deselect all; otherwise select all.
         final allSelected = items.every((i) => i.selected);
-        final toggled = items.map((i) => i.copyWith(selected: !allSelected)).toList();
+        final toggled =
+            items.map((i) => i.copyWith(selected: !allSelected)).toList();
         return (_copy(items: toggled), null);
 
       default:
@@ -188,7 +184,8 @@ final class MultiSelectModel extends TeaModel {
   MultiSelectModel _toggleAt(int index) {
     if (items.isEmpty) return this;
     final toggled = List<MultiSelectItem>.from(items);
-    toggled[index] = toggled[index].copyWith(selected: !toggled[index].selected);
+    toggled[index] =
+        toggled[index].copyWith(selected: !toggled[index].selected);
     return _copy(items: toggled);
   }
 

@@ -220,7 +220,9 @@ final class ListModel extends TeaModel {
           // Account for title rows above the item list
           var headerRows = 0;
           if (title.isNotEmpty) headerRows += 2; // title + blank line
-          if (filterMode || filter.isNotEmpty) headerRows += 2; // filter + blank
+          if (filterMode || filter.isNotEmpty) {
+            headerRows += 2; // filter + blank
+          }
           final itemY = relY - headerRows;
           if (itemY >= 0) {
             final rowsPerItem = showDescription ? 2 : 1;

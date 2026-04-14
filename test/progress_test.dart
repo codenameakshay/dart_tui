@@ -39,11 +39,13 @@ void main() {
     });
 
     test('assert throws for fraction < 0', () {
-      expect(() => ProgressModel(fraction: -0.1), throwsA(isA<AssertionError>()));
+      expect(
+          () => ProgressModel(fraction: -0.1), throwsA(isA<AssertionError>()));
     });
 
     test('assert throws for fraction > 1', () {
-      expect(() => ProgressModel(fraction: 1.1), throwsA(isA<AssertionError>()));
+      expect(
+          () => ProgressModel(fraction: 1.1), throwsA(isA<AssertionError>()));
     });
   });
 }

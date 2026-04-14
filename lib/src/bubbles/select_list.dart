@@ -73,24 +73,27 @@ final class SelectListModel extends TeaModel {
       case 'up':
       case 'k':
         final c = _safeCursor;
-        final next = c > 0
-            ? c - 1
-            : (wrap ? items.length - 1 : 0);
+        final next = c > 0 ? c - 1 : (wrap ? items.length - 1 : 0);
         return (
           SelectListModel(
-              items: items, cursor: next, title: title, styles: styles,
+              items: items,
+              cursor: next,
+              title: title,
+              styles: styles,
               wrap: wrap),
           null
         );
       case 'down':
       case 'j':
         final c = _safeCursor;
-        final next = c < items.length - 1
-            ? c + 1
-            : (wrap ? 0 : items.length - 1);
+        final next =
+            c < items.length - 1 ? c + 1 : (wrap ? 0 : items.length - 1);
         return (
           SelectListModel(
-              items: items, cursor: next, title: title, styles: styles,
+              items: items,
+              cursor: next,
+              title: title,
+              styles: styles,
               wrap: wrap),
           null
         );

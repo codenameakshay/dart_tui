@@ -82,8 +82,7 @@ ProgramOption withAltScreen() => (p) => p._altScreen = true;
 
 /// Hide the terminal cursor at startup (default behaviour).
 /// Pass `false` to keep the cursor visible.
-ProgramOption withHideCursor([bool hide = true]) =>
-    (p) => p._hideCursor = hide;
+ProgramOption withHideCursor([bool hide = true]) => (p) => p._hideCursor = hide;
 
 /// Emit tick messages on a fixed [interval].
 ProgramOption withTickInterval(Duration interval) =>

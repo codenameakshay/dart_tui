@@ -92,7 +92,8 @@ void main() {
 
     test('selectedValues returns custom value when set', () {
       final m = MultiSelectModel(items: [
-        const MultiSelectItem(label: 'Dart', value: 'dart-lang', selected: true),
+        const MultiSelectItem(
+            label: 'Dart', value: 'dart-lang', selected: true),
       ]);
       expect(m.selectedValues, ['dart-lang']);
     });

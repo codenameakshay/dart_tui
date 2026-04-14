@@ -37,7 +37,9 @@ void main() {
       expect(k.keyEvent.text, 'a');
     });
 
-    test('multiple letters in one chunk: decoder greedily combines printable ASCII', () {
+    test(
+        'multiple letters in one chunk: decoder greedily combines printable ASCII',
+        () {
       final d = TerminalInputDecoder();
       final msgs = d.feed(_str('xyz'));
       // The key buffer parser greedily decodes as many UTF-8 bytes as possible
@@ -463,7 +465,9 @@ void main() {
       expect(m.value, 1);
     });
 
-    test('keyboard enhancements report (mode 2027) also emits KeyboardEnhancementsMsg', () {
+    test(
+        'keyboard enhancements report (mode 2027) also emits KeyboardEnhancementsMsg',
+        () {
       final d = TerminalInputDecoder();
       final msgs = d.feed(_str('\x1b[?2027;1\$y'));
       expect(msgs.any((m) => m is ModeReportMsg), isTrue);

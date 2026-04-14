@@ -1436,16 +1436,16 @@ final class Border {
       );
 
   /// A border with only the top edge visible.
-  Border get topOnly =>
-      copyWith(showTop: true, showRight: false, showBottom: false, showLeft: false);
+  Border get topOnly => copyWith(
+      showTop: true, showRight: false, showBottom: false, showLeft: false);
 
   /// A border with only the bottom edge visible.
-  Border get bottomOnly =>
-      copyWith(showTop: false, showRight: false, showBottom: true, showLeft: false);
+  Border get bottomOnly => copyWith(
+      showTop: false, showRight: false, showBottom: true, showLeft: false);
 
   /// A border with only left and right edges visible.
-  Border get sidesOnly =>
-      copyWith(showTop: false, showRight: true, showBottom: false, showLeft: true);
+  Border get sidesOnly => copyWith(
+      showTop: false, showRight: true, showBottom: false, showLeft: true);
 }
 
 final class RgbColor {
