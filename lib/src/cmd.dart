@@ -81,6 +81,32 @@ Cmd println([Object? value]) => () => PrintLineMsg('${value ?? ''}');
 Cmd printf(String template, [List<Object?> args = const []]) =>
     () => PrintLineMsg(_format(template, args));
 
+// ── Terminal mode commands ─────────────────────────────────────────────────────
+
+/// Enter the alternate screen buffer.
+Msg enterAltScreen() => EnterAltScreenMsg();
+
+/// Exit the alternate screen buffer.
+Msg exitAltScreen() => ExitAltScreenMsg();
+
+/// Hide the terminal cursor.
+Msg hideCursor() => HideCursorMsg();
+
+/// Show the terminal cursor.
+Msg showCursor() => ShowCursorMsg();
+
+/// Set the terminal window title.
+Cmd setWindowTitle(String title) => () => SetWindowTitleMsg(title);
+
+/// Clear the scroll area (non-alt-screen) and reset the scroll region.
+Msg clearScrollArea() => ClearScrollAreaMsg();
+
+/// Scroll the terminal up by [n] lines.
+Cmd scrollUp([int n = 1]) => () => ScrollMsg(n, up: true);
+
+/// Scroll the terminal down by [n] lines.
+Cmd scrollDown([int n = 1]) => () => ScrollMsg(n, up: false);
+
 final class RequestWindowSizeMsg extends Msg {}
 
 final class RequestTerminalVersionMsg extends Msg {}
@@ -111,6 +137,27 @@ final class SetPrimaryClipboardMsg extends Msg {
 }
 
 final class ReadPrimaryClipboardMsg extends Msg {}
+
+final class EnterAltScreenMsg extends Msg {}
+
+final class ExitAltScreenMsg extends Msg {}
+
+final class HideCursorMsg extends Msg {}
+
+final class ShowCursorMsg extends Msg {}
+
+final class SetWindowTitleMsg extends Msg {
+  SetWindowTitleMsg(this.title);
+  final String title;
+}
+
+final class ClearScrollAreaMsg extends Msg {}
+
+final class ScrollMsg extends Msg {
+  ScrollMsg(this.lines, {required this.up});
+  final int lines;
+  final bool up;
+}
 
 String _format(String template, List<Object?> args) {
   var out = template;

@@ -336,6 +336,28 @@ final class Program {
         case ClearScreenMsg():
           _renderer?.clearScreen();
           return true;
+        case EnterAltScreenMsg():
+          _renderer?.setAltScreen(true);
+          return false;
+        case ExitAltScreenMsg():
+          _renderer?.setAltScreen(false);
+          return false;
+        case HideCursorMsg():
+          _renderer?.setCursorVisibility(false);
+          return false;
+        case ShowCursorMsg():
+          _renderer?.setCursorVisibility(true);
+          return false;
+        case SetWindowTitleMsg():
+          _output.write('\x1b]0;${msg.title}\x07');
+          return false;
+        case ClearScrollAreaMsg():
+          _output.write('\x1b[2J\x1b[H');
+          _renderer?.clearScreen();
+          return true;
+        case ScrollMsg():
+          _renderer?.scroll(msg.lines, up: msg.up);
+          return false;
         case PrintLineMsg():
           _renderer?.insertAbove(msg.messageBody);
           return true;

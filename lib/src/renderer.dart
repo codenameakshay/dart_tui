@@ -12,29 +12,38 @@ abstract interface class TeaRenderer {
   void release({bool reset = false});
   void restore(View view);
   void close();
+
+  /// Imperatively enter or exit the alternate screen buffer.
+  void setAltScreen(bool enabled);
+
+  /// Imperatively hide or show the cursor.
+  void setCursorVisibility(bool visible);
+
+  /// Emit ANSI scroll sequences: positive [n] scrolls up, negative scrolls down.
+  void scroll(int n, {bool up = true});
 }
 
 final class NilRenderer implements TeaRenderer {
   @override
   void clearScreen() {}
-
   @override
   void close() {}
-
   @override
   void insertAbove(String line) {}
-
   @override
   void setSyncUpdates(bool enabled) {}
-
   @override
   void release({bool reset = false}) {}
-
   @override
   void render(View view) {}
-
   @override
   void restore(View view) {}
+  @override
+  void setAltScreen(bool enabled) {}
+  @override
+  void setCursorVisibility(bool visible) {}
+  @override
+  void scroll(int n, {bool up = true}) {}
 }
 
 final class AnsiRenderer implements TeaRenderer {
@@ -148,6 +157,31 @@ final class AnsiRenderer implements TeaRenderer {
   @override
   void close() {
     release();
+  }
+
+  @override
+  void setAltScreen(bool enabled) {
+    if (enabled == _altScreenEnabled) return;
+    _output.write(enabled ? '\x1b[?1049h' : '\x1b[?1049l');
+    _altScreenEnabled = enabled;
+    _lastLines = const <String>[];
+    _hasRenderedFrame = false;
+  }
+
+  @override
+  void setCursorVisibility(bool visible) {
+    if (visible == !_cursorHidden) return;
+    _output.write(visible ? '\x1b[?25h' : '\x1b[?25l');
+    _cursorHidden = !visible;
+  }
+
+  @override
+  void scroll(int n, {bool up = true}) {
+    if (n <= 0) return;
+    // ESC[nS = scroll up n lines; ESC[nT = scroll down n lines
+    _output.write(up ? '\x1b[${n}S' : '\x1b[${n}T');
+    _lastLines = const <String>[];
+    _hasRenderedFrame = false;
   }
 
   bool _linesEqual(List<String> a, List<String> b) {
@@ -305,6 +339,28 @@ final class CellRenderer implements TeaRenderer {
 
   @override
   void setSyncUpdates(bool enabled) {} // cell renderer handles its own sync
+
+  @override
+  void setAltScreen(bool enabled) {
+    if (enabled == _altScreenEnabled) return;
+    _output.write(enabled ? '\x1b[?1049h' : '\x1b[?1049l');
+    _altScreenEnabled = enabled;
+    _lastGrid = null;
+  }
+
+  @override
+  void setCursorVisibility(bool visible) {
+    if (visible == !_cursorHidden) return;
+    _output.write(visible ? '\x1b[?25h' : '\x1b[?25l');
+    _cursorHidden = !visible;
+  }
+
+  @override
+  void scroll(int n, {bool up = true}) {
+    if (n <= 0) return;
+    _output.write(up ? '\x1b[${n}S' : '\x1b[${n}T');
+    _lastGrid = null;
+  }
 
   // ── Grid building ──────────────────────────────────────────────────────────
 
