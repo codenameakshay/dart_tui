@@ -5,26 +5,61 @@ import '../msg.dart';
 /// Horizontal text alignment.
 enum Align { left, center, right }
 
-/// Vertical content alignment (used when [Style.height] is set).
+/// Vertical content alignment (used when [Style.height] is set, or in
+/// [joinHorizontal]).
 enum AlignVertical { top, middle, bottom }
 
+// ── AlignVertical → double helper ─────────────────────────────────────────────
+
+extension AlignVerticalDouble on AlignVertical {
+  /// Returns the equivalent fractional position (0.0 = top, 0.5 = mid, 1.0 = bottom).
+  double get fraction => switch (this) {
+        AlignVertical.top => 0.0,
+        AlignVertical.middle => 0.5,
+        AlignVertical.bottom => 1.0,
+      };
+}
+
+extension AlignDouble on Align {
+  /// Returns the equivalent fractional position (0.0 = left, 0.5 = center, 1.0 = right).
+  double get fraction => switch (this) {
+        Align.left => 0.0,
+        Align.center => 0.5,
+        Align.right => 1.0,
+      };
+}
+
 /// Composable ANSI style object inspired by Lip Gloss primitives.
+///
+/// All properties default to "unset" (null for optionals, false for booleans).
+/// Call [inherit] to fill in unset properties from a parent style.
 final class Style {
   const Style({
     this.foreground256,
     this.background256,
     this.foregroundRgb,
     this.backgroundRgb,
+    this.foregroundComplete,
+    this.backgroundComplete,
     this.adaptiveForeground,
     this.adaptiveBackground,
-    this.isBold = false,
-    this.isDim = false,
-    this.isItalic = false,
-    this.isUnderline = false,
-    this.isStrikethrough = false,
+    this.isBold,
+    this.isDim,
+    this.isItalic,
+    this.isUnderline,
+    this.isStrikethrough,
+    this.isReverse,
+    this.isBlink,
+    this.isOverline,
+    this.underlineSpaces = true,
+    this.strikethroughSpaces = true,
     this.padding = const EdgeInsets.all(0),
     this.margin = const EdgeInsets.all(0),
     this.border = Border.none,
+    this.borderForeground,
+    this.borderBackground,
+    this.borderTitle = '',
+    this.borderTitleAlignment = Align.left,
     this.width,
     this.height,
     this.maxWidth,
@@ -32,23 +67,73 @@ final class Style {
     this.align = Align.left,
     this.alignVertical = AlignVertical.top,
     this.inline = false,
+    this.wordWrap = false,
     this.profile,
+    this.transform,
   });
 
   final int? foreground256;
   final int? background256;
   final RgbColor? foregroundRgb;
   final RgbColor? backgroundRgb;
+
+  /// A [CompleteColor] lets you specify different color values for each
+  /// terminal color profile (trueColor, ansi256, ansi16). When set, takes
+  /// precedence over [foregroundRgb] and [foreground256].
+  final CompleteColor? foregroundComplete;
+
+  /// A [CompleteColor] for the background.
+  final CompleteColor? backgroundComplete;
+
   final AdaptiveColor? adaptiveForeground;
   final AdaptiveColor? adaptiveBackground;
-  final bool isBold;
-  final bool isDim;
-  final bool isItalic;
-  final bool isUnderline;
-  final bool isStrikethrough;
+
+  /// SGR 1 — bold / increased intensity. `null` = unset (inheritable).
+  final bool? isBold;
+
+  /// SGR 2 — faint / decreased intensity. `null` = unset (inheritable).
+  final bool? isDim;
+
+  /// SGR 3 — italic. `null` = unset (inheritable).
+  final bool? isItalic;
+
+  /// SGR 4 — underline. `null` = unset (inheritable).
+  final bool? isUnderline;
+
+  /// SGR 9 — crossed-out / strikethrough. `null` = unset (inheritable).
+  final bool? isStrikethrough;
+
+  /// SGR 7 — reverse video (swap foreground and background). `null` = unset.
+  final bool? isReverse;
+
+  /// SGR 5 — slow blink. `null` = unset (inheritable).
+  final bool? isBlink;
+
+  /// SGR 53 — overline. `null` = unset (inheritable).
+  final bool? isOverline;
+
+  /// Whether spaces inside underlined text are also underlined (default true).
+  final bool underlineSpaces;
+
+  /// Whether spaces inside struck-through text are also struck through (default true).
+  final bool strikethroughSpaces;
+
   final EdgeInsets padding;
   final EdgeInsets margin;
   final Border border;
+
+  /// Foreground (text) color of the border characters themselves.
+  final RgbColor? borderForeground;
+
+  /// Background color of the border characters.
+  final RgbColor? borderBackground;
+
+  /// Optional title string embedded into the top border edge.
+  final String borderTitle;
+
+  /// Horizontal alignment of [borderTitle] within the top edge.
+  final Align borderTitleAlignment;
+
   final int? width;
   final int? height;
   final int? maxWidth;
@@ -56,7 +141,16 @@ final class Style {
   final Align align;
   final AlignVertical alignVertical;
   final bool inline;
+
+  /// When `true`, long lines are soft-wrapped at word boundaries to fit
+  /// within [width] / [maxWidth] instead of being truncated.
+  final bool wordWrap;
+
   final ColorProfile? profile;
+
+  /// Optional post-processing function applied to the final rendered string
+  /// (after layout, before returning). Useful for custom transforms.
+  final String Function(String)? transform;
 
   // ── Fluent builder methods ────────────────────────────────────────────────
 
@@ -66,14 +160,30 @@ final class Style {
       copyWith(foregroundRgb: RgbColor(r, g, b));
   Style backgroundColorRgb(int r, int g, int b) =>
       copyWith(backgroundRgb: RgbColor(r, g, b));
+  Style withForegroundComplete(CompleteColor c) =>
+      copyWith(foregroundComplete: c);
+  Style withBackgroundComplete(CompleteColor c) =>
+      copyWith(backgroundComplete: c);
   Style bold([bool value = true]) => copyWith(isBold: value);
   Style dim([bool value = true]) => copyWith(isDim: value);
   Style italic([bool value = true]) => copyWith(isItalic: value);
   Style underline([bool value = true]) => copyWith(isUnderline: value);
   Style strikethrough([bool value = true]) => copyWith(isStrikethrough: value);
+  Style reverse([bool value = true]) => copyWith(isReverse: value);
+  Style blink([bool value = true]) => copyWith(isBlink: value);
+  Style overline([bool value = true]) => copyWith(isOverline: value);
+  Style withUnderlineSpaces(bool value) => copyWith(underlineSpaces: value);
+  Style withStrikethroughSpaces(bool value) =>
+      copyWith(strikethroughSpaces: value);
   Style withPadding(EdgeInsets value) => copyWith(padding: value);
   Style withMargin(EdgeInsets value) => copyWith(margin: value);
   Style withBorder(Border value) => copyWith(border: value);
+  Style withBorderForeground(RgbColor value) =>
+      copyWith(borderForeground: value);
+  Style withBorderBackground(RgbColor value) =>
+      copyWith(borderBackground: value);
+  Style withBorderTitle(String title, {Align alignment = Align.left}) =>
+      copyWith(borderTitle: title, borderTitleAlignment: alignment);
   Style withWidth(int? value) => copyWith(width: value);
   Style withHeight(int? value) => copyWith(height: value);
   Style withMaxWidth(int? value) => copyWith(maxWidth: value);
@@ -82,17 +192,72 @@ final class Style {
   Style withAlignVertical(AlignVertical value) =>
       copyWith(alignVertical: value);
   Style withInline(bool value) => copyWith(inline: value);
+  Style withWordWrap(bool value) => copyWith(wordWrap: value);
   Style withProfile(ColorProfile? value) => copyWith(profile: value);
   Style withAdaptiveForeground(AdaptiveColor value) =>
       copyWith(adaptiveForeground: value);
   Style withAdaptiveBackground(AdaptiveColor value) =>
       copyWith(adaptiveBackground: value);
+  Style withTransform(String Function(String)? fn) =>
+      copyWith(transform: fn);
+
+  // Unset helpers (set nullable booleans back to null for inheritance)
+  Style unsetBold() => _copyWithNullBool('isBold');
+  Style unsetDim() => _copyWithNullBool('isDim');
+  Style unsetItalic() => _copyWithNullBool('isItalic');
+  Style unsetUnderline() => _copyWithNullBool('isUnderline');
+  Style unsetStrikethrough() => _copyWithNullBool('isStrikethrough');
+  Style unsetReverse() => _copyWithNullBool('isReverse');
+  Style unsetBlink() => _copyWithNullBool('isBlink');
+  Style unsetOverline() => _copyWithNullBool('isOverline');
+
+  Style _copyWithNullBool(String field) {
+    return Style(
+      foreground256: foreground256,
+      background256: background256,
+      foregroundRgb: foregroundRgb,
+      backgroundRgb: backgroundRgb,
+      foregroundComplete: foregroundComplete,
+      backgroundComplete: backgroundComplete,
+      adaptiveForeground: adaptiveForeground,
+      adaptiveBackground: adaptiveBackground,
+      isBold: field == 'isBold' ? null : isBold,
+      isDim: field == 'isDim' ? null : isDim,
+      isItalic: field == 'isItalic' ? null : isItalic,
+      isUnderline: field == 'isUnderline' ? null : isUnderline,
+      isStrikethrough: field == 'isStrikethrough' ? null : isStrikethrough,
+      isReverse: field == 'isReverse' ? null : isReverse,
+      isBlink: field == 'isBlink' ? null : isBlink,
+      isOverline: field == 'isOverline' ? null : isOverline,
+      underlineSpaces: underlineSpaces,
+      strikethroughSpaces: strikethroughSpaces,
+      padding: padding,
+      margin: margin,
+      border: border,
+      borderForeground: borderForeground,
+      borderBackground: borderBackground,
+      borderTitle: borderTitle,
+      borderTitleAlignment: borderTitleAlignment,
+      width: width,
+      height: height,
+      maxWidth: maxWidth,
+      maxHeight: maxHeight,
+      align: align,
+      alignVertical: alignVertical,
+      inline: inline,
+      wordWrap: wordWrap,
+      profile: profile,
+      transform: transform,
+    );
+  }
 
   Style copyWith({
     int? foreground256,
     int? background256,
     RgbColor? foregroundRgb,
     RgbColor? backgroundRgb,
+    CompleteColor? foregroundComplete,
+    CompleteColor? backgroundComplete,
     AdaptiveColor? adaptiveForeground,
     AdaptiveColor? adaptiveBackground,
     bool? isBold,
@@ -100,9 +265,18 @@ final class Style {
     bool? isItalic,
     bool? isUnderline,
     bool? isStrikethrough,
+    bool? isReverse,
+    bool? isBlink,
+    bool? isOverline,
+    bool? underlineSpaces,
+    bool? strikethroughSpaces,
     EdgeInsets? padding,
     EdgeInsets? margin,
     Border? border,
+    RgbColor? borderForeground,
+    RgbColor? borderBackground,
+    String? borderTitle,
+    Align? borderTitleAlignment,
     int? width,
     int? height,
     int? maxWidth,
@@ -110,13 +284,17 @@ final class Style {
     Align? align,
     AlignVertical? alignVertical,
     bool? inline,
+    bool? wordWrap,
     ColorProfile? profile,
+    String Function(String)? transform,
   }) {
     return Style(
       foreground256: foreground256 ?? this.foreground256,
       background256: background256 ?? this.background256,
       foregroundRgb: foregroundRgb ?? this.foregroundRgb,
       backgroundRgb: backgroundRgb ?? this.backgroundRgb,
+      foregroundComplete: foregroundComplete ?? this.foregroundComplete,
+      backgroundComplete: backgroundComplete ?? this.backgroundComplete,
       adaptiveForeground: adaptiveForeground ?? this.adaptiveForeground,
       adaptiveBackground: adaptiveBackground ?? this.adaptiveBackground,
       isBold: isBold ?? this.isBold,
@@ -124,9 +302,18 @@ final class Style {
       isItalic: isItalic ?? this.isItalic,
       isUnderline: isUnderline ?? this.isUnderline,
       isStrikethrough: isStrikethrough ?? this.isStrikethrough,
+      isReverse: isReverse ?? this.isReverse,
+      isBlink: isBlink ?? this.isBlink,
+      isOverline: isOverline ?? this.isOverline,
+      underlineSpaces: underlineSpaces ?? this.underlineSpaces,
+      strikethroughSpaces: strikethroughSpaces ?? this.strikethroughSpaces,
       padding: padding ?? this.padding,
       margin: margin ?? this.margin,
       border: border ?? this.border,
+      borderForeground: borderForeground ?? this.borderForeground,
+      borderBackground: borderBackground ?? this.borderBackground,
+      borderTitle: borderTitle ?? this.borderTitle,
+      borderTitleAlignment: borderTitleAlignment ?? this.borderTitleAlignment,
       width: width ?? this.width,
       height: height ?? this.height,
       maxWidth: maxWidth ?? this.maxWidth,
@@ -134,28 +321,87 @@ final class Style {
       align: align ?? this.align,
       alignVertical: alignVertical ?? this.alignVertical,
       inline: inline ?? this.inline,
+      wordWrap: wordWrap ?? this.wordWrap,
       profile: profile ?? this.profile,
+      transform: transform ?? this.transform,
+    );
+  }
+
+  /// Inherit unset properties from [parent].
+  ///
+  /// For every property that is `null` (unset) in `this`, the value from
+  /// [parent] is used. Explicitly-set values (including `false`) are kept.
+  Style inherit(Style parent) {
+    return Style(
+      foreground256: foreground256 ?? parent.foreground256,
+      background256: background256 ?? parent.background256,
+      foregroundRgb: foregroundRgb ?? parent.foregroundRgb,
+      backgroundRgb: backgroundRgb ?? parent.backgroundRgb,
+      foregroundComplete: foregroundComplete ?? parent.foregroundComplete,
+      backgroundComplete: backgroundComplete ?? parent.backgroundComplete,
+      adaptiveForeground: adaptiveForeground ?? parent.adaptiveForeground,
+      adaptiveBackground: adaptiveBackground ?? parent.adaptiveBackground,
+      isBold: isBold ?? parent.isBold,
+      isDim: isDim ?? parent.isDim,
+      isItalic: isItalic ?? parent.isItalic,
+      isUnderline: isUnderline ?? parent.isUnderline,
+      isStrikethrough: isStrikethrough ?? parent.isStrikethrough,
+      isReverse: isReverse ?? parent.isReverse,
+      isBlink: isBlink ?? parent.isBlink,
+      isOverline: isOverline ?? parent.isOverline,
+      underlineSpaces: underlineSpaces,
+      strikethroughSpaces: strikethroughSpaces,
+      padding: padding,
+      margin: margin,
+      border: border,
+      borderForeground: borderForeground ?? parent.borderForeground,
+      borderBackground: borderBackground ?? parent.borderBackground,
+      borderTitle: borderTitle.isNotEmpty ? borderTitle : parent.borderTitle,
+      borderTitleAlignment: borderTitleAlignment,
+      width: width ?? parent.width,
+      height: height ?? parent.height,
+      maxWidth: maxWidth ?? parent.maxWidth,
+      maxHeight: maxHeight ?? parent.maxHeight,
+      align: align,
+      alignVertical: alignVertical,
+      inline: inline,
+      wordWrap: wordWrap,
+      profile: profile ?? parent.profile,
+      transform: transform ?? parent.transform,
     );
   }
 
   /// Render [value] with all style attributes applied.
   String render(String value) {
+    String result;
     if (inline) {
       // Inline mode: single line, no top/bottom padding or border
       final singleLine = value.replaceAll('\n', ' ');
-      return _wrapAnsi(singleLine);
+      result = _wrapAnsi(singleLine);
+    } else {
+      final lines = value.split('\n');
+      final wrapped = _applyWordWrap(lines);
+      final padded = _applyPadding(wrapped);
+      final constrained = _applyConstraints(padded);
+      final withBorder = _applyBorder(constrained);
+      final withMargin = _applyMargin(withBorder);
+      final content = withMargin.join('\n');
+      result = _wrapAnsi(content);
     }
-
-    final lines = value.split('\n');
-    final padded = _applyPadding(lines);
-    final constrained = _applyConstraints(padded);
-    final withBorder = _applyBorder(constrained);
-    final withMargin = _applyMargin(withBorder);
-    final content = withMargin.join('\n');
-    return _wrapAnsi(content);
+    return transform != null ? transform!(result) : result;
   }
 
   // ── Internal pipeline ─────────────────────────────────────────────────────
+
+  /// If [wordWrap] is true, expand lines that exceed the target width.
+  List<String> _applyWordWrap(List<String> lines) {
+    if (!wordWrap) return lines;
+    final targetWidth = width ?? maxWidth;
+    if (targetWidth == null) return lines;
+    final innerWidth = targetWidth - padding.left - padding.right;
+    if (innerWidth <= 0) return lines;
+    return lines.expand((line) => _wordWrapLine(line, innerWidth)).toList();
+  }
 
   List<String> _applyPadding(List<String> lines) {
     final maxW = lines.fold<int>(
@@ -186,19 +432,20 @@ final class Style {
   List<String> _applyConstraints(List<String> lines) {
     var result = lines;
 
-    // Width constraint: truncate lines that are too wide first
+    // Width constraint
     final targetWidth = width ?? maxWidth;
     if (targetWidth != null) {
-      result = result.map((line) {
+      result = result.expand((line) {
         final vis = _visibleWidth(line);
         if (vis > targetWidth) {
-          return _truncateVisible(line, targetWidth);
+          // wordWrap was already applied before padding; here just truncate
+          return [_truncateVisible(line, targetWidth)];
         }
-        return line;
+        return [line];
       }).toList();
     }
 
-    // Alignment (horizontal) applied before padding to target width
+    // Alignment (horizontal) applied to target width
     if (align != Align.left && result.isNotEmpty) {
       final effectiveWidth = width ??
           (result.fold<int>(
@@ -228,7 +475,6 @@ final class Style {
       if (result.length > targetHeight) {
         result = result.sublist(0, targetHeight);
       } else if (height != null && result.length < height!) {
-        // Vertical alignment
         final deficit = height! - result.length;
         result = _distributeVerticalPadding(result, deficit, alignVertical);
       }
@@ -264,18 +510,63 @@ final class Style {
       },
     );
     final horizontal = border.horizontal * maxW;
+
+    // Build top edge with optional title
+    final String topEdge;
+    if (borderTitle.isNotEmpty) {
+      topEdge = _buildBorderTitleEdge(maxW);
+    } else {
+      topEdge = horizontal;
+    }
+
+    // Build ANSI open/close for border characters
+    final bOpen = _borderAnsiOpen();
+    final bClose = bOpen.isNotEmpty ? '\x1b[0m' : '';
+
     final out = <String>[
-      '${border.topLeft}$horizontal${border.topRight}',
+      '$bOpen${border.topLeft}$topEdge${border.topRight}$bClose',
     ];
     for (final line in lines) {
       final vis = _visibleWidth(line);
       final pad = maxW - vis;
       out.add(
-        '${border.vertical}$line${' ' * pad}${border.vertical}',
+        '$bOpen${border.vertical}$bClose$line${' ' * pad}$bOpen${border.vertical}$bClose',
       );
     }
-    out.add('${border.bottomLeft}$horizontal${border.bottomRight}');
+    out.add(
+        '$bOpen${border.bottomLeft}$horizontal${border.bottomRight}$bClose');
     return out;
+  }
+
+  /// Build the top border edge string with the title embedded.
+  String _buildBorderTitleEdge(int innerWidth) {
+    final titleLen = _visibleWidth(borderTitle);
+    final availableForDashes = innerWidth - titleLen;
+    if (availableForDashes <= 0) {
+      // Title too long — truncate it
+      return _truncateVisible(borderTitle, innerWidth);
+    }
+    final leftDashes = switch (borderTitleAlignment) {
+      Align.left => 0,
+      Align.center => availableForDashes ~/ 2,
+      Align.right => availableForDashes,
+    };
+    final rightDashes = availableForDashes - leftDashes;
+    return '${border.horizontal * leftDashes}$borderTitle${border.horizontal * rightDashes}';
+  }
+
+  /// Returns ANSI open sequence for border coloring, or empty string.
+  String _borderAnsiOpen() {
+    final open = StringBuffer();
+    if (borderForeground != null) {
+      final c = borderForeground!;
+      open.write('\x1b[38;2;${c.r};${c.g};${c.b}m');
+    }
+    if (borderBackground != null) {
+      final c = borderBackground!;
+      open.write('\x1b[48;2;${c.r};${c.g};${c.b}m');
+    }
+    return open.toString();
   }
 
   List<String> _applyMargin(List<String> lines) {
@@ -304,24 +595,30 @@ final class Style {
   String _wrapAnsi(String value) {
     final open = StringBuffer();
 
-    if (isBold) open.write('\x1b[1m');
-    if (isDim) open.write('\x1b[2m');
-    if (isItalic) open.write('\x1b[3m');
-    if (isUnderline) open.write('\x1b[4m');
-    if (isStrikethrough) open.write('\x1b[9m');
+    if (isBold ?? false) open.write('\x1b[1m');
+    if (isDim ?? false) open.write('\x1b[2m');
+    if (isItalic ?? false) open.write('\x1b[3m');
+    if (isUnderline ?? false) open.write('\x1b[4m');
+    if (isBlink ?? false) open.write('\x1b[5m');
+    if (isReverse ?? false) open.write('\x1b[7m');
+    if (isStrikethrough ?? false) open.write('\x1b[9m');
+    if (isOverline ?? false) open.write('\x1b[53m');
 
-    // Resolve effective foreground/background considering adaptive colors and profile
+    // Resolve effective foreground/background considering CompleteColor,
+    // adaptive colors, and profile.
     final effectiveFg = _resolveColor(
+      explicitComplete: foregroundComplete,
       explicit256: foreground256,
       explicitRgb: foregroundRgb,
       adaptive: adaptiveForeground,
-      background: background256 != null || backgroundRgb != null,
+      isBackground: false,
     );
     final effectiveBg = _resolveColor(
+      explicitComplete: backgroundComplete,
       explicit256: background256,
       explicitRgb: backgroundRgb,
       adaptive: adaptiveBackground,
-      background: false,
+      isBackground: true,
     );
 
     if (effectiveFg != null) {
@@ -332,24 +629,61 @@ final class Style {
     }
 
     if (open.isEmpty) return value;
+
+    // When underlineSpaces is false and underline is set, wrap each word
+    // individually.
+    if ((isUnderline ?? false) && !underlineSpaces) {
+      final reset = TuiStyle.reset;
+      final reOpen = open.toString();
+      final result = value.replaceAll(' ', '$reset $reOpen');
+      return '$reOpen$result$reset';
+    }
+    if ((isStrikethrough ?? false) && !strikethroughSpaces) {
+      final reset = TuiStyle.reset;
+      final reOpen = open.toString();
+      final result = value.replaceAll(' ', '$reset $reOpen');
+      return '$reOpen$result$reset';
+    }
+
     return '$open$value${TuiStyle.reset}';
   }
 
-  /// Resolve a color, considering adaptive colors and the active profile.
+  /// Resolve a color, considering [CompleteColor], adaptive colors, and profile.
   _ResolvedColor? _resolveColor({
+    CompleteColor? explicitComplete,
     int? explicit256,
     RgbColor? explicitRgb,
     AdaptiveColor? adaptive,
-    required bool background,
+    required bool isBackground,
   }) {
     final activeProfile = profile ?? ColorProfile.trueColor;
     if (activeProfile == ColorProfile.noColor) return null;
+
+    // CompleteColor takes precedence: pick the value for this profile tier.
+    if (explicitComplete != null) {
+      switch (activeProfile) {
+        case ColorProfile.noColor:
+          return null;
+        case ColorProfile.ansi:
+          final ansi = explicitComplete.ansi;
+          if (ansi != null) return _ResolvedColor.ansi16(ansi);
+          // Fall through to rgb/256 downgrade
+          break;
+        case ColorProfile.ansi256:
+          final idx = explicitComplete.ansi256;
+          if (idx != null) return _ResolvedColor.ansi256(idx);
+          break;
+        case ColorProfile.trueColor:
+          final rgb = explicitComplete.trueColor;
+          if (rgb != null) return _ResolvedColor.rgb(rgb);
+          break;
+      }
+    }
 
     RgbColor? rgb;
     int? idx256;
 
     if (adaptive != null) {
-      // Use background luminance to choose light/dark variant
       final bgRgb = backgroundRgb ??
           (background256 != null ? _ansi256ToRgb(background256!) : null);
       final isDark = bgRgb == null || _isDarkBackground(bgRgb);
@@ -390,8 +724,6 @@ final class Style {
   }
 
   static String _ansi16Code(int index, {required bool foreground}) {
-    // 0-7: normal colors (30-37 fg, 40-47 bg)
-    // 8-15: bright colors (90-97 fg, 100-107 bg)
     if (index < 8) {
       return foreground ? '\x1b[${30 + index}m' : '\x1b[${40 + index}m';
     } else {
@@ -400,6 +732,67 @@ final class Style {
           : '\x1b[${100 + index - 8}m';
     }
   }
+}
+
+// ── Word wrap helpers ──────────────────────────────────────────────────────────
+
+/// Wrap [line] to fit within [maxWidth] visible columns.
+/// Returns one or more lines.
+List<String> _wordWrapLine(String line, int maxWidth) {
+  if (_visibleWidth(line) <= maxWidth) return [line];
+  final words = line.split(' ');
+  final result = <String>[];
+  final current = StringBuffer();
+  var currentWidth = 0;
+
+  for (final word in words) {
+    final wordWidth = _visibleWidth(word);
+    if (current.isEmpty) {
+      if (wordWidth > maxWidth) {
+        result.addAll(_hardWrapWord(word, maxWidth));
+      } else {
+        current.write(word);
+        currentWidth = wordWidth;
+      }
+    } else {
+      if (currentWidth + 1 + wordWidth <= maxWidth) {
+        current.write(' $word');
+        currentWidth += 1 + wordWidth;
+      } else {
+        result.add(current.toString());
+        current.clear();
+        currentWidth = 0;
+        if (wordWidth > maxWidth) {
+          result.addAll(_hardWrapWord(word, maxWidth));
+        } else {
+          current.write(word);
+          currentWidth = wordWidth;
+        }
+      }
+    }
+  }
+  if (current.isNotEmpty) result.add(current.toString());
+  return result.isEmpty ? [''] : result;
+}
+
+/// Hard-break a single long word across multiple lines.
+List<String> _hardWrapWord(String word, int maxWidth) {
+  final result = <String>[];
+  final chars = word.characters.toList();
+  final current = StringBuffer();
+  var currentWidth = 0;
+  for (final char in chars) {
+    final w = _visibleWidth(char);
+    if (currentWidth + w > maxWidth) {
+      if (current.isNotEmpty) result.add(current.toString());
+      current.clear();
+      currentWidth = 0;
+    }
+    current.write(char);
+    currentWidth += w;
+  }
+  if (current.isNotEmpty) result.add(current.toString());
+  return result;
 }
 
 // ── Color resolution helpers ──────────────────────────────────────────────────
@@ -425,8 +818,8 @@ final class _ResolvedColor {
         b = c.b;
 
   final _ColorType type;
-  final int value; // for ansi16/ansi256
-  final int r, g, b; // for rgb
+  final int value;
+  final int r, g, b;
 }
 
 bool _isDarkBackground(RgbColor c) {
@@ -437,7 +830,6 @@ bool _isDarkBackground(RgbColor c) {
 /// Map a 256-color index to approximate RGB.
 RgbColor _ansi256ToRgb(int idx) {
   if (idx < 16) {
-    // Standard ANSI 16 colors (approximate)
     const colors = [
       RgbColor(0, 0, 0),
       RgbColor(128, 0, 0),
@@ -458,7 +850,6 @@ RgbColor _ansi256ToRgb(int idx) {
     ];
     return colors[idx];
   } else if (idx < 232) {
-    // 6x6x6 color cube
     final i = idx - 16;
     final r = (i ~/ 36) % 6;
     final g = (i ~/ 6) % 6;
@@ -466,16 +857,12 @@ RgbColor _ansi256ToRgb(int idx) {
     int scale(int v) => v == 0 ? 0 : 55 + v * 40;
     return RgbColor(scale(r), scale(g), scale(b));
   } else {
-    // Grayscale
     final v = 8 + (idx - 232) * 10;
     return RgbColor(v, v, v);
   }
 }
 
-/// Find the nearest ANSI 16 color index for [rgb].
-/// Returns 0-15 where 0-7 are standard colors and 8-15 are bright variants.
 int _nearestAnsi16(RgbColor rgb) {
-  // Full 16-color palette (0-7 standard, 8-15 bright)
   const palette = [
     RgbColor(0, 0, 0),
     RgbColor(128, 0, 0),
@@ -494,22 +881,18 @@ int _nearestAnsi16(RgbColor rgb) {
     RgbColor(0, 255, 255),
     RgbColor(255, 255, 255),
   ];
-  // Map bright indices (8-15) back to standard (0-7) for code generation
-  // since bright variants share hue with standard variants
   var best = 0;
   var bestDist = _colorDist(rgb, palette[0]);
   for (var i = 1; i < palette.length; i++) {
     final d = _colorDist(rgb, palette[i]);
     if (d < bestDist) {
       bestDist = d;
-      // Map bright variants (8-15) to their standard counterparts (0-7)
       best = i < 8 ? i : i - 8;
     }
   }
   return best;
 }
 
-/// Find the nearest 256-color index for [rgb].
 int _nearestAnsi256(RgbColor rgb) {
   var best = 0;
   var bestDist = double.infinity;
@@ -568,26 +951,16 @@ RgbColor blend(RgbColor a, RgbColor b, double t) {
 final _ansiEscapeRe = RegExp(r'\x1b(?:\[[0-9;?]*[A-Za-z]|[\]O][^\x07]*\x07?)');
 
 /// Strip ANSI escape sequences from [s].
-String _stripAnsiStyle(String s) => s.replaceAll(_ansiEscapeRe, '');
+String stripAnsi(String s) => s.replaceAll(_ansiEscapeRe, '');
 
-/// Visible display width of [s] (number of printable characters after stripping ANSI).
-/// Handles double-width characters (CJK).
+/// Visible display width of [s] (number of printable columns after stripping ANSI).
+/// Handles double-width characters (CJK, full-width, emoji).
 int _visibleWidth(String s) {
-  final stripped = _stripAnsiStyle(s);
+  final stripped = stripAnsi(s);
   var width = 0;
   for (final char in stripped.characters) {
     final code = char.runes.first;
-    // Basic CJK / full-width heuristic
-    // Based on East Asian Width properties
-    if (code >= 0x1100 &&
-        (code <= 0x11ff || // Hangul Jamo
-            (code >= 0x2e80 && code <= 0x9fff) || // CJK Radicals .. CJK Unified Ideographs
-            (code >= 0xac00 && code <= 0xd7af) || // Hangul Syllables
-            (code >= 0xf900 && code <= 0xfaff) || // CJK Compatibility Ideographs
-            (code >= 0xfe30 && code <= 0xfe4f) || // CJK Compatibility Forms
-            (code >= 0xff00 && code <= 0xff60) || // Fullwidth Forms
-            (code >= 0x1f300 && code <= 0x1f9ff))) {
-      // Emojis and CJK
+    if (_isDoubleWidth(code)) {
       width += 2;
     } else {
       width += 1;
@@ -596,7 +969,19 @@ int _visibleWidth(String s) {
   return width;
 }
 
-/// Truncate [s] to at most [maxWidth] visible characters, preserving ANSI codes.
+/// Returns `true` for double-width code points (CJK, full-width, emoji).
+bool _isDoubleWidth(int code) {
+  return code >= 0x1100 &&
+      (code <= 0x11ff || // Hangul Jamo
+          (code >= 0x2e80 && code <= 0x9fff) || // CJK Radicals .. CJK Unified Ideographs
+          (code >= 0xac00 && code <= 0xd7af) || // Hangul Syllables
+          (code >= 0xf900 && code <= 0xfaff) || // CJK Compatibility Ideographs
+          (code >= 0xfe30 && code <= 0xfe4f) || // CJK Compatibility Forms
+          (code >= 0xff00 && code <= 0xff60) || // Fullwidth Forms
+          (code >= 0x1f300 && code <= 0x1f9ff)); // Emojis
+}
+
+/// Truncate [s] to at most [maxWidth] visible columns, preserving ANSI codes.
 String _truncateVisible(String s, int maxWidth) {
   if (_visibleWidth(s) <= maxWidth) return s;
   var currentWidth = 0;
@@ -604,7 +989,6 @@ String _truncateVisible(String s, int maxWidth) {
   var i = 0;
   while (i < s.length && currentWidth < maxWidth) {
     if (s[i] == '\x1b') {
-      // consume escape sequence
       final match = _ansiEscapeRe.matchAsPrefix(s, i);
       if (match != null) {
         b.write(match.group(0));
@@ -642,9 +1026,13 @@ String _alignLine(String line, int maxWidth, Align align) {
 
 /// Join styled blocks side-by-side (horizontal composition).
 ///
-/// [alignment] controls vertical alignment: 0.0 = top, 0.5 = center, 1.0 = bottom.
+/// [alignment] controls vertical alignment within the composed block.
 /// Shorter blocks are padded with blank lines to match the tallest block.
-String joinHorizontal(double alignment, List<String> blocks) {
+///
+/// ```dart
+/// joinHorizontal(AlignVertical.top, [leftPane, rightPane])
+/// ```
+String joinHorizontal(AlignVertical alignment, List<String> blocks) {
   if (blocks.isEmpty) return '';
   if (blocks.length == 1) return blocks.first;
 
@@ -657,12 +1045,14 @@ String joinHorizontal(double alignment, List<String> blocks) {
           }))
       .toList();
 
+  final frac = alignment.fraction;
+
   // Pad each block to maxLines
   final padded = List.generate(split.length, (bi) {
     final lines = split[bi];
     final deficit = maxLines - lines.length;
     if (deficit == 0) return lines;
-    final top = (deficit * alignment).round();
+    final top = (deficit * frac).round();
     final bottom = deficit - top;
     final w = widths[bi];
     return [
@@ -687,15 +1077,18 @@ String joinHorizontal(double alignment, List<String> blocks) {
 
 /// Join blocks vertically (stacked), padding narrower blocks to widest width.
 ///
-/// [alignment] controls horizontal alignment: 0.0 = left, 0.5 = center, 1.0 = right.
-String joinVertical(double alignment, List<String> blocks) {
+/// [alignment] controls horizontal alignment of narrower blocks.
+///
+/// ```dart
+/// joinVertical(Align.left, [topBlock, bottomBlock])
+/// ```
+String joinVertical(Align alignment, List<String> blocks) {
   if (blocks.isEmpty) return '';
   if (blocks.length == 1) return blocks.first;
 
   final allLines = blocks.expand((b) => b.split('\n')).toList();
 
-  // For left alignment, no padding is added (lines stay as-is)
-  if (alignment <= 0.0) {
+  if (alignment == Align.left) {
     return allLines.join('\n');
   }
 
@@ -704,32 +1097,32 @@ String joinVertical(double alignment, List<String> blocks) {
     return w > m ? w : m;
   });
 
-  final align = alignment >= 1.0 ? Align.right : Align.center;
-
+  final align = alignment == Align.right ? Align.right : Align.center;
   return allLines.map((l) => _alignLine(l, maxW, align)).join('\n');
 }
 
 /// Place [content] within a box of [width] x [height].
 ///
-/// [hAlign] and [vAlign] control placement: 0.0 = top/left, 1.0 = bottom/right.
+/// [hAlign] and [vAlign] control placement within the box.
 String place(
   int width,
   int height,
-  double hAlign,
-  double vAlign,
+  Align hAlign,
+  AlignVertical vAlign,
   String content,
 ) {
-  return placeVertical(height, vAlign, placeHorizontal(width, hAlign, content));
+  return placeVertical(
+      height, vAlign, placeHorizontal(width, hAlign, content));
 }
 
 /// Center [content] horizontally within [width] columns.
-String placeHorizontal(int width, double align, String content) {
+String placeHorizontal(int width, Align align, String content) {
   final lines = content.split('\n');
   final aligned = lines.map((line) {
     final vis = _visibleWidth(line);
     if (vis >= width) return line;
     final pad = width - vis;
-    final left = (pad * align).round();
+    final left = (pad * align.fraction).round();
     final right = pad - left;
     return '${' ' * left}$line${' ' * right}';
   });
@@ -737,11 +1130,11 @@ String placeHorizontal(int width, double align, String content) {
 }
 
 /// Place [content] vertically within [height] rows.
-String placeVertical(int height, double align, String content) {
+String placeVertical(int height, AlignVertical align, String content) {
   final lines = content.split('\n');
   if (lines.length >= height) return content;
   final deficit = height - lines.length;
-  final top = (deficit * align).round();
+  final top = (deficit * align.fraction).round();
   final bottom = deficit - top;
   return [
     ...List.filled(top, ''),
@@ -765,6 +1158,19 @@ final class EdgeInsets {
         right = value,
         bottom = value,
         left = value;
+
+  const EdgeInsets.symmetric({int vertical = 0, int horizontal = 0})
+      : top = vertical,
+        right = horizontal,
+        bottom = vertical,
+        left = horizontal;
+
+  const EdgeInsets.only({
+    this.top = 0,
+    this.right = 0,
+    this.bottom = 0,
+    this.left = 0,
+  });
 
   final int top;
   final int right;
@@ -834,6 +1240,16 @@ final class Border {
     vertical: '║',
   );
 
+  static const hidden = Border(
+    enabled: true,
+    topLeft: ' ',
+    topRight: ' ',
+    bottomLeft: ' ',
+    bottomRight: ' ',
+    horizontal: ' ',
+    vertical: ' ',
+  );
+
   final bool enabled;
   final String topLeft;
   final String topRight;
@@ -848,6 +1264,36 @@ final class RgbColor {
   final int r;
   final int g;
   final int b;
+
+  @override
+  String toString() => 'RgbColor($r, $g, $b)';
+
+  @override
+  bool operator ==(Object other) =>
+      other is RgbColor && other.r == r && other.g == g && other.b == b;
+
+  @override
+  int get hashCode => Object.hash(r, g, b);
+}
+
+/// A color that explicitly specifies values for each terminal color-profile
+/// tier. When used in a [Style], the value matching the active [ColorProfile]
+/// is selected, falling back to lower tiers if the exact tier is not set.
+final class CompleteColor {
+  const CompleteColor({
+    this.trueColor,
+    this.ansi256,
+    this.ansi,
+  });
+
+  /// True-color (24-bit RGB) value.
+  final RgbColor? trueColor;
+
+  /// ANSI 256-color index (0–255).
+  final int? ansi256;
+
+  /// ANSI 16-color index (0–15).
+  final int? ansi;
 }
 
 /// Adaptive color that selects between [light] and [dark] variants based on
@@ -881,17 +1327,12 @@ abstract final class TuiStyle {
 /// [colors] must have at least 2 entries. The gradient is computed in true-color
 /// RGB space; each grapheme cluster receives its own `\x1b[38;2;r;g;bm` code.
 /// Use [gradientBackground] for background gradients.
-///
-/// Example:
-/// ```dart
-/// gradientText('Hello, world!', [RgbColor(255,0,128), RgbColor(0,200,255)])
-/// ```
 String gradientText(String text, List<RgbColor> colors) {
   assert(colors.length >= 2, 'gradientText requires at least 2 colors');
   final chars = text.characters.toList();
   if (chars.isEmpty) return '';
   final b = StringBuffer();
-  final n = colors.length - 1; // number of segments
+  final n = colors.length - 1;
   for (var i = 0; i < chars.length; i++) {
     final t = chars.length == 1 ? 0.0 : i / (chars.length - 1);
     final seg = (t * n).floor().clamp(0, n - 1);
@@ -936,7 +1377,7 @@ String _extractFgCode(Style s) {
     return '\x1b[38;2;${c.r};${c.g};${c.b}m';
   }
   if (s.foreground256 != null) return '\x1b[38;5;${s.foreground256}m';
-  if (s.isBold) return '\x1b[1m';
+  if (s.isBold ?? false) return '\x1b[1m';
   return '';
 }
 
