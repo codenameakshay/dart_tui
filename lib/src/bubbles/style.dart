@@ -68,6 +68,7 @@ final class Style {
     this.alignVertical = AlignVertical.top,
     this.inline = false,
     this.wordWrap = false,
+    this.tabWidth = 4,
     this.profile,
     this.transform,
   });
@@ -146,6 +147,10 @@ final class Style {
   /// within [width] / [maxWidth] instead of being truncated.
   final bool wordWrap;
 
+  /// Number of spaces used to expand tab characters (`\t`) during rendering.
+  /// Defaults to 4. Set to 0 to pass tabs through unmodified.
+  final int tabWidth;
+
   final ColorProfile? profile;
 
   /// Optional post-processing function applied to the final rendered string
@@ -215,6 +220,7 @@ final class Style {
       copyWith(alignVertical: value);
   Style withInline(bool value) => copyWith(inline: value);
   Style withWordWrap(bool value) => copyWith(wordWrap: value);
+  Style withTabWidth(int value) => copyWith(tabWidth: value);
   Style withProfile(ColorProfile? value) => copyWith(profile: value);
   Style withAdaptiveForeground(AdaptiveColor value) =>
       copyWith(adaptiveForeground: value);
@@ -267,6 +273,7 @@ final class Style {
       alignVertical: alignVertical,
       inline: inline,
       wordWrap: wordWrap,
+      tabWidth: tabWidth,
       profile: profile,
       transform: transform,
     );
@@ -306,6 +313,7 @@ final class Style {
     AlignVertical? alignVertical,
     bool? inline,
     bool? wordWrap,
+    int? tabWidth,
     ColorProfile? profile,
     String Function(String)? transform,
   }) {
@@ -343,6 +351,7 @@ final class Style {
       alignVertical: alignVertical ?? this.alignVertical,
       inline: inline ?? this.inline,
       wordWrap: wordWrap ?? this.wordWrap,
+      tabWidth: tabWidth ?? this.tabWidth,
       profile: profile ?? this.profile,
       transform: transform ?? this.transform,
     );
@@ -387,6 +396,7 @@ final class Style {
       alignVertical: alignVertical,
       inline: inline,
       wordWrap: wordWrap,
+      tabWidth: tabWidth,
       profile: profile ?? parent.profile,
       transform: transform ?? parent.transform,
     );
@@ -394,13 +404,17 @@ final class Style {
 
   /// Render [value] with all style attributes applied.
   String render(String value) {
+    // Expand tab characters before any other processing.
+    final expanded = tabWidth > 0 && value.contains('\t')
+        ? value.replaceAll('\t', ' ' * tabWidth)
+        : value;
     String result;
     if (inline) {
       // Inline mode: single line, no top/bottom padding or border
-      final singleLine = value.replaceAll('\n', ' ');
+      final singleLine = expanded.replaceAll('\n', ' ');
       result = _wrapAnsi(singleLine);
     } else {
-      final lines = value.split('\n');
+      final lines = expanded.split('\n');
       final wrapped = _applyWordWrap(lines);
       final padded = _applyPadding(wrapped);
       final constrained = _applyConstraints(padded);
