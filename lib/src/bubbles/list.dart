@@ -213,6 +213,26 @@ final class ListModel extends TeaModel {
           _copy(cursor: cur < fi.length - 1 ? cur + 1 : fi.length - 1),
           null,
         );
+      case 'pgup':
+      case 'ctrl+b':
+        final cur = _safeCursor;
+        return (_copy(cursor: (cur - height).clamp(0, fi.length - 1)), null);
+      case 'pgdown':
+      case 'ctrl+f':
+        final cur = _safeCursor;
+        return (
+          _copy(cursor: (cur + height).clamp(0, fi.length - 1)),
+          null,
+        );
+      case 'home':
+      case 'g':
+        return (_copy(cursor: 0), null);
+      case 'end':
+      case 'G':
+        return (
+          _copy(cursor: fi.isEmpty ? 0 : fi.length - 1),
+          null,
+        );
       case '/':
         return (_copy(filterMode: true), null);
       case 'esc':
