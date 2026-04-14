@@ -16,13 +16,15 @@ Build rich, interactive CLI applications with a clean **Model–Update–View** 
 
 - **Model–Update–View** — same architecture as Elm and Bubble Tea; pure, testable state
 - **Async commands** (`Cmd`) for timers, HTTP, subprocesses, and any async work
-- **25+ ready-made components** — spinners, progress bars, text inputs, tables, trees, list with fuzzy filter, tabbed views, and more
+- **27+ ready-made components** — spinners, progress bars, text inputs, tables, trees, multi-select, list with fuzzy filter, tabbed views, in-line cursor, and more
 - **Lipgloss-inspired styling** — true-color RGB, borders with titles, padding, word-wrap, gradients, SGR attributes
+- **Style utilities** — `getWidth()`, `getHeight()`, `truncate()`, `truncateLeft()`, per-side border flags, `tabWidth`, `marginBackground`
 - **Style inheritance** — `Style.inherit(parent)` fills unset fields; `CompleteColor` for per-profile color downgrade
 - **Canvas compositing** — paint styled blocks at arbitrary (x, y) positions with z-index layering
 - **Cell-level diff renderer** — only changed cells are written; zero flicker
 - **Synchronized updates** (`CSI ?2026`) for terminals that support them
 - **Auto background detection** — OSC 11 query fires at startup; your model receives `BackgroundColorMsg`
+- **Fluent `ProgramOption` functions** — `withAltScreen()`, `withHideCursor()`, `withTickInterval()`, `withMouseCellMotion()`, `withMouseAllMotion()`, `withReportFocus()`, `withWindowSize()`
 - **Fast startup** — kernel snapshots cut warm-JIT from ~1 s to ~500 ms; AOT compiles to native
 
 ---
@@ -32,7 +34,7 @@ Build rich, interactive CLI applications with a clean **Model–Update–View** 
 ```yaml
 # pubspec.yaml
 dependencies:
-  dart_tui: ^1.1.0
+  dart_tui: ^1.2.0
 ```
 
 ```bash
@@ -153,6 +155,13 @@ Program(
   programOptions: [
     withFps(60),              // default 60, max 120
     withCellRenderer(),       // cell-level diff (less flicker on older terminals)
+    withAltScreen(),          // enter alternate screen buffer
+    withHideCursor(),         // hide terminal cursor (pass false to keep visible)
+    withTickInterval(const Duration(milliseconds: 100)), // global tick rate
+    withMouseCellMotion(),    // enable button-event mouse tracking
+    withMouseAllMotion(),     // enable all-motion mouse tracking
+    withReportFocus(),        // enable focus/blur reporting (FocusMsg / BlurMsg)
+    withWindowSize(120, 40),  // inject a fixed window size (useful in tests)
     withFilter((model, msg) { // intercept / transform messages
       if (msg is QuitMsg) return null; // suppress
       return msg;
@@ -231,18 +240,40 @@ final resolved = child.inherit(base);
 
 ### Border styles
 
-All 6 border variants plus per-character foreground/background coloring and an embedded title:
+All 7 border variants plus per-character foreground/background coloring, an embedded title, and per-side visibility flags:
 
 ```dart
 Border.box      // ┌─┐ └─┘ │
 Border.rounded  // ╭─╮ ╰─╯ │
 Border.thick    // ┏━┓ ┗━┛ ┃
 Border.double   // ╔═╗ ╚═╝ ║
+Border.normal   // +--+ | (ASCII-only)
 Border.hidden   // space-padded (preserves geometry)
 Border.none     // no border
+
+// Draw only specific sides
+style.withBorderSides(top: true, bottom: true)  // top + bottom only
+Border.rounded.topOnly    // pre-built single-side helpers
+Border.rounded.sidesOnly
 ```
 
 ![border_style](example/tapes/output/border_style.gif)
+
+### Style utilities
+
+```dart
+// Measure and truncate strings respecting ANSI codes and double-wide chars
+getWidth('hello')          // → 5  (visible terminal columns)
+getWidth('\x1b[31mhi\x1b[0m') // → 2  (ANSI stripped before counting)
+getHeight('line1\nline2')  // → 2
+
+truncate('hello world', 5)     // → 'hello'   (drop right)
+truncateLeft('hello world', 5) // → 'world'   (drop left)
+
+// Tab expansion and margin background
+const Style(tabWidth: 4)             // expand \t to 4 spaces (default 4)
+const Style(marginBackground: RgbColor(30, 30, 46)) // tint the margin area
+```
 
 ### Word wrap
 
@@ -423,6 +454,47 @@ TreeModel(
 
 ![tree](example/tapes/output/tree.gif)
 
+### Multi-select
+
+Scrollable checkbox list supporting multiple concurrent selections. Navigate with `↑↓ / jk`, toggle with `Space` or `x`, select all / none with `a`, confirm with `Enter`.
+
+```dart
+MultiSelectModel(
+  title: 'Pick your languages',
+  items: [
+    MultiSelectItem(label: 'Dart',   value: 'dart'),
+    MultiSelectItem(label: 'Go',     value: 'go'),
+    MultiSelectItem(label: 'Rust',   value: 'rust'),
+  ],
+  height: 10,
+  showStatusBar: true, // shows "N/Total selected"
+  wrap: true,          // cursor wraps at list boundaries
+)
+
+// After the user presses Enter:
+final values = multi.selectedValues; // ['dart', 'rust']
+```
+
+![multi_select](example/tapes/output/multi_select.gif)
+
+### Cursor
+
+In-line blinking cursor widget — useful for building text editors, prompts, or any UI that needs a visible insertion point that isn't tied to the real terminal cursor.
+
+```dart
+CursorModel(
+  mode: CursorMode.block,    // block █, underline _, or bar |
+  blink: true,               // toggles on every TickMsg
+)
+
+// Forward TickMsg to make it blink:
+final (next, _) = cursor.update(tickMsg);
+// Embed in view:
+'hello${cursor.view().content}world'  // → 'hello█world'
+```
+
+![cursor_model](example/tapes/output/cursor_model.gif)
+
 ### Viewport
 
 Scrollable content pane with soft-wrap; useful for long text, logs, or file content.
@@ -485,7 +557,7 @@ FilePickerModel(
 
 ## Examples
 
-52 runnable examples covering every feature:
+54 runnable examples covering every feature:
 
 | Example | What it shows |
 |---------|---------------|
@@ -497,8 +569,10 @@ FilePickerModel(
 | `list_simple.dart` | Basic SelectListModel |
 | `list_default.dart` | List with selection state |
 | `list_filter.dart` | ListModel with fuzzy filtering |
+| `multi_select.dart` | **MultiSelectModel** — checkbox list with toggle-all |
 | `table.dart` | City data table |
 | `tree.dart` | Expandable language/framework tree |
+| `cursor_model.dart` | **CursorModel** — blinking block/underline/bar cursor |
 | `spinner.dart` | Animated spinner |
 | `spinners.dart` | All built-in spinner styles |
 | `progress_bar.dart` | Interactive progress bar |
@@ -601,7 +675,7 @@ Typical results:
 ### Re-recording GIFs
 
 ```bash
-make gifs          # builds all kernels, then records all 52 GIFs
+make gifs          # builds all kernels, then records all 54 GIFs
 make gif EXAMPLE=showcase   # record one
 ```
 

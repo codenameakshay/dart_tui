@@ -1,6 +1,6 @@
 name: dart_tui
-description: Elm-style terminal UI framework for Dart — Model–Update–View, async commands, 25+ components, Lipgloss-inspired styling.
-version: 1.1.0
+description: Elm-style terminal UI framework for Dart — Model–Update–View, async commands, 27+ components, Lipgloss-inspired styling.
+version: 1.2.0
 homepage: https://github.com/codenameakshay/dart_tui
 repository: https://github.com/codenameakshay/dart_tui
 issue_tracker: https://github.com/codenameakshay/dart_tui/issues

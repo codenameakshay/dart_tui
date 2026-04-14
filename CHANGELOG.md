@@ -1,5 +1,83 @@
 # Changelog
 
+## 1.2.0
+
+### New components
+
+- **`CursorModel`** (`bubbles/cursor.dart`): in-line blinking cursor widget with three display modes — `CursorMode.block` (`█`), `CursorMode.underline` (`_`), and `CursorMode.bar` (`|`). Toggles visibility on every `TickMsg` when `blink: true`. Useful for building custom text editors, prompts, or any UI that needs a visible insertion point independent of the real terminal cursor. Supports `focus()`/`blur()` to pause blinking, and `withMode()`/`withBlink()` builders.
+
+- **`MultiSelectModel`** (`bubbles/multi_select.dart`): scrollable checkbox list supporting multiple concurrent selections. Navigate with `↑↓ / jk`, toggle with `Space` or `x`, select/deselect all with `a`, confirm with `Enter`. Features:
+  - `wrap: bool` — cursor wraps at list boundaries
+  - `height` — viewport limiting
+  - `showStatusBar` — `"N/Total selected"` footer
+  - `selectedValues` getter — returns custom `value` or falls back to `label`
+  - `MultiSelectStyles` for full per-element theming (Catppuccin Mocha defaults)
+
+### New `ProgramOption` functions
+
+Seven new fluent option functions complement the existing `ProgramOptions` struct:
+
+```dart
+withAltScreen()                                    // enter alt-screen buffer at startup
+withHideCursor([bool hide = true])                 // hide/show terminal cursor at startup
+withTickInterval(Duration interval)                // emit TickMsg at a fixed interval
+withMouseCellMotion()                              // enable button-event mouse tracking
+withMouseAllMotion()                               // enable all-motion mouse tracking
+withReportFocus()                                  // emit FocusMsg / BlurMsg on window focus
+withWindowSize(int width, int height)              // inject fixed dimensions (useful in tests)
+```
+
+These compose with `ProgramOptions` and take precedence over it; `defaultMouseMode` and `defaultReportFocus` act as floor values so per-`View` overrides still work.
+
+### Style additions
+
+- **`Border.normal`** — ASCII-art border (`+`, `-`, `|`) for environments without Unicode box-drawing support.
+- **Per-side border flags** — `Border` now has `showTop`, `showRight`, `showBottom`, `showLeft` (all default `true`). Use `Style.withBorderSides({top, right, bottom, left})` or the pre-built helpers `Border.topOnly`, `Border.bottomOnly`, `Border.sidesOnly` to draw partial borders.
+- **`Border.copyWith()`** — produce modified `Border` instances without recreating all fields.
+- **`tabWidth: int`** field on `Style` (default `4`) — `\t` characters are expanded to spaces before rendering. Use `Style.withTabWidth(n)` fluent builder.
+- **`marginBackground: RgbColor?`** field on `Style` — fills the margin area with a solid ANSI background colour. Use `Style.withMarginBackground(color)` fluent builder.
+- **`getWidth(String)`** (public) — visible terminal column width after stripping ANSI and counting double-wide characters.
+- **`getHeight(String)`** (public) — number of newline-delimited lines.
+- **`truncate(String, int)`** (public) — drop trailing visible columns to fit `maxWidth`; ANSI-safe.
+- **`truncateLeft(String, int)`** (public) — drop leading visible columns; ANSI codes in the kept portion are preserved.
+
+### Component navigation & mouse improvements
+
+- **`ListModel`** — added `pgup` / `ctrl+b`, `pgdown` / `ctrl+f`, `home` / `g`, `end` / `G` key bindings; `viewOffsetY` field for click-to-select mouse handling; mouse wheel scrolling.
+- **`SelectListModel`** — added `wrap: bool` (cursor wraps at list boundaries).
+- **`TableModel`** — added `viewOffsetY` and mouse handling (wheel up/down, left-click to select with header offset).
+- **`TreeModel`** — added `viewOffsetY` and mouse handling (wheel scroll, left-click to move cursor); fixed `' '` space key mapping to `'space'` keystroke.
+
+### New examples
+
+| Example | What it shows |
+|---------|---------------|
+| `cursor_model.dart` | `CursorModel` — all three blink modes side-by-side, toggle blink with `b` |
+| `multi_select.dart` | `MultiSelectModel` — toggle, select-all, confirm, display result |
+
+### Tests
+
+10 new test files, 160+ new test cases:
+
+| File | Coverage |
+|------|----------|
+| `spinner_test.dart` | SpinnerModel state transitions |
+| `select_list_test.dart` | SelectListModel navigation, wrap, view |
+| `progress_test.dart` | ProgressModel rendering and clamping |
+| `help_test.dart` | HelpModel expand/collapse, KeyMap |
+| `paginator_test.dart` | PaginatorModel navigation, bounds, view |
+| `cursor_model_test.dart` | CursorModel blink, focus, modes, view |
+| `multi_select_test.dart` | MultiSelectModel toggle, select-all, wrap, view |
+| `program_options_test.dart` | Integration: each ProgramOption emits correct ANSI sequences |
+| `input_decoder_test.dart` | TerminalInputDecoder — 48 edge-case / fuzz-style tests |
+| `style_properties_test.dart` | Property-based invariants for getWidth, getHeight, truncate, Style.render, joinH/V, stripAnsi |
+
+### Other
+
+- All 54 VHS GIFs regenerated from current kernel snapshots.
+
+---
+
 ## 1.1.0
 
 ### New features
