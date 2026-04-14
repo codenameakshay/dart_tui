@@ -1,3 +1,4 @@
+import 'package:characters/characters.dart';
 import 'style.dart';
 
 /// A single painted cell: one grapheme cluster with its accumulated ANSI
@@ -75,7 +76,7 @@ final class Canvas {
     // Initialise grid
     final grid = List.generate(
       height,
-      (_) => List<_Cell>.filled(width, const _Cell()),
+      (_) => List<_Cell?>.filled(width, const _Cell()),
     );
 
     // Draw layers in ascending z order
@@ -91,6 +92,7 @@ final class Canvas {
     for (var row = 0; row < height; row++) {
       for (var col = 0; col < width; col++) {
         final cell = grid[row][col];
+        if (cell == null) continue; // Skip second half of double-width char
         if (cell.isStyled) {
           sb.write('${cell.ansiOpen}${cell.char}\x1b[0m');
         } else {
@@ -102,7 +104,7 @@ final class Canvas {
     return sb.toString();
   }
 
-  void _paintLayer(List<List<_Cell>> grid, _Layer layer) {
+  void _paintLayer(List<List<_Cell?>> grid, _Layer layer) {
     final lines = layer.content.split('\n');
     for (var lineIdx = 0; lineIdx < lines.length; lineIdx++) {
       final row = layer.y + lineIdx;
@@ -114,7 +116,7 @@ final class Canvas {
   /// Parse [line] (which may contain ANSI codes) into grapheme clusters,
   /// tracking the current SGR state, and write cells into [gridRow] starting
   /// at column [startX].
-  void _paintStyledLine(List<_Cell> gridRow, int startX, String line) {
+  void _paintStyledLine(List<_Cell?> gridRow, int startX, String line) {
     var col = startX;
     var i = 0;
     final ansiRe = RegExp(r'\x1b(?:\[[0-9;?]*[A-Za-z]|[\]O][^\x07]*\x07?)');
@@ -135,31 +137,45 @@ final class Canvas {
         continue;
       }
 
-      // Printable grapheme cluster: consume one rune
-      final rune = line.runes.elementAt(0 + _runeOffset(line, i));
-      final char = String.fromCharCode(rune);
+      // Printable grapheme cluster
+      final remaining = line.substring(i);
+      final char = remaining.characters.first;
       i += char.length;
+
+      final charWidth = _estimateWidth(char);
 
       if (col >= 0 && col < gridRow.length) {
         gridRow[col] = _Cell(
           char: char,
           ansiOpen: currentAnsi.toString(),
         );
+        // If double width, mark next cell as null to skip it during rendering
+        if (charWidth == 2 && col + 1 < gridRow.length) {
+          gridRow[col + 1] = null;
+        }
       }
-      col++;
+      col += charWidth;
     }
   }
 
-  /// Return the rune index for byte offset [byteOffset] in [s].
-  static int _runeOffset(String s, int byteOffset) {
-    var idx = 0;
-    var pos = 0;
-    for (final r in s.runes) {
-      if (pos == byteOffset) return idx;
-      pos += String.fromCharCode(r).length;
-      idx++;
+  static int _estimateWidth(String s) {
+    var width = 0;
+    for (final char in s.characters) {
+      final code = char.runes.first;
+      if (code >= 0x1100 &&
+          (code <= 0x11ff ||
+              (code >= 0x2e80 && code <= 0x9fff) ||
+              (code >= 0xac00 && code <= 0xd7af) ||
+              (code >= 0xf900 && code <= 0xfaff) ||
+              (code >= 0xfe30 && code <= 0xfe4f) ||
+              (code >= 0xff00 && code <= 0xff60) ||
+              (code >= 0x1f300 && code <= 0x1f9ff))) {
+        width += 2;
+      } else {
+        width += 1;
+      }
     }
-    return idx;
+    return width;
   }
 }
 

@@ -1,3 +1,4 @@
+import 'package:characters/characters.dart';
 import '../cmd.dart';
 import '../model.dart';
 import '../msg.dart';
@@ -135,9 +136,10 @@ final class TableModel extends TeaModel {
 
     // Header
     final headerCells = columns.map((c) {
-      final title = c.title.length > c.width
-          ? c.title.substring(0, c.width)
-          : c.title.padRight(c.width);
+      final visWidth = _estimateWidth(c.title);
+      final title = visWidth > c.width
+          ? _truncateVisible(c.title, c.width)
+          : c.title + ' ' * (c.width - visWidth);
       return styles.header.render(title);
     }).join(' │ ');
     b.writeln(headerCells);
@@ -154,9 +156,10 @@ final class TableModel extends TeaModel {
       final isSelected = i == cursor;
       final cells = List.generate(columns.length, (ci) {
         final cell = ci < row.length ? row[ci] : '';
-        final truncated = cell.length > columns[ci].width
-            ? cell.substring(0, columns[ci].width)
-            : cell.padRight(columns[ci].width);
+        final visWidth = _estimateWidth(cell);
+        final truncated = visWidth > columns[ci].width
+            ? _truncateVisible(cell, columns[ci].width)
+            : cell + ' ' * (columns[ci].width - visWidth);
         // Per-cell styleFunc takes priority
         final cellStyle = styles.styleFunc?.call(dataRowIndex, ci) ??
             (isSelected ? styles.selectedRow : styles.normalRow);
@@ -169,5 +172,37 @@ final class TableModel extends TeaModel {
     }
 
     return newView(b.toString());
+  }
+
+  static int _estimateWidth(String s) {
+    var width = 0;
+    for (final char in s.characters) {
+      final code = char.runes.first;
+      if (code >= 0x1100 &&
+          (code <= 0x11ff ||
+              (code >= 0x2e80 && code <= 0x9fff) ||
+              (code >= 0xac00 && code <= 0xd7af) ||
+              (code >= 0xf900 && code <= 0xfaff) ||
+              (code >= 0xfe30 && code <= 0xfe4f) ||
+              (code >= 0xff00 && code <= 0xff60) ||
+              (code >= 0x1f300 && code <= 0x1f9ff))) {
+        width += 2;
+      } else {
+        width += 1;
+      }
+    }
+    return width;
+  }
+
+  static String _truncateVisible(String s, int maxWidth) {
+    var currentWidth = 0;
+    final b = StringBuffer();
+    for (final char in s.characters) {
+      final charWidth = _estimateWidth(char);
+      if (currentWidth + charWidth > maxWidth) break;
+      b.write(char);
+      currentWidth += charWidth;
+    }
+    return b.toString();
   }
 }

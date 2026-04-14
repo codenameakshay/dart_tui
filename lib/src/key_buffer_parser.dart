@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'msg.dart';
 
 /// Parses [TeaKey]s from a byte buffer, covering the control-character and
@@ -121,7 +122,28 @@ TeaKey? parseKeyFromBuffer(List<int> buffer) {
     return const TeaKey(code: KeyCode.unknown);
   }
 
-  // Printable ASCII / Latin-1
-  buffer.removeAt(0);
-  return TeaKey(code: KeyCode.rune, text: String.fromCharCode(b0));
+  // Multi-byte UTF-8 or Printable ASCII
+  // Try to decode as much as possible from the start of the buffer.
+  for (var len = 4; len >= 1; len--) {
+    if (buffer.length >= len) {
+      try {
+        final decoded = utf8.decode(buffer.sublist(0, len));
+        buffer.removeRange(0, len);
+        return TeaKey(code: KeyCode.rune, text: decoded);
+      } catch (_) {
+        // Continue trying shorter lengths or wait for more bytes
+      }
+    }
+  }
+
+  // If we're here, it might be a partial UTF-8 sequence or invalid.
+  // UTF-8 lead bytes: 110xxxxx (2 bytes), 1110xxxx (3 bytes), 11110xxx (4 bytes).
+  if (b0 & 0x80 == 0) {
+    // Should have been handled by utf8.decode(len=1) but for safety:
+    buffer.removeAt(0);
+    return TeaKey(code: KeyCode.rune, text: String.fromCharCode(b0));
+  }
+
+  // Wait for more bytes if it looks like a lead byte
+  return null;
 }

@@ -71,7 +71,7 @@ final class TextAreaModel extends TeaModel {
     lineChars.insert(col, text);
     ls[row] = lineChars.join();
     final newValue = ls.join('\n');
-    if (charLimit > 0 && newValue.length > charLimit) return this;
+    if (charLimit > 0 && newValue.characters.length > charLimit) return this;
     return copyWith(value: newValue, cursorCol: col + 1);
   }
 
@@ -86,8 +86,9 @@ final class TextAreaModel extends TeaModel {
       return copyWith(value: ls.join('\n'), cursorCol: cursorCol - 1);
     } else if (row > 0) {
       // Merge with previous line
-      final prevLen = ls[row - 1].characters.length;
-      ls[row - 1] = ls[row - 1] + ls[row];
+      final prevChars = ls[row - 1].characters.toList();
+      final prevLen = prevChars.length;
+      ls[row - 1] = prevChars.join() + ls[row];
       ls.removeAt(row);
       return copyWith(
         value: ls.join('\n'),
@@ -128,7 +129,8 @@ final class TextAreaModel extends TeaModel {
     if (msg is! KeyMsg) return (this, null);
     final ls = lines;
     final row = cursorRow.clamp(0, ls.length - 1);
-    final lineLen = ls[row].characters.length;
+    final lineChars = ls[row].characters.toList();
+    final lineLen = lineChars.length;
 
     switch (msg.key) {
       case 'backspace':
@@ -138,8 +140,7 @@ final class TextAreaModel extends TeaModel {
         return (_deleteForward(), null);
 
       case 'enter':
-        if (charLimit > 0 && value.length >= charLimit) return (this, null);
-        final lineChars = ls[row].characters.toList();
+        if (charLimit > 0 && value.characters.length >= charLimit) return (this, null);
         final col = cursorCol.clamp(0, lineChars.length);
         final newLine = lineChars.sublist(0, col).join();
         final rest = lineChars.sublist(col).join();
@@ -192,18 +193,16 @@ final class TextAreaModel extends TeaModel {
       default:
         // ctrl+k: kill to end of line
         if (msg.key == 'ctrl+k') {
-          final lineChars = ls[row].characters.toList();
           ls[row] = lineChars.sublist(0, cursorCol).join();
           return (copyWith(value: ls.join('\n')), null);
         }
         // ctrl+u: kill to start of line
         if (msg.key == 'ctrl+u') {
-          final lineChars = ls[row].characters.toList();
           ls[row] = lineChars.sublist(cursorCol).join();
           return (copyWith(value: ls.join('\n'), cursorCol: 0), null);
         }
         if (!focused) return (this, null);
-        if (msg.key.length == 1) {
+        if (msg.key.length >= 1) {
           return (_insertText(msg.key)._scroll(cursorRow), null);
         }
         return (this, null);
