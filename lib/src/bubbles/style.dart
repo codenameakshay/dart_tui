@@ -178,6 +178,28 @@ final class Style {
   Style withPadding(EdgeInsets value) => copyWith(padding: value);
   Style withMargin(EdgeInsets value) => copyWith(margin: value);
   Style withBorder(Border value) => copyWith(border: value);
+
+  /// Convenience: copy the current border style with per-side visibility flags.
+  ///
+  /// Only sides explicitly passed are changed; omitted sides keep their current
+  /// values. This allows things like:
+  /// ```dart
+  /// style.withBorderSides(showBottom: false)
+  /// ```
+  Style withBorderSides({
+    bool? showTop,
+    bool? showRight,
+    bool? showBottom,
+    bool? showLeft,
+  }) =>
+      copyWith(
+        border: border.copyWith(
+          showTop: showTop,
+          showRight: showRight,
+          showBottom: showBottom,
+          showLeft: showLeft,
+        ),
+      );
   Style withBorderForeground(RgbColor value) =>
       copyWith(borderForeground: value);
   Style withBorderBackground(RgbColor value) =>
@@ -522,18 +544,31 @@ final class Style {
     final bOpen = _borderAnsiOpen();
     final bClose = bOpen.isNotEmpty ? '\x1b[0m' : '';
 
-    final out = <String>[
-      '$bOpen${border.topLeft}$topEdge${border.topRight}$bClose',
-    ];
+    final out = <String>[];
+
+    // Top border edge
+    if (border.showTop) {
+      final tl = border.showLeft ? border.topLeft : '';
+      final tr = border.showRight ? border.topRight : '';
+      out.add('$bOpen$tl$topEdge$tr$bClose');
+    }
+
+    // Content lines with optional side borders
     for (final line in lines) {
       final vis = _visibleWidth(line);
       final pad = maxW - vis;
-      out.add(
-        '$bOpen${border.vertical}$bClose$line${' ' * pad}$bOpen${border.vertical}$bClose',
-      );
+      final left = border.showLeft ? '$bOpen${border.vertical}$bClose' : '';
+      final right = border.showRight ? '$bOpen${border.vertical}$bClose' : '';
+      out.add('$left$line${' ' * pad}$right');
     }
-    out.add(
-        '$bOpen${border.bottomLeft}$horizontal${border.bottomRight}$bClose');
+
+    // Bottom border edge
+    if (border.showBottom) {
+      final bl = border.showLeft ? border.bottomLeft : '';
+      final br = border.showRight ? border.bottomRight : '';
+      out.add('$bOpen$bl$horizontal$br$bClose');
+    }
+
     return out;
   }
 
@@ -1243,6 +1278,10 @@ final class Border {
     required this.bottomRight,
     required this.horizontal,
     required this.vertical,
+    this.showTop = true,
+    this.showRight = true,
+    this.showBottom = true,
+    this.showLeft = true,
   });
 
   static const none = Border(
@@ -1306,6 +1345,17 @@ final class Border {
     vertical: ' ',
   );
 
+  /// ASCII border using `+`, `-`, and `|` characters.
+  static const normal = Border(
+    enabled: true,
+    topLeft: '+',
+    topRight: '+',
+    bottomLeft: '+',
+    bottomRight: '+',
+    horizontal: '-',
+    vertical: '|',
+  );
+
   final bool enabled;
   final String topLeft;
   final String topRight;
@@ -1313,6 +1363,51 @@ final class Border {
   final String bottomRight;
   final String horizontal;
   final String vertical;
+
+  /// Whether to render the top border edge.
+  final bool showTop;
+
+  /// Whether to render the right border edge.
+  final bool showRight;
+
+  /// Whether to render the bottom border edge.
+  final bool showBottom;
+
+  /// Whether to render the left border edge.
+  final bool showLeft;
+
+  /// Return a copy of this border with selected sides toggled.
+  Border copyWith({
+    bool? showTop,
+    bool? showRight,
+    bool? showBottom,
+    bool? showLeft,
+  }) =>
+      Border(
+        enabled: enabled,
+        topLeft: topLeft,
+        topRight: topRight,
+        bottomLeft: bottomLeft,
+        bottomRight: bottomRight,
+        horizontal: horizontal,
+        vertical: vertical,
+        showTop: showTop ?? this.showTop,
+        showRight: showRight ?? this.showRight,
+        showBottom: showBottom ?? this.showBottom,
+        showLeft: showLeft ?? this.showLeft,
+      );
+
+  /// A border with only the top edge visible.
+  Border get topOnly =>
+      copyWith(showTop: true, showRight: false, showBottom: false, showLeft: false);
+
+  /// A border with only the bottom edge visible.
+  Border get bottomOnly =>
+      copyWith(showTop: false, showRight: false, showBottom: true, showLeft: false);
+
+  /// A border with only left and right edges visible.
+  Border get sidesOnly =>
+      copyWith(showTop: false, showRight: true, showBottom: false, showLeft: true);
 }
 
 final class RgbColor {
