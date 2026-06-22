@@ -44,6 +44,9 @@ TeaKey? parseKeyFromBuffer(List<int> buffer) {
         0x44 => const TeaKey(code: KeyCode.left),
         0x48 => const TeaKey(code: KeyCode.home),
         0x46 => const TeaKey(code: KeyCode.end),
+        // CSI Z is backtab (Shift+Tab); surface it as Tab + Shift so consumers
+        // (e.g. TabsModel's `case 'shift+tab'`) receive `key == 'shift+tab'`.
+        0x5a => const TeaKey(code: KeyCode.tab, modifiers: {KeyMod.shift}),
         _ => null,
       };
       if (arrowOrNav != null) {
