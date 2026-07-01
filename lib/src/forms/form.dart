@@ -65,18 +65,30 @@ final class Form extends TeaModel implements OutcomeModel<FormValues> {
       Form._(next, styles, groupIndex, fieldIndex, submitted, cancelled);
 
   /// The values of every visible, keyed field (hidden fields excluded).
-  ///
-  /// (Task 9 replaces the hidden resolution with live values.)
   FormValues get values {
-    final map = <String, Object?>{};
+    final rv = _rawValues;
+    final out = <String, Object?>{};
     for (final g in groups) {
-      if (g.hidden?.call(const FormValues({})) ?? false) continue;
+      if (g.hidden?.call(rv) ?? false) continue;
       for (final f in g.fields) {
         final k = f.key;
-        if (k != null && !f.isHidden(const FormValues({}))) map[k] = f.value;
+        if (k != null && !f.isHidden(rv)) out[k] = f.value;
       }
     }
-    return FormValues(map);
+    return FormValues(out);
+  }
+
+  /// Values of every keyed field including hidden ones — drives
+  /// `hidden()` / `optionsFor()` / `recompute()`. The public [values] filters
+  /// hidden fields out (Decision B).
+  FormValues get _rawValues {
+    final raw = <String, Object?>{};
+    for (final g in groups) {
+      for (final f in g.fields) {
+        if (f.key != null) raw[f.key!] = f.value;
+      }
+    }
+    return FormValues(raw);
   }
 
   @override
@@ -124,16 +136,16 @@ final class Form extends TeaModel implements OutcomeModel<FormValues> {
 
   List<int> _visibleGroups() => [
         for (var i = 0; i < groups.length; i++)
-          if (!(groups[i].hidden?.call(values) ?? false)) i
+          if (!(groups[i].hidden?.call(_rawValues) ?? false)) i
       ];
 
   int? _firstFocusable(int gi) {
-    final t = _focusable(groups[gi], values);
+    final t = _focusable(groups[gi], _rawValues);
     return t.isEmpty ? null : t.first;
   }
 
   int? _lastFocusable(int gi) {
-    final t = _focusable(groups[gi], values);
+    final t = _focusable(groups[gi], _rawValues);
     return t.isEmpty ? null : t.last;
   }
 
@@ -153,7 +165,7 @@ final class Form extends TeaModel implements OutcomeModel<FormValues> {
     final cleared = active.error == null ? this : _setActiveError(null);
 
     final g = cleared.groups[cleared.groupIndex];
-    final targets = cleared._focusable(g, cleared.values);
+    final targets = cleared._focusable(g, cleared._rawValues);
     final pos = targets.indexOf(cleared.fieldIndex);
     if (pos >= 0 && pos < targets.length - 1) {
       return (cleared._copy(fieldIndex: targets[pos + 1]), null);
@@ -171,12 +183,13 @@ final class Form extends TeaModel implements OutcomeModel<FormValues> {
 
   // Validate every visible keyed field; jump to the first error, else submit.
   (Model, Cmd?) _submit() {
+    final rv = _rawValues;
     for (var gi = 0; gi < groups.length; gi++) {
       final g = groups[gi];
-      if (g.hidden?.call(values) ?? false) continue;
+      if (g.hidden?.call(rv) ?? false) continue;
       for (var fi = 0; fi < g.fields.length; fi++) {
         final f = g.fields[fi];
-        if (f.isHidden(values)) continue;
+        if (f.isHidden(rv)) continue;
         final err = f.validate();
         if (err != null) {
           return (
@@ -190,7 +203,7 @@ final class Form extends TeaModel implements OutcomeModel<FormValues> {
   }
 
   (Model, Cmd?) _back() {
-    final targets = _focusable(groups[groupIndex], values);
+    final targets = _focusable(groups[groupIndex], _rawValues);
     final pos = targets.indexOf(fieldIndex);
     if (pos > 0) return (_copy(fieldIndex: targets[pos - 1]), null);
     // before the first field of this group → previous visible group's last field
@@ -220,19 +233,43 @@ final class Form extends TeaModel implements OutcomeModel<FormValues> {
       case 'enter':
         if (!multiline) return _advance();
     }
-    // delegate to the active field's editor
-    final g = groups[groupIndex];
-    final fields = [...g.fields];
-    fields[fieldIndex] = active.updateEditor(msg);
-    final next = [...groups];
-    next[groupIndex] = Group(fields, title: g.title, hidden: g.hidden);
-    return (_withGroups(next), null);
+    // delegate to the active field's editor, then recompute dynamics
+    final g0 = groups[groupIndex];
+    final edited = [...g0.fields];
+    edited[fieldIndex] = active.updateEditor(msg);
+    var nf = _withGroups([
+      for (var i = 0; i < groups.length; i++)
+        if (i == groupIndex)
+          Group(edited, title: g0.title, hidden: g0.hidden)
+        else
+          groups[i],
+    ]);
+
+    // recompute dynamic options/selection against the new raw values
+    final rv = nf._rawValues;
+    nf = nf._withGroups([
+      for (final g in nf.groups)
+        Group([for (final f in g.fields) f.recompute(rv)],
+            title: g.title, hidden: g.hidden),
+    ]);
+
+    // if the active field is now hidden, refocus to the next (or last) target
+    final active2 = nf.groups[nf.groupIndex].fields[nf.fieldIndex];
+    if (!active2.acceptsInput || active2.isHidden(nf._rawValues)) {
+      final targets = nf._focusable(nf.groups[nf.groupIndex], nf._rawValues);
+      if (targets.isNotEmpty) {
+        final after = targets.firstWhere((i) => i > nf.fieldIndex,
+            orElse: () => targets.last);
+        nf = nf._copy(fieldIndex: after);
+      }
+    }
+    return (nf, null);
   }
 
   @override
   View view() {
     final g = groups[groupIndex];
-    final v = values;
+    final v = _rawValues;
     final b = StringBuffer();
     final visible = _visibleGroups();
     if (visible.length > 1) {
@@ -243,6 +280,7 @@ final class Form extends TeaModel implements OutcomeModel<FormValues> {
       b.writeln(styles.activeTitle.render(g.title!));
     }
     for (var i = 0; i < g.fields.length; i++) {
+      if (g.fields[i].isHidden(v)) continue;
       b.writeln(g.fields[i].render(i == fieldIndex, styles, v));
     }
     b.write(styles.help
