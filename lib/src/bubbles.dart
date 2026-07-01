@@ -12,6 +12,7 @@ export 'bubbles/paginator.dart';
 export 'bubbles/progress.dart';
 export 'bubbles/select_list.dart';
 export 'bubbles/spinner.dart';
+export 'bubbles/spring.dart';
 export 'bubbles/stopwatch.dart';
 export 'bubbles/table.dart';
 export 'bubbles/tabs.dart';

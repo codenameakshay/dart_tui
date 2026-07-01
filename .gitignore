@@ -19,3 +19,6 @@ debug.log
 
 # FVM Version Cache
 .fvm/
+# Coverage output
+.coverage_out/
+coverage/

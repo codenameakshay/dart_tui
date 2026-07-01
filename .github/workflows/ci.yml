@@ -23,7 +23,12 @@ jobs:
       # don't trip --set-exit-if-changed with spurious line-ending diffs.
       - if: runner.os != 'Windows'
         run: dart format --output=none --set-exit-if-changed .
-      - run: dart test
+      # Windows: run the suite plainly (coverage tooling + bash are flaky there).
+      - if: runner.os == 'Windows'
+        run: dart test
+      # Linux/macOS: run the suite with coverage and enforce the lib/ floor.
+      - if: runner.os != 'Windows'
+        run: bash tool/coverage.sh 90
       # The PTY smoke test relies on Python's Unix-only `pty` module.
       - if: runner.os != 'Windows'
         run: python3 tool/pty_examples_smoke.py

@@ -10,29 +10,35 @@ import 'view.dart';
 Future<String?> promptSelect(
   List<String> choices, {
   ProgramOptions options = const ProgramOptions(),
+  List<ProgramOption> programOptions = const [],
   String title = 'Choose one',
 }) async {
   if (choices.isEmpty) return null;
   final model = _SelectPromptModel(choices: choices, title: title);
-  return Program(options: options).runForResult(model);
+  return Program(options: options, programOptions: programOptions)
+      .runForResult(model);
 }
 
 /// Yes / no; returns `null` on cancel.
 Future<bool?> promptConfirm(
   String question, {
   ProgramOptions options = const ProgramOptions(),
+  List<ProgramOption> programOptions = const [],
 }) async {
   final model = _ConfirmPromptModel(question: question);
-  return Program(options: options).runForResult(model);
+  return Program(options: options, programOptions: programOptions)
+      .runForResult(model);
 }
 
 /// Single-line text; returns `null` on cancel.
 Future<String?> promptInput(
   String label, {
   ProgramOptions options = const ProgramOptions(),
+  List<ProgramOption> programOptions = const [],
 }) async {
   final model = _InputPromptModel(label: label);
-  return Program(options: options).runForResult(model);
+  return Program(options: options, programOptions: programOptions)
+      .runForResult(model);
 }
 
 final class _SelectPromptModel extends TeaModel
@@ -110,7 +116,7 @@ final class _SelectPromptModel extends TeaModel
             result: null,
             finished: true,
           ),
-          null,
+          () => QuitMsg(),
         );
       default:
         return (this, null);
@@ -177,7 +183,7 @@ final class _ConfirmPromptModel extends TeaModel implements OutcomeModel<bool> {
       case 'ctrl+c':
         return (
           _ConfirmPromptModel(question: question, result: null, finished: true),
-          null,
+          () => QuitMsg(),
         );
       default:
         return (this, null);
@@ -232,7 +238,7 @@ final class _InputPromptModel extends TeaModel implements OutcomeModel<String> {
             result: null,
             finished: true,
           ),
-          null,
+          () => QuitMsg(),
         );
       case 'backspace':
         if (value.isEmpty) return (this, null);

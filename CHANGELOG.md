@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.3.0
+
+### New components & helpers
+
+- **`Spring`** (`bubbles/spring.dart`) — harmonica-style damped-harmonic-oscillator for smooth eased motion of any scalar (progress, scroll, cursor). Pure math, no terminal I/O: `Spring(fps:, frequency:, damping:).update(pos, vel, target)` plus `fpsToDelta()`.
+- **`FileLog`** (`log.dart`) — append timestamped diagnostics to a file. Because a running `Program` owns stdout, `print()` corrupts the UI; write here and `tail -f` instead. `FileLog.none()` discards.
+- **gum-style one-shot helpers** (`gum.dart`) — `filter()` (interactive fuzzy picker), `spin()` (run a spinner while awaiting a `Future`, returns its result), and `pager()` (scrollable viewer). Each takes a `programOptions` list for headless testing.
+- **`ListModel` runtime mutation API** — `withItems`, `appendItem`, `insertItem`, `removeItemAt`, `setItemAt`, `select`, and `selectedIndex`; all clamp the cursor.
+- **Readline / emacs editing keys** for `TextInputModel` and `TextAreaModel` — `ctrl+a`/`ctrl+e` (home/end), `ctrl+b`/`ctrl+f` (char left/right), `alt+←`/`alt+→` (word motion), and `ctrl+w` / `alt+backspace` (delete previous word).
+
+### Examples
+
+Five new runnable examples (each with a VHS tape): `spring`, `gum` (filter/spin/pager), `list_mutation`, `readline`, and `file_log`.
+
+### Performance
+
+Hot-path allocation and CPU reductions on the per-frame render and per-keystroke paths (all behaviour-preserving, covered by regression tests):
+
+- `stripAnsi` fast-path (skip the regex when there is no escape) plus a single-grapheme width helper — the width/wrap/truncate/pad path no longer runs a regex per grapheme.
+- `ViewportModel` reuses its wrapped lines across scrolling instead of re-wrapping every frame.
+- `AnsiRenderer` and `CellRenderer` skip the grid rebuild / diff walk on identical frames; the redundant per-frame list copy is gone.
+- `ListModel.filteredItems` is memoised; `TreeModel` reuses its flattened node list on cursor-only changes.
+- The render throttle uses a precomputed frame budget and a monotonic `Stopwatch`.
+
+### Fixes
+
+- **Prompts no longer hang on cancel.** `promptSelect` / `promptConfirm` / `promptInput` set `finished` on Esc/Ctrl+C but never quit, and raw mode delivers Ctrl+C as a byte (not SIGINT) — so cancelling hung forever. They now quit cleanly and return `null`. The three prompt helpers also gained a `programOptions` parameter for headless/scripted use.
+
+### Quality
+
+- Test suite grown from 423 to 560+ cases; measured `lib/` line coverage raised from ~67% to **92%**.
+- New `make coverage [FLOOR=90]` target and a CI coverage gate (Linux/macOS) that fails below the floor, honouring `// coverage:ignore-*` markers for genuinely-untestable code (Win32 FFI, raw-mode TTY, OS signals).
+
 ## 1.2.0
 
 ### New components

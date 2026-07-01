@@ -170,6 +170,28 @@ final class TextInputModel extends TeaModel {
       case 'end':
         return (copyWith(cursorPos: chars.length), null);
 
+      // ── Readline / emacs bindings ──────────────────────────────────────────
+      case 'ctrl+a':
+        return (copyWith(cursorPos: 0), null);
+      case 'ctrl+e':
+        return (copyWith(cursorPos: chars.length), null);
+      case 'ctrl+b':
+        if (cursorPos == 0) return (this, null);
+        return (copyWith(cursorPos: cursorPos - 1), null);
+      case 'ctrl+f':
+        if (cursorPos >= chars.length) return (this, null);
+        return (copyWith(cursorPos: cursorPos + 1), null);
+      case 'alt+left': // Alt+B / ⌥←
+        return (copyWith(cursorPos: _wordStartBefore(chars, cursorPos)), null);
+      case 'alt+right': // Alt+F / ⌥→
+        return (copyWith(cursorPos: _wordEndAfter(chars, cursorPos)), null);
+      case 'ctrl+w':
+      case 'alt+backspace':
+        final start = _wordStartBefore(chars, cursorPos);
+        if (start == cursorPos) return (this, null);
+        final next = [...chars.sublist(0, start), ...chars.sublist(cursorPos)];
+        return (copyWith(value: next.join(), cursorPos: start), null);
+
       case 'tab':
         final suggestion = _activeSuggestion;
         if (suggestion != null) {
@@ -245,6 +267,32 @@ final class TextInputModel extends TeaModel {
     }
 
     return view;
+  }
+
+  /// Index of the start of the word before [pos] (skips trailing spaces, then
+  /// the run of non-space characters). Used by word-motion / word-delete keys.
+  static int _wordStartBefore(List<String> chars, int pos) {
+    var i = pos;
+    while (i > 0 && chars[i - 1] == ' ') {
+      i--;
+    }
+    while (i > 0 && chars[i - 1] != ' ') {
+      i--;
+    }
+    return i;
+  }
+
+  /// Index just after the word at/after [pos] (skips leading spaces, then the
+  /// run of non-space characters).
+  static int _wordEndAfter(List<String> chars, int pos) {
+    var i = pos;
+    while (i < chars.length && chars[i] == ' ') {
+      i++;
+    }
+    while (i < chars.length && chars[i] != ' ') {
+      i++;
+    }
+    return i;
   }
 
   static int _estimateWidth(String s) {

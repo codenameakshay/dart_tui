@@ -130,6 +130,18 @@ dart run example/autocomplete.dart
 
 ---
 
+### readline
+
+`TextInputModel` and `TextAreaModel` understand emacs/readline editing keys: `ctrl+a`/`ctrl+e` (start/end), `ctrl+b`/`ctrl+f` (char), `alt+←`/`alt+→` (word), and `ctrl+w` / `alt+⌫` (delete previous word). Press Esc or Ctrl+C to quit.
+
+![readline](tapes/output/readline.gif)
+
+```bash
+dart run example/readline.dart
+```
+
+---
+
 ## Lists & Selection
 
 ### list\_simple
@@ -152,6 +164,18 @@ A styled list with title, status bar, and help footer. Navigate with arrows and 
 
 ```bash
 dart run example/list_default.dart
+```
+
+---
+
+### list\_mutation
+
+Mutate a `ListModel` at runtime with its immutable helper API: press `a` to append a task, `d` to delete the selected one, `↑↓`/`jk` to move. Press `q` to quit.
+
+![list_mutation](tapes/output/list_mutation.gif)
+
+```bash
+dart run example/list_mutation.dart
 ```
 
 ---
@@ -252,6 +276,18 @@ An auto-incrementing progress bar driven by ticks. Watch it fill from 0 % to 100
 
 ```bash
 dart run example/progress_animated.dart
+```
+
+---
+
+### spring
+
+Harmonica-style `Spring` easing: a dot springs toward a target with bouncy, under-damped motion. Press `←`/`→` (or `h`/`l`) to move the target; `q` to quit.
+
+![spring](tapes/output/spring.gif)
+
+```bash
+dart run example/spring.dart
 ```
 
 ---
@@ -468,6 +504,18 @@ dart run example/http.dart
 
 ---
 
+### file\_log
+
+`FileLog` writes diagnostics to a file while the TUI runs — `print()` would corrupt the screen. Every keypress is logged; `tail -f dart_tui_example.log` in another terminal to watch. Press `q` to quit.
+
+![file_log](tapes/output/file_log.gif)
+
+```bash
+dart run example/file_log.dart
+```
+
+---
+
 ### file\_picker
 
 An interactive file-system browser. Navigate directories with arrows, Enter to descend, Escape to go up. Press `q` to quit.
@@ -538,6 +586,18 @@ Chains `promptSelect` → `promptConfirm` → `promptInput` in sequence, each ru
 
 ```bash
 dart run example/prompts_chain.dart
+```
+
+---
+
+### gum
+
+gum-style one-shot helpers chained together: `filter()` (fuzzy picker) → `spin()` (spinner while awaiting a `Future`) → `pager()` (scrollable viewer). Type to filter, Enter to pick, `q` to leave the pager.
+
+![gum](tapes/output/gum.gif)
+
+```bash
+dart run example/gum.dart
 ```
 
 ---

@@ -121,6 +121,18 @@ final class TreeModel extends TeaModel {
     this.viewOffsetY = 0,
   }) : _flat = _buildFlatList(root);
 
+  /// Internal constructor for cursor/scroll-only copies that reuse the already
+  /// flattened node list (only a [root] change requires re-flattening).
+  TreeModel._withFlat({
+    required this.root,
+    required this.cursor,
+    required this.scrollOffset,
+    required this.height,
+    required this.styles,
+    required this.viewOffsetY,
+    required List<_FlatNode> flat,
+  }) : _flat = flat;
+
   final TreeNode root;
   final int cursor;
   final int scrollOffset;
@@ -252,15 +264,29 @@ final class TreeModel extends TeaModel {
     TreeNode? root,
     int? cursor,
     int? scrollOffset,
-  }) =>
-      TreeModel(
-        root: root ?? this.root,
+  }) {
+    if (root == null) {
+      // root unchanged → the flattened list is identical; reuse it instead of
+      // re-walking the whole tree and re-allocating every node's path lists.
+      return TreeModel._withFlat(
+        root: this.root,
         cursor: cursor ?? this.cursor,
         scrollOffset: scrollOffset ?? this.scrollOffset,
         height: height,
         styles: styles,
         viewOffsetY: viewOffsetY,
+        flat: _flat,
       );
+    }
+    return TreeModel(
+      root: root,
+      cursor: cursor ?? this.cursor,
+      scrollOffset: scrollOffset ?? this.scrollOffset,
+      height: height,
+      styles: styles,
+      viewOffsetY: viewOffsetY,
+    );
+  }
 
   // ── TeaModel ──────────────────────────────────────────────────────────────
 

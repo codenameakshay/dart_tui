@@ -62,6 +62,19 @@ final class TextAreaModel extends TeaModel {
         styles: styles ?? this.styles,
       );
 
+  /// Index of the start of the word before [pos] within [chars] (skips trailing
+  /// spaces, then the run of non-space characters).
+  static int _wordStartBefore(List<String> chars, int pos) {
+    var i = pos;
+    while (i > 0 && chars[i - 1] == ' ') {
+      i--;
+    }
+    while (i > 0 && chars[i - 1] != ' ') {
+      i--;
+    }
+    return i;
+  }
+
   /// Insert [text] at the current cursor position.
   TextAreaModel _insertText(String text) {
     final ls = lines;
@@ -191,6 +204,23 @@ final class TextAreaModel extends TeaModel {
 
       case 'end':
         return (copyWith(cursorCol: lineLen), null);
+
+      // ── Readline / emacs bindings ──────────────────────────────────────────
+      case 'ctrl+a':
+        return (copyWith(cursorCol: 0), null);
+
+      case 'ctrl+e':
+        return (copyWith(cursorCol: lineLen), null);
+
+      case 'ctrl+w':
+      case 'alt+backspace':
+        final start = _wordStartBefore(lineChars, cursorCol);
+        if (start == cursorCol) return (this, null);
+        ls[row] = [
+          ...lineChars.sublist(0, start),
+          ...lineChars.sublist(cursorCol)
+        ].join();
+        return (copyWith(value: ls.join('\n'), cursorCol: start), null);
 
       default:
         // ctrl+k: kill to end of line
