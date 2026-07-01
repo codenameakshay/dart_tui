@@ -1023,7 +1023,10 @@ RgbColor blend(RgbColor a, RgbColor b, double t) {
 final _ansiEscapeRe = RegExp(r'\x1b(?:\[[0-9;?]*[A-Za-z]|[\]O][^\x07]*\x07?)');
 
 /// Strip ANSI escape sequences from [s].
-String stripAnsi(String s) => s.replaceAll(_ansiEscapeRe, '');
+String stripAnsi(String s) {
+  if (!s.contains('\x1b')) return s;
+  return s.replaceAll(_ansiEscapeRe, '');
+}
 
 /// Visible display width of [s] after stripping ANSI escape sequences.
 ///
@@ -1057,7 +1060,7 @@ String truncateLeft(String s, int maxWidth) {
   var consumed = 0;
   for (final char in stripped.characters) {
     if (consumed >= drop) break;
-    consumed += _visibleWidth(char);
+    consumed += _graphemeWidth(char);
   }
   // Find the corresponding position in the original string by replaying
   // from the front.  We rebuild by stripping the same leading graphemes
@@ -1074,7 +1077,7 @@ String truncateLeft(String s, int maxWidth) {
     }
     final remaining = s.substring(rawIdx);
     final char = remaining.characters.first;
-    final w = _visibleWidth(char);
+    final w = _graphemeWidth(char);
     if (rawConsumed + w > drop) break;
     rawConsumed += w;
     rawIdx += char.length;
@@ -1111,6 +1114,12 @@ bool _isDoubleWidth(int code) {
           (code >= 0x1f300 && code <= 0x1f9ff)); // Emojis
 }
 
+/// Visible column width (1 or 2) of a single grapheme cluster [g].
+///
+/// Callers pass raw graphemes that never contain ANSI escapes, so this skips
+/// [stripAnsi] entirely — the hot inner-loop replacement for `_visibleWidth(char)`.
+int _graphemeWidth(String g) => _isDoubleWidth(g.runes.first) ? 2 : 1;
+
 /// Truncate [s] to at most [maxWidth] visible columns, preserving ANSI codes.
 String _truncateVisible(String s, int maxWidth) {
   if (_visibleWidth(s) <= maxWidth) return s;
@@ -1129,7 +1138,7 @@ String _truncateVisible(String s, int maxWidth) {
 
     final remaining = s.substring(i);
     final char = remaining.characters.first;
-    final charWidth = _visibleWidth(char);
+    final charWidth = _graphemeWidth(char);
 
     if (currentWidth + charWidth > maxWidth) break;
 
