@@ -68,6 +68,30 @@ void main() {
     });
   });
 
+  group('viewport wrap memoization (Task 2)', () {
+    test('soft-wrap splits a long line to width', () {
+      final vp = ViewportModel(
+          content: 'aaaaaaaaaa', width: 4, height: 10, softWrap: true);
+      expect(vp.totalLines, 3); // 4 + 4 + 2
+    });
+
+    test('scrolling preserves wrapped content and window', () {
+      final content = List.generate(20, (i) => 'line$i').join('\n');
+      final vp =
+          ViewportModel(content: content, width: 80, height: 5, softWrap: true);
+      final scrolled = vp.scrollBy(3);
+      expect(scrolled.totalLines, 20);
+      expect(scrolled.view().content.split('\n').first, 'line3');
+      expect(scrolled.view().content.split('\n').length, 5);
+    });
+
+    test('setContent re-wraps', () {
+      final vp = ViewportModel(content: 'a', width: 4, height: 10);
+      final vp2 = vp.setContent('aaaaaaaa');
+      expect(vp2.totalLines, 2);
+    });
+  });
+
   rendererTests();
 }
 

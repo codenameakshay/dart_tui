@@ -15,6 +15,18 @@ final class ViewportModel extends TeaModel {
     this.softWrap = true,
   }) : _wrappedLines = _computeWrapped(content, width, softWrap);
 
+  /// Internal constructor for scroll-only rebuilds that reuse the already
+  /// computed wrapped lines (yOffset/xOffset changes never affect wrapping).
+  ViewportModel._withWrapped({
+    required this.content,
+    required this.width,
+    required this.height,
+    required this.yOffset,
+    required this.xOffset,
+    required this.softWrap,
+    required List<String> wrappedLines,
+  }) : _wrappedLines = wrappedLines;
+
   final String content;
   final int width;
   final int height;
@@ -30,8 +42,11 @@ final class ViewportModel extends TeaModel {
     if (!softWrap) return lines;
     final result = <String>[];
     for (final line in lines) {
-      final stripped = line.replaceAll(
-          RegExp(r'\x1b\[[0-9;]*m'), ''); // Simple ANSI strip for wrap
+      // Simple ANSI strip for wrap — skip the regex entirely for the common
+      // case of lines that contain no escape sequences.
+      final stripped = line.contains('\x1b')
+          ? line.replaceAll(RegExp(r'\x1b\[[0-9;]*m'), '')
+          : line;
       if (_estimateWidth(stripped) <= width || width <= 0) {
         result.add(line);
       } else {
@@ -85,8 +100,27 @@ final class ViewportModel extends TeaModel {
 
   ViewportModel _clamp(int yOff) {
     final clamped = yOff.clamp(0, (totalLines - height).clamp(0, totalLines));
-    return _rebuild(yOffset: clamped);
+    // Scroll-only change — reuse the memoized wrapped lines.
+    return ViewportModel._withWrapped(
+      content: content,
+      width: width,
+      height: height,
+      yOffset: clamped,
+      xOffset: xOffset,
+      softWrap: softWrap,
+      wrappedLines: _wrappedLines,
+    );
   }
+
+  ViewportModel _withXOffset(int xOff) => ViewportModel._withWrapped(
+        content: content,
+        width: width,
+        height: height,
+        yOffset: yOffset,
+        xOffset: xOff,
+        softWrap: softWrap,
+        wrappedLines: _wrappedLines,
+      );
 
   ViewportModel _rebuild({
     String? content,
@@ -137,11 +171,11 @@ final class ViewportModel extends TeaModel {
         return (scrollTo(totalLines), null);
       case 'left':
         if (!softWrap) {
-          return (_rebuild(xOffset: (xOffset - 1).clamp(0, 9999)), null);
+          return (_withXOffset((xOffset - 1).clamp(0, 9999)), null);
         }
         return (this, null);
       case 'right':
-        if (!softWrap) return (_rebuild(xOffset: xOffset + 1), null);
+        if (!softWrap) return (_withXOffset(xOffset + 1), null);
         return (this, null);
       default:
         return (this, null);
