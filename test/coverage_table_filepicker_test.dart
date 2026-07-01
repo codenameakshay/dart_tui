@@ -93,10 +93,10 @@ void main() {
 
     setUp(() {
       tmp = Directory.systemTemp.createTempSync('fp_test');
-      Directory(p_join(tmp.path, 'sub')).createSync();
-      File(p_join(tmp.path, 'a.txt')).writeAsStringSync('x');
-      File(p_join(tmp.path, 'b.dart')).writeAsStringSync('y');
-      File(p_join(tmp.path, '.hidden')).writeAsStringSync('z');
+      Directory(pathJoin(tmp.path, 'sub')).createSync();
+      File(pathJoin(tmp.path, 'a.txt')).writeAsStringSync('x');
+      File(pathJoin(tmp.path, 'b.dart')).writeAsStringSync('y');
+      File(pathJoin(tmp.path, '.hidden')).writeAsStringSync('z');
     });
 
     tearDown(() => tmp.deleteSync(recursive: true));
@@ -159,4 +159,4 @@ void main() {
   });
 }
 
-String p_join(String a, String b) => '$a/$b';
+String pathJoin(String a, String b) => '$a/$b';

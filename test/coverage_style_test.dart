@@ -59,12 +59,12 @@ void main() {
 
     test('layout: padding, margin, border+title, width/align, wordwrap, tabs',
         () {
-      final s = Style(
-        padding: const EdgeInsets.all(1),
-        margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 2),
-        marginBackground: const RgbColor(10, 10, 10),
+      final s = const Style(
+        padding: EdgeInsets.all(1),
+        margin: EdgeInsets.symmetric(vertical: 1, horizontal: 2),
+        marginBackground: RgbColor(10, 10, 10),
         border: Border.rounded,
-        borderForeground: const RgbColor(1, 1, 1),
+        borderForeground: RgbColor(1, 1, 1),
         borderTitle: 'Title',
         borderTitleAlignment: Align.center,
         width: 20,
