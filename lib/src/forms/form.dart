@@ -1,3 +1,5 @@
+import 'package:meta/meta.dart';
+
 import '../cmd.dart';
 import '../model.dart';
 import '../msg.dart';
@@ -41,6 +43,9 @@ final class Form extends TeaModel implements OutcomeModel<FormValues> {
   final int fieldIndex;
   final bool submitted;
   final bool cancelled;
+
+  @visibleForTesting
+  int get fieldIndexForTest => fieldIndex;
 
   Form _copy(
           {int? groupIndex,
@@ -111,25 +116,54 @@ final class Form extends TeaModel implements OutcomeModel<FormValues> {
     return _withGroups(next);
   }
 
+  // Focus targets in a group, given current values.
+  List<int> _focusable(Group g, FormValues v) => [
+        for (var i = 0; i < g.fields.length; i++)
+          if (g.fields[i].acceptsInput && !g.fields[i].isHidden(v)) i,
+      ];
+
+  (Model, Cmd?) _advance() {
+    final g = groups[groupIndex];
+    final targets = _focusable(g, values);
+    final pos = targets.indexOf(fieldIndex);
+    if (pos >= 0 && pos < targets.length - 1) {
+      return (_copy(fieldIndex: targets[pos + 1]), null);
+    }
+    // past the last focusable field of the (only, for now) group → submit
+    return (_copy(submitted: true), null);
+  }
+
+  (Model, Cmd?) _back() {
+    final targets = _focusable(groups[groupIndex], values);
+    final pos = targets.indexOf(fieldIndex);
+    if (pos > 0) return (_copy(fieldIndex: targets[pos - 1]), null);
+    return (this, null); // no-op at first field
+  }
+
   @override
   (Model, Cmd?) update(Msg msg) {
     if (msg is! KeyMsg) return (_broadcast(msg), null);
+    final active = groups[groupIndex].fields[fieldIndex];
+    final multiline = active.isMultiline;
     switch (msg.key) {
       case 'esc':
       case 'ctrl+c':
         return (_copy(cancelled: true), null);
-      case 'enter':
+      case 'ctrl+d':
       case 'tab':
-        // Task 6 replaces this with real navigation.
-        return (_copy(submitted: true), null);
-      default:
-        final g = groups[groupIndex];
-        final fields = [...g.fields];
-        fields[fieldIndex] = fields[fieldIndex].updateEditor(msg);
-        final next = [...groups];
-        next[groupIndex] = Group(fields, title: g.title, hidden: g.hidden);
-        return (_withGroups(next), null);
+        return _advance();
+      case 'shift+tab':
+        return _back();
+      case 'enter':
+        if (!multiline) return _advance();
     }
+    // delegate to the active field's editor
+    final g = groups[groupIndex];
+    final fields = [...g.fields];
+    fields[fieldIndex] = active.updateEditor(msg);
+    final next = [...groups];
+    next[groupIndex] = Group(fields, title: g.title, hidden: g.hidden);
+    return (_withGroups(next), null);
   }
 
   @override
