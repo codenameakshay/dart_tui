@@ -118,6 +118,33 @@ void main() {
     });
   });
 
+  group('tree flatten reuse (Task 6)', () {
+    TreeNode sample() => TreeNode(label: 'root', isExpanded: true, children: [
+          TreeNode(label: 'a'),
+          TreeNode(label: 'b', isExpanded: true, children: [
+            TreeNode(label: 'b1'),
+          ]),
+        ]);
+
+    test('cursor navigation preserves node count and structure', () {
+      final t = TreeModel(root: sample());
+      final before = t.nodeCount;
+      final (moved, _) = t.update(KeyPressMsg(const TeaKey(code: KeyCode.down)));
+      expect((moved as TreeModel).nodeCount, before);
+      expect(moved.nodeCount, 4);
+    });
+
+    test('toggling collapse changes node count', () {
+      final t = TreeModel(root: sample());
+      final before = t.nodeCount; // root + a + b + b1 = 4
+      var m = t;
+      m = m.update(KeyPressMsg(const TeaKey(code: KeyCode.down))).$1 as TreeModel;
+      m = m.update(KeyPressMsg(const TeaKey(code: KeyCode.down))).$1 as TreeModel;
+      m = m.update(KeyPressMsg(const TeaKey(code: KeyCode.left))).$1 as TreeModel;
+      expect(m.nodeCount, lessThan(before));
+    });
+  });
+
   rendererTests();
 }
 
