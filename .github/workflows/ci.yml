@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -19,6 +19,11 @@ jobs:
           sdk: stable
       - run: dart pub get
       - run: dart analyze
-      - run: dart format --output=none --set-exit-if-changed .
+      # Formatting is platform-independent; skip on Windows so CRLF checkouts
+      # don't trip --set-exit-if-changed with spurious line-ending diffs.
+      - if: runner.os != 'Windows'
+        run: dart format --output=none --set-exit-if-changed .
       - run: dart test
-      - run: python3 tool/pty_examples_smoke.py
+      # The PTY smoke test relies on Python's Unix-only `pty` module.
+      - if: runner.os != 'Windows'
+        run: python3 tool/pty_examples_smoke.py
