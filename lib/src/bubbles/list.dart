@@ -340,6 +340,56 @@ final class ListModel extends TeaModel {
     );
   }
 
+  // ── Runtime mutation API ─────────────────────────────────────────────────
+
+  /// Cursor index within the (filtered) list; 0 when empty.
+  int get selectedIndex => _safeCursor;
+
+  ListModel _withState({List<ListItem>? items, int? cursor}) => ListModel(
+        items: items ?? this.items,
+        cursor: cursor ?? this.cursor,
+        title: title,
+        height: height,
+        filter: filter,
+        filterMode: filterMode,
+        styles: styles,
+        showStatusBar: showStatusBar,
+        showDescription: showDescription,
+        viewOffsetY: viewOffsetY,
+      );
+
+  /// Replace all items; the cursor is clamped to the new list.
+  ListModel withItems(List<ListItem> newItems) => _withState(
+        items: newItems,
+        cursor: cursor.clamp(0, newItems.isEmpty ? 0 : newItems.length - 1),
+      );
+
+  /// Append [item] to the end of the list.
+  ListModel appendItem(ListItem item) => withItems([...items, item]);
+
+  /// Insert [item] at [index] (clamped to a valid range).
+  ListModel insertItem(int index, ListItem item) {
+    final i = index.clamp(0, items.length);
+    return withItems([...items.sublist(0, i), item, ...items.sublist(i)]);
+  }
+
+  /// Remove the item at [index]; a no-op when out of range.
+  ListModel removeItemAt(int index) {
+    if (index < 0 || index >= items.length) return this;
+    return withItems([...items]..removeAt(index));
+  }
+
+  /// Replace the item at [index]; a no-op when out of range.
+  ListModel setItemAt(int index, ListItem item) {
+    if (index < 0 || index >= items.length) return this;
+    return _withState(items: [...items]..[index] = item);
+  }
+
+  /// Move the cursor to [index] (clamped to the list bounds).
+  ListModel select(int index) => _withState(
+        cursor: index.clamp(0, items.isEmpty ? 0 : items.length - 1),
+      );
+
   // ── View ───────────────────────────────────────────────────────────────────
 
   @override
