@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:characters/characters.dart';
 
+import 'bubbles/style.dart' show getWidth;
 import 'view.dart';
 
 abstract interface class TeaRenderer {
@@ -98,7 +99,13 @@ final class AnsiRenderer implements TeaRenderer {
       if (next == prev) continue;
       _output.write('\x1b[${row + 1};1H');
       _output.write(next);
-      _output.write('\x1b[K');
+      // Only erase to end of line when the new line is *narrower* than the old
+      // one — the sole case where stale cells from the previous frame remain
+      // (the columns between the two widths). Erasing unconditionally lands the
+      // EL on the pending-wrap last column of a full-width line and wipes the
+      // just-painted cell, which loses the right edge and flickers it on every
+      // redraw. Widths are compared visibly (SGR codes ignored, wide chars = 2).
+      if (getWidth(next) < getWidth(prev)) _output.write('\x1b[K');
     }
     if (_syncUpdates) _output.write('\x1b[?2026l');
 
@@ -130,8 +137,11 @@ final class AnsiRenderer implements TeaRenderer {
     _output.write('\x1b[1;1H'); // move to top-left
     _output.write('\x1b[S'); // scroll up one line (creates blank row at bottom)
     _output.write('\x1b[1;1H'); // back to top-left
-    _output.write(line);
+    // Clear the row *before* writing the line. Erasing after would land the EL
+    // on the pending-wrap last column of a full-width line and wipe it (#7);
+    // erasing first still removes any content the scroll shifted into this row.
     _output.write('\x1b[K'); // clear to end of line
+    _output.write(line);
     _output.write('\x1b[u'); // restore cursor position
     _hasRenderedFrame = false; // invalidate diff cache
   }
@@ -328,8 +338,10 @@ final class CellRenderer implements TeaRenderer {
     _output.write('\x1b[1;1H');
     _output.write('\x1b[S');
     _output.write('\x1b[1;1H');
-    _output.write(line);
+    // Clear the row before writing so a full-width line keeps its last column
+    // (see AnsiRenderer.insertAbove / #7).
     _output.write('\x1b[K');
+    _output.write(line);
     _output.write('\x1b[u');
     _lastGrid = null;
   }
