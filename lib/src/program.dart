@@ -275,11 +275,12 @@ final class Program {
       }
     }
 
-    var lastRenderMicros = 0;
+    final minFrameMicros = _fps > 0 ? (1000000 / _fps).round() : 0;
+    final frameClock = Stopwatch()..start();
+    var lastRenderMicros = -1;
     Future<void> render(View v) async {
-      final minFrameMicros = (1000000 / _fps).round();
-      final nowMicros = DateTime.now().microsecondsSinceEpoch;
-      if (lastRenderMicros != 0 && minFrameMicros > 0) {
+      final nowMicros = frameClock.elapsedMicroseconds;
+      if (lastRenderMicros >= 0 && minFrameMicros > 0) {
         final delta = nowMicros - lastRenderMicros;
         if (delta < minFrameMicros) {
           await Future<void>.delayed(
@@ -288,7 +289,7 @@ final class Program {
         }
       }
       _renderer?.render(v);
-      lastRenderMicros = DateTime.now().microsecondsSinceEpoch;
+      lastRenderMicros = frameClock.elapsedMicroseconds;
     }
 
     void scheduleResizeMsg() {
