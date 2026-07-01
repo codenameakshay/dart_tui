@@ -153,6 +153,134 @@ abstract final class Field {
         description: description,
         hiddenFn: hidden,
       );
+
+  static FormField select({
+    required String key,
+    String? title,
+    String Function(FormValues)? titleFor,
+    String? description,
+    required List<String> options,
+    String? initial,
+    String? Function(String value)? validate,
+    bool Function(FormValues)? hidden,
+  }) {
+    final i = options.indexOf(initial ?? '');
+    return _SelectField<String>(
+      key: key,
+      options: [for (final o in options) Option(o, o)],
+      optionsForFn: null,
+      index: i < 0 ? 0 : i,
+      titleSpec: _Title(title, titleFor),
+      description: description,
+      validator: validate,
+      hiddenFn: hidden,
+    );
+  }
+
+  static FormField selectOf<T>({
+    required String key,
+    String? title,
+    String Function(FormValues)? titleFor,
+    String? description,
+    List<Option<T>>? options,
+    List<Option<T>> Function(FormValues)? optionsFor,
+    T? initial,
+    String? Function(T value)? validate,
+    bool Function(FormValues)? hidden,
+  }) {
+    assert((options == null) != (optionsFor == null),
+        'provide exactly one of options / optionsFor');
+    final initialOpts = options ?? const [];
+    var idx = 0;
+    for (var i = 0; i < initialOpts.length; i++) {
+      if (initialOpts[i].value == initial) idx = i;
+    }
+    return _SelectField<T>(
+      key: key,
+      options: initialOpts,
+      optionsForFn: optionsFor,
+      index: idx,
+      titleSpec: _Title(title, titleFor),
+      description: description,
+      validator: validate,
+      hiddenFn: hidden,
+    );
+  }
+
+  static FormField multiSelect({
+    required String key,
+    String? title,
+    String Function(FormValues)? titleFor,
+    String? description,
+    required List<String> options,
+    Set<String> initial = const {},
+    int? limit,
+    bool Function(FormValues)? hidden,
+  }) =>
+      _MultiSelectField<String>(
+        key: key,
+        options: [for (final o in options) Option(o, o)],
+        optionsForFn: null,
+        selected: {
+          for (var i = 0; i < options.length; i++)
+            if (initial.contains(options[i])) i
+        },
+        cursor: 0,
+        limit: limit,
+        titleSpec: _Title(title, titleFor),
+        description: description,
+        hiddenFn: hidden,
+      );
+
+  static FormField multiSelectOf<T>({
+    required String key,
+    String? title,
+    String Function(FormValues)? titleFor,
+    String? description,
+    List<Option<T>>? options,
+    List<Option<T>> Function(FormValues)? optionsFor,
+    Set<T> initial = const {},
+    int? limit,
+    bool Function(FormValues)? hidden,
+  }) {
+    assert((options == null) != (optionsFor == null),
+        'provide exactly one of options / optionsFor');
+    final opts = options ?? const [];
+    return _MultiSelectField<T>(
+      key: key,
+      options: opts,
+      optionsForFn: optionsFor,
+      selected: {
+        for (var i = 0; i < opts.length; i++)
+          if (initial.contains(opts[i].value)) i
+      },
+      cursor: 0,
+      limit: limit,
+      titleSpec: _Title(title, titleFor),
+      description: description,
+      hiddenFn: hidden,
+    );
+  }
+
+  static FormField confirm({
+    required String key,
+    String? title,
+    String Function(FormValues)? titleFor,
+    String? description,
+    bool initial = false,
+    String affirmative = 'Yes',
+    String negative = 'No',
+    bool Function(FormValues)? hidden,
+  }) =>
+      _ConfirmField(
+        key: key,
+        state: initial,
+        affirmative: affirmative,
+        negative: negative,
+        titleSpec: _Title(title, titleFor),
+        description: description,
+        hiddenFn: hidden,
+      );
 }
 
 /// Resolves a static or dynamic title.
@@ -396,5 +524,302 @@ final class _NoteField extends FormField with _FieldCommon {
     final d = descriptionText(values);
     if (d != null) b.write('\n    ${styles.description.render(d)}');
     return b.toString();
+  }
+}
+
+// ── select ────────────────────────────────────────────────────────────────
+final class _SelectField<T> extends FormField with _FieldCommon {
+  const _SelectField({
+    required this.key,
+    required this.options,
+    required this.optionsForFn,
+    required this.index,
+    required this.titleSpec,
+    required this.description,
+    required this.validator,
+    required this.hiddenFn,
+    this.error,
+  });
+
+  @override
+  final String? key;
+  final List<Option<T>> options;
+  final List<Option<T>> Function(FormValues)? optionsForFn;
+  final int index;
+  @override
+  final _Title titleSpec;
+  @override
+  final String? description;
+  final String? Function(T)? validator;
+  @override
+  final bool Function(FormValues)? hiddenFn;
+  @override
+  final String? error;
+
+  @override
+  bool get acceptsInput => true;
+  @override
+  Object? get value => options.isEmpty ? null : options[index].value;
+  @override
+  String? validate() => (validator == null || options.isEmpty)
+      ? null
+      : validator!(options[index].value);
+
+  _SelectField<T> _copy(
+          {List<Option<T>>? options, int? index, String? error}) =>
+      _SelectField<T>(
+        key: key,
+        options: options ?? this.options,
+        optionsForFn: optionsForFn,
+        index: index ?? this.index,
+        titleSpec: titleSpec,
+        description: description,
+        validator: validator,
+        hiddenFn: hiddenFn,
+        error: error,
+      );
+
+  @override
+  FormField updateEditor(Msg msg) {
+    if (msg is! KeyMsg || options.isEmpty) return this;
+    switch (msg.key) {
+      case 'up':
+      case 'left':
+      case 'k':
+        return _copy(index: index > 0 ? index - 1 : options.length - 1);
+      case 'down':
+      case 'right':
+      case 'j':
+        return _copy(index: index < options.length - 1 ? index + 1 : 0);
+      default:
+        return this;
+    }
+  }
+
+  @override
+  FormField recompute(FormValues values) {
+    if (optionsForFn == null) return this;
+    final next = optionsForFn!(values);
+    final clamped = next.isEmpty ? 0 : index.clamp(0, next.length - 1);
+    return _copy(options: next, index: clamped);
+  }
+
+  @override
+  FormField withError(String? error) => _copy(error: error);
+
+  @override
+  String render(bool active, FormStyles styles, FormValues values) {
+    final titleStyle = active ? styles.activeTitle : styles.title;
+    final marker = active ? '${styles.cursor.render('›')} ' : '  ';
+    final b = StringBuffer('$marker${titleStyle.render(titleText(values))}\n');
+    for (var i = 0; i < options.length; i++) {
+      final chosen = i == index;
+      final label = options[i].label;
+      b.write(
+          '    ${chosen ? styles.selectedOption.render('(•) $label') : styles.option.render('( ) $label')}');
+      if (i < options.length - 1) b.write('\n');
+    }
+    if (error != null) b.write('\n    ${styles.error.render('✗ $error')}');
+    return b.toString();
+  }
+}
+
+// ── multiSelect ───────────────────────────────────────────────────────────
+final class _MultiSelectField<T> extends FormField with _FieldCommon {
+  const _MultiSelectField({
+    required this.key,
+    required this.options,
+    required this.optionsForFn,
+    required this.selected,
+    required this.cursor,
+    required this.limit,
+    required this.titleSpec,
+    required this.description,
+    required this.hiddenFn,
+    this.error,
+  });
+
+  @override
+  final String? key;
+  final List<Option<T>> options;
+  final List<Option<T>> Function(FormValues)? optionsForFn;
+  final Set<int> selected;
+  final int cursor;
+  final int? limit;
+  @override
+  final _Title titleSpec;
+  @override
+  final String? description;
+  @override
+  final bool Function(FormValues)? hiddenFn;
+  @override
+  final String? error;
+
+  @override
+  bool get acceptsInput => true;
+  @override
+  Object? get value => [
+        for (var i = 0; i < options.length; i++)
+          if (selected.contains(i)) options[i].value
+      ];
+  @override
+  String? validate() => null;
+
+  _MultiSelectField<T> _copy({
+    List<Option<T>>? options,
+    Set<int>? selected,
+    int? cursor,
+    String? error,
+  }) =>
+      _MultiSelectField<T>(
+        key: key,
+        options: options ?? this.options,
+        optionsForFn: optionsForFn,
+        selected: selected ?? this.selected,
+        cursor: cursor ?? this.cursor,
+        limit: limit,
+        titleSpec: titleSpec,
+        description: description,
+        hiddenFn: hiddenFn,
+        error: error,
+      );
+
+  @override
+  FormField updateEditor(Msg msg) {
+    if (msg is! KeyMsg || options.isEmpty) return this;
+    switch (msg.key) {
+      case 'up':
+      case 'k':
+        return _copy(cursor: cursor > 0 ? cursor - 1 : options.length - 1);
+      case 'down':
+      case 'j':
+        return _copy(cursor: cursor < options.length - 1 ? cursor + 1 : 0);
+      case 'space':
+      case 'x':
+        final next = {...selected};
+        if (next.contains(cursor)) {
+          next.remove(cursor);
+        } else if (limit == null || next.length < limit!) {
+          next.add(cursor);
+        }
+        return _copy(selected: next);
+      default:
+        return this;
+    }
+  }
+
+  @override
+  FormField recompute(FormValues values) {
+    if (optionsForFn == null) return this;
+    final next = optionsForFn!(values);
+    final kept = {
+      for (final i in selected)
+        if (i < next.length) i
+    };
+    return _copy(
+        options: next,
+        selected: kept,
+        cursor: next.isEmpty ? 0 : cursor.clamp(0, next.length - 1));
+  }
+
+  @override
+  FormField withError(String? error) => _copy(error: error);
+
+  @override
+  String render(bool active, FormStyles styles, FormValues values) {
+    final titleStyle = active ? styles.activeTitle : styles.title;
+    final marker = active ? '${styles.cursor.render('›')} ' : '  ';
+    final b = StringBuffer('$marker${titleStyle.render(titleText(values))}\n');
+    for (var i = 0; i < options.length; i++) {
+      final box = selected.contains(i)
+          ? styles.checkedBox.render('[x]')
+          : styles.uncheckedBox.render('[ ]');
+      final pointer = (active && i == cursor) ? '› ' : '  ';
+      b.write('    $pointer$box ${styles.option.render(options[i].label)}');
+      if (i < options.length - 1) b.write('\n');
+    }
+    return b.toString();
+  }
+}
+
+// ── confirm ───────────────────────────────────────────────────────────────
+final class _ConfirmField extends FormField with _FieldCommon {
+  const _ConfirmField({
+    required this.key,
+    required this.state,
+    required this.affirmative,
+    required this.negative,
+    required this.titleSpec,
+    required this.description,
+    required this.hiddenFn,
+    this.error,
+  });
+
+  @override
+  final String? key;
+  final bool state;
+  final String affirmative;
+  final String negative;
+  @override
+  final _Title titleSpec;
+  @override
+  final String? description;
+  @override
+  final bool Function(FormValues)? hiddenFn;
+  @override
+  final String? error;
+
+  @override
+  bool get acceptsInput => true;
+  @override
+  Object? get value => state;
+  @override
+  String? validate() => null;
+
+  _ConfirmField _copy({bool? state, String? error}) => _ConfirmField(
+        key: key,
+        state: state ?? this.state,
+        affirmative: affirmative,
+        negative: negative,
+        titleSpec: titleSpec,
+        description: description,
+        hiddenFn: hiddenFn,
+        error: error,
+      );
+
+  @override
+  FormField updateEditor(Msg msg) {
+    if (msg is! KeyMsg) return this;
+    switch (msg.key) {
+      case 'y':
+      case 'Y':
+        return _copy(state: true);
+      case 'n':
+      case 'N':
+        return _copy(state: false);
+      case 'left':
+      case 'right':
+      case 'h':
+      case 'l':
+        return _copy(state: !state);
+      default:
+        return this;
+    }
+  }
+
+  @override
+  FormField withError(String? error) => _copy(error: error);
+
+  @override
+  String render(bool active, FormStyles styles, FormValues values) {
+    final titleStyle = active ? styles.activeTitle : styles.title;
+    final marker = active ? '${styles.cursor.render('›')} ' : '  ';
+    final yes = state
+        ? styles.selectedOption.render('‹$affirmative›')
+        : styles.option.render(' $affirmative ');
+    final no = state
+        ? styles.option.render(' $negative ')
+        : styles.selectedOption.render('‹$negative›');
+    return '$marker${titleStyle.render(titleText(values))}\n    $yes  $no';
   }
 }

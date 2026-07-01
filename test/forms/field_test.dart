@@ -59,4 +59,52 @@ void main() {
     expect(f.isHidden(const FormValues({'h': true})), isTrue);
     expect(f.isHidden(const FormValues({'h': false})), isFalse);
   });
+
+  group('select field', () {
+    test('arrows change selection; value is the chosen option', () {
+      var f = Field.select(
+          key: 'r', title: 'R', options: ['Dart', 'Go', 'Node'], initial: 'Go');
+      expect(f.value, 'Go');
+      f = f.updateEditor(key(KeyCode.down));
+      expect(f.value, 'Node');
+      f = f.updateEditor(key(KeyCode.up)).updateEditor(key(KeyCode.up));
+      expect(f.value, 'Dart');
+      expect(f.render(true, FormStyles.defaults, FormValues.empty),
+          contains('Dart'));
+    });
+
+    test('selectOf yields typed values', () {
+      final f = Field.selectOf<int>(
+          key: 'n',
+          title: 'N',
+          options: const [Option('one', 1), Option('two', 2)],
+          initial: 2);
+      expect(f.value, 2);
+    });
+  });
+
+  group('multiSelect field', () {
+    test('space toggles; value is the chosen list; limit respected', () {
+      var f = Field.multiSelect(
+          key: 'reg', title: 'Reg', options: ['iad', 'fra', 'sfo'], limit: 2);
+      f = f.updateEditor(rune(' ')); // toggle iad
+      f = f.updateEditor(key(KeyCode.down)).updateEditor(rune(' ')); // fra
+      expect(f.value, ['iad', 'fra']);
+      f = f.updateEditor(key(KeyCode.down)).updateEditor(rune(' ')); // blocked
+      expect(f.value, ['iad', 'fra']);
+    });
+  });
+
+  group('confirm field', () {
+    test('left/right and y/n toggle bool', () {
+      var f = Field.confirm(key: 'ok', title: 'OK?', initial: false);
+      expect(f.value, false);
+      f = f.updateEditor(rune('y'));
+      expect(f.value, true);
+      f = f.updateEditor(rune('n'));
+      expect(f.value, false);
+      f = f.updateEditor(key(KeyCode.left));
+      expect(f.value, true);
+    });
+  });
 }
