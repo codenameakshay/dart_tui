@@ -49,13 +49,14 @@ void main() {
   });
 
   test('titleFor resolves from values', () {
-    final f = Field.input(key: 'x', titleFor: (v) => 'Hi ${v.get('n')}');
+    final f =
+        Field.input(key: 'x', titleFor: (v) => 'Hi ${v.get<String>('n')}');
     expect(f.titleText(const FormValues({'n': 'ada'})), 'Hi ada');
   });
 
   test('hidden resolves from values', () {
-    final f =
-        Field.input(key: 'x', title: 'X', hidden: (v) => v.get('h') == true);
+    final f = Field.input(
+        key: 'x', title: 'X', hidden: (v) => v.get<bool>('h') == true);
     expect(f.isHidden(const FormValues({'h': true})), isTrue);
     expect(f.isHidden(const FormValues({'h': false})), isFalse);
   });

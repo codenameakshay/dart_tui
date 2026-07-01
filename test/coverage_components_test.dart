@@ -16,8 +16,8 @@ void main() {
     });
 
     test('space key inserts a literal space', () {
-      final m = _u<TextAreaModel>(
-          TextAreaModel(value: 'a', cursorCol: 1), _r(' '));
+      final m =
+          _u<TextAreaModel>(TextAreaModel(value: 'a', cursorCol: 1), _r(' '));
       expect(m.value, 'a ');
     });
 
