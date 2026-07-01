@@ -309,6 +309,7 @@ final class CellRenderer implements TeaRenderer {
   MouseMode _mouseMode = MouseMode.none;
 
   List<List<_Cell>>? _lastGrid;
+  String? _lastContent;
 
   @override
   void render(View view) {
@@ -316,9 +317,13 @@ final class CellRenderer implements TeaRenderer {
     if (view.windowTitle.isNotEmpty) {
       _output.write('\x1b]0;${view.windowTitle}\x07');
     }
+    if (_lastGrid != null && _lastContent == view.content) {
+      return; // identical frame — skip rebuild + diff walk
+    }
     final nextGrid = _buildGrid(view.content);
     _diffAndEmit(nextGrid);
     _lastGrid = nextGrid;
+    _lastContent = view.content;
     _logSink?.writeln('--- cell frame ---\n${view.content}');
   }
 
@@ -326,6 +331,7 @@ final class CellRenderer implements TeaRenderer {
   void clearScreen() {
     _output.write('\x1b[H\x1b[2J');
     _lastGrid = null;
+    _lastContent = null;
   }
 
   @override
@@ -344,6 +350,7 @@ final class CellRenderer implements TeaRenderer {
     _output.write(line);
     _output.write('\x1b[u');
     _lastGrid = null;
+    _lastContent = null;
   }
 
   @override
@@ -359,6 +366,7 @@ final class CellRenderer implements TeaRenderer {
     _bracketedPasteEnabled = false;
     _mouseMode = MouseMode.none;
     _lastGrid = null;
+    _lastContent = null;
     if (reset) clearScreen();
   }
 
@@ -377,6 +385,7 @@ final class CellRenderer implements TeaRenderer {
     _output.write(enabled ? '\x1b[?1049h' : '\x1b[?1049l');
     _altScreenEnabled = enabled;
     _lastGrid = null;
+    _lastContent = null;
   }
 
   @override
@@ -391,6 +400,7 @@ final class CellRenderer implements TeaRenderer {
     if (n <= 0) return;
     _output.write(up ? '\x1b[${n}S' : '\x1b[${n}T');
     _lastGrid = null;
+    _lastContent = null;
   }
 
   // ── Grid building ──────────────────────────────────────────────────────────

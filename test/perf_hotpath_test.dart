@@ -95,4 +95,33 @@ void main() {
   rendererTests();
 }
 
-void rendererTests() {}
+void rendererTests() {
+  group('CellRenderer identical-frame guard (Task 3)', () {
+    test('second identical render emits no new output', () {
+      final buf = StringBuffer();
+      final r = CellRenderer(
+        output: _StringSink(buf),
+        defaultAltScreen: false,
+        defaultHideCursor: false,
+      );
+      r.render(View(content: 'hello\nworld'));
+      final afterFirst = buf.length;
+      r.render(View(content: 'hello\nworld'));
+      expect(buf.length, afterFirst,
+          reason: 'identical content must produce no additional bytes');
+    });
+
+    test('changed frame still emits', () {
+      final buf = StringBuffer();
+      final r = CellRenderer(
+        output: _StringSink(buf),
+        defaultAltScreen: false,
+        defaultHideCursor: false,
+      );
+      r.render(View(content: 'hello'));
+      final afterFirst = buf.length;
+      r.render(View(content: 'jello'));
+      expect(buf.length, greaterThan(afterFirst));
+    });
+  });
+}
