@@ -12,7 +12,8 @@ class _Sink implements IOSink {
   @override
   void writeln([Object? o = '']) => buf.writeln(o);
   @override
-  void writeAll(Iterable objs, [String sep = '']) => buf.writeAll(objs, sep);
+  void writeAll(Iterable<dynamic> objs, [String sep = '']) =>
+      buf.writeAll(objs, sep);
   @override
   void writeCharCode(int c) => buf.writeCharCode(c);
   @override

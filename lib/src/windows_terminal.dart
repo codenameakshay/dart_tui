@@ -1,3 +1,7 @@
+// coverage:ignore-file
+// Windows-only console (Win32 FFI) code. Unreachable on the CI runners
+// (macOS/Linux), so it is excluded from the coverage denominator rather than
+// force-tested with brittle platform mocks.
 import 'dart:ffi';
 import 'dart:io';
 
