@@ -18,6 +18,15 @@ void main() {
     expect(b, isEmpty);
   });
 
+  test('parseKeyFromBuffer parses CSI Z (backtab) as shift+tab', () {
+    final b = <int>[0x1b, 0x5b, 0x5a];
+    final k = parseKeyFromBuffer(b)!;
+    expect(k.code, KeyCode.tab);
+    expect(k.modifiers, contains(KeyMod.shift));
+    expect(k.keystroke(), 'shift+tab');
+    expect(b, isEmpty);
+  });
+
   test('parseKeyFromBuffer returns null until escape sequence complete', () {
     final b = <int>[0x1b];
     expect(parseKeyFromBuffer(b), isNull);
