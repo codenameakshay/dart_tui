@@ -82,4 +82,22 @@ void main() {
     expect(f.submitted, isFalse);
     expect(f.view().content, contains('required'));
   });
+
+  test('advances across groups and shows a page indicator', () {
+    var f = Form([
+      Group([Field.input(key: 'a', title: 'A')], title: 'One'),
+      Group([Field.input(key: 'b', title: 'B')], title: 'Two'),
+    ]);
+    expect(f.view().content, contains('1/2'));
+    f = step(f, rune('x'));
+    f = step(f, key(KeyCode.tab)); // → group 2
+    expect(f.view().content, contains('2/2'));
+    f = step(f, rune('y'));
+    final back = step(f, shiftTab());
+    expect(back.view().content, contains('1/2')); // back to group 1
+    f = step(f, key(KeyCode.tab)); // past last field of last group → submit
+    expect(f.submitted, isTrue);
+    expect(f.values.get<String>('a'), 'x');
+    expect(f.values.get<String>('b'), 'y');
+  });
 }

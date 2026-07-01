@@ -122,6 +122,21 @@ final class Form extends TeaModel implements OutcomeModel<FormValues> {
           if (g.fields[i].acceptsInput && !g.fields[i].isHidden(v)) i,
       ];
 
+  List<int> _visibleGroups() => [
+        for (var i = 0; i < groups.length; i++)
+          if (!(groups[i].hidden?.call(values) ?? false)) i
+      ];
+
+  int? _firstFocusable(int gi) {
+    final t = _focusable(groups[gi], values);
+    return t.isEmpty ? null : t.first;
+  }
+
+  int? _lastFocusable(int gi) {
+    final t = _focusable(groups[gi], values);
+    return t.isEmpty ? null : t.last;
+  }
+
   Form _setActiveError(String? error) {
     final g = groups[groupIndex];
     final fields = [...g.fields];
@@ -142,6 +157,14 @@ final class Form extends TeaModel implements OutcomeModel<FormValues> {
     final pos = targets.indexOf(cleared.fieldIndex);
     if (pos >= 0 && pos < targets.length - 1) {
       return (cleared._copy(fieldIndex: targets[pos + 1]), null);
+    }
+    // past the last focusable field of this group → next visible group
+    final vg = cleared._visibleGroups();
+    final gp = vg.indexOf(cleared.groupIndex);
+    if (gp + 1 < vg.length) {
+      final gi = vg[gp + 1];
+      final ff = cleared._firstFocusable(gi);
+      return (cleared._copy(groupIndex: gi, fieldIndex: ff ?? 0), null);
     }
     return cleared._submit();
   }
@@ -170,7 +193,14 @@ final class Form extends TeaModel implements OutcomeModel<FormValues> {
     final targets = _focusable(groups[groupIndex], values);
     final pos = targets.indexOf(fieldIndex);
     if (pos > 0) return (_copy(fieldIndex: targets[pos - 1]), null);
-    return (this, null); // no-op at first field
+    // before the first field of this group → previous visible group's last field
+    final vg = _visibleGroups();
+    final gp = vg.indexOf(groupIndex);
+    for (var j = gp - 1; j >= 0; j--) {
+      final lf = _lastFocusable(vg[j]);
+      if (lf != null) return (_copy(groupIndex: vg[j], fieldIndex: lf), null);
+    }
+    return (this, null); // no-op at the very first field
   }
 
   @override
@@ -204,11 +234,19 @@ final class Form extends TeaModel implements OutcomeModel<FormValues> {
     final g = groups[groupIndex];
     final v = values;
     final b = StringBuffer();
-    if (g.title != null) b.writeln(styles.activeTitle.render(g.title!));
+    final visible = _visibleGroups();
+    if (visible.length > 1) {
+      final pos = visible.indexOf(groupIndex) + 1;
+      b.writeln(styles.pageIndicator
+          .render('${g.title ?? 'Step'}  $pos/${visible.length}'));
+    } else if (g.title != null) {
+      b.writeln(styles.activeTitle.render(g.title!));
+    }
     for (var i = 0; i < g.fields.length; i++) {
       b.writeln(g.fields[i].render(i == fieldIndex, styles, v));
     }
-    b.write(styles.help.render('enter submit · esc cancel'));
+    b.write(styles.help
+        .render('tab next · shift+tab back · enter submit · esc cancel'));
     return newView(b.toString());
   }
 }
