@@ -75,6 +75,7 @@ final class AnsiRenderer implements TeaRenderer {
   bool _bracketedPasteEnabled = false;
   MouseMode _mouseMode = MouseMode.none;
   List<String> _lastLines = const <String>[];
+  String _lastContent = '';
   bool _hasRenderedFrame = false;
   bool _syncUpdates = false;
 
@@ -84,10 +85,10 @@ final class AnsiRenderer implements TeaRenderer {
     if (view.windowTitle.isNotEmpty) {
       _output.write('\x1b]0;${view.windowTitle}\x07');
     }
-    final nextLines = view.content.split('\n');
-    if (_hasRenderedFrame && _linesEqual(nextLines, _lastLines)) {
+    if (_hasRenderedFrame && view.content == _lastContent) {
       return;
     }
+    final nextLines = view.content.split('\n');
 
     if (_syncUpdates) _output.write('\x1b[?2026h');
     final maxRows = nextLines.length > _lastLines.length
@@ -109,7 +110,8 @@ final class AnsiRenderer implements TeaRenderer {
     }
     if (_syncUpdates) _output.write('\x1b[?2026l');
 
-    _lastLines = List<String>.from(nextLines);
+    _lastLines = nextLines;
+    _lastContent = view.content;
     _hasRenderedFrame = true;
     _logSink?.writeln('--- frame (diff) ---\n${view.content}');
   }
@@ -123,6 +125,7 @@ final class AnsiRenderer implements TeaRenderer {
   void clearScreen() {
     _output.write('\x1b[H\x1b[2J');
     _lastLines = const <String>[];
+    _lastContent = '';
     _hasRenderedFrame = false;
   }
 
@@ -159,6 +162,7 @@ final class AnsiRenderer implements TeaRenderer {
     _bracketedPasteEnabled = false;
     _mouseMode = MouseMode.none;
     _lastLines = const <String>[];
+    _lastContent = '';
     _hasRenderedFrame = false;
     if (reset) {
       clearScreen();
@@ -181,6 +185,7 @@ final class AnsiRenderer implements TeaRenderer {
     _output.write(enabled ? '\x1b[?1049h' : '\x1b[?1049l');
     _altScreenEnabled = enabled;
     _lastLines = const <String>[];
+    _lastContent = '';
     _hasRenderedFrame = false;
   }
 
@@ -197,15 +202,8 @@ final class AnsiRenderer implements TeaRenderer {
     // ESC[nS = scroll up n lines; ESC[nT = scroll down n lines
     _output.write(up ? '\x1b[${n}S' : '\x1b[${n}T');
     _lastLines = const <String>[];
+    _lastContent = '';
     _hasRenderedFrame = false;
-  }
-
-  bool _linesEqual(List<String> a, List<String> b) {
-    if (a.length != b.length) return false;
-    for (var i = 0; i < a.length; i++) {
-      if (a[i] != b[i]) return false;
-    }
-    return true;
   }
 
   void _applyModes(View v) {

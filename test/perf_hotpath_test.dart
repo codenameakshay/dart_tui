@@ -124,4 +124,32 @@ void rendererTests() {
       expect(buf.length, greaterThan(afterFirst));
     });
   });
+
+  group('AnsiRenderer identical-frame guard (Task 4)', () {
+    test('second identical render emits no new output', () {
+      final buf = StringBuffer();
+      final r = AnsiRenderer(
+        output: _StringSink(buf),
+        defaultAltScreen: false,
+        defaultHideCursor: false,
+      );
+      r.render(View(content: 'a\nb\nc'));
+      final afterFirst = buf.length;
+      r.render(View(content: 'a\nb\nc'));
+      expect(buf.length, afterFirst);
+    });
+
+    test('changed line is re-emitted', () {
+      final buf = StringBuffer();
+      final r = AnsiRenderer(
+        output: _StringSink(buf),
+        defaultAltScreen: false,
+        defaultHideCursor: false,
+      );
+      r.render(View(content: 'a\nb\nc'));
+      final afterFirst = buf.length;
+      r.render(View(content: 'a\nX\nc'));
+      expect(buf.length, greaterThan(afterFirst));
+    });
+  });
 }
