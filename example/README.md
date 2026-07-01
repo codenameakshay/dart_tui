@@ -602,6 +602,18 @@ dart run example/gum.dart
 
 ---
 
+### form
+
+A composable, huh-style form: typed fields (`input` / `select` / `multiSelect` / `confirm` / `note`) grouped into wizard pages, with per-field validation and a dynamic page that only appears when “Deploy now?” is Yes. `Enter`/`Tab` advance, `Esc` cancels.
+
+![form](tapes/output/form.gif)
+
+```bash
+dart run example/form.dart
+```
+
+---
+
 ### all\_features
 
 A guided tour of every dart\_tui widget and API in a single file. Pages through spinners, progress bars, text inputs, lists, tables, and more.
