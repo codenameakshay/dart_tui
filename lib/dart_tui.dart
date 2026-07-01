@@ -4,3 +4,4 @@ library;
 export 'src/core.dart';
 export 'src/bubbles.dart';
 export 'src/bubbles/style.dart';
+export 'src/log.dart';
