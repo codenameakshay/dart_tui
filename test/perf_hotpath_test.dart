@@ -92,6 +92,32 @@ void main() {
     });
   });
 
+  group('list filter memoization (Task 5)', () {
+    test('filteredItems returns the identical cached list across calls', () {
+      final m = ListModel(
+        items: [
+          ListItem(title: 'apple'),
+          ListItem(title: 'banana'),
+          ListItem(title: 'apricot'),
+        ],
+        filter: 'ap',
+      );
+      expect(identical(m.filteredItems, m.filteredItems), isTrue);
+    });
+
+    test('filtering results are unchanged', () {
+      final m = ListModel(
+        items: [
+          ListItem(title: 'apple'),
+          ListItem(title: 'banana'),
+          ListItem(title: 'apricot'),
+        ],
+        filter: 'ap',
+      );
+      expect(m.filteredItems.map((i) => i.title), ['apple', 'apricot']);
+    });
+  });
+
   rendererTests();
 }
 

@@ -176,12 +176,18 @@ final class ListModel extends TeaModel {
   // ── Derived state ──────────────────────────────────────────────────────────
 
   /// Items that match the current [filter] query (fuzzy, case-insensitive).
-  List<ListItem> get filteredItems {
+  ///
+  /// Memoized: computed once per model instance on first access, so the
+  /// repeated reads in `update()`/`view()`/`selected`/`_safeCursor` don't each
+  /// re-run the filter.
+  late final List<ListItem> filteredItems = _computeFilteredItems();
+
+  List<ListItem> _computeFilteredItems() {
     if (filter.isEmpty) return items;
     final q = filter.toLowerCase();
-    return items.where((item) {
-      return _fuzzyMatch(item._filterKey.toLowerCase(), q);
-    }).toList();
+    return items
+        .where((item) => _fuzzyMatch(item._filterKey.toLowerCase(), q))
+        .toList();
   }
 
   /// The currently highlighted item, or null if the list is empty.
