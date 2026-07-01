@@ -11,6 +11,7 @@ import 'model.dart';
 import 'msg.dart';
 import 'renderer.dart';
 import 'view.dart';
+import 'windows_terminal.dart';
 
 typedef ProgramOption = void Function(Program program);
 
@@ -151,6 +152,15 @@ final class Program {
       stdin.lineMode = !raw;
     } on StdinException {
       // stdin is not a TTY (e.g. in tests or piped input) — ignore.
+    }
+    // On Windows, lineMode/echoMode alone leave the console in legacy input
+    // mode, where arrow keys / Esc / Shift+Tab / mouse never reach the byte
+    // stream. Enable VT console input here (and restore it when leaving raw
+    // mode). No-op on other platforms.
+    if (raw) {
+      enableWindowsVtInput();
+    } else {
+      restoreWindowsVtInput();
     }
   }
 
