@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.4.0
+
+### Forms (huh-style)
+
+A composable, immutable, key-based forms subsystem — the equivalent of Charm's [huh](https://github.com/charmbracelet/huh).
+
+- **`Form`** (`forms/form.dart`) — an immutable `TeaModel` you can embed (exposes `submitted`/`cancelled`/`values`), or run one-shot with `await form.run()` (returns `FormValues?`, `null` if cancelled). Groups of fields render one page at a time as a wizard, with a `Group N/M` indicator.
+- **Field types** via the `Field` factory: `input`, `password`, `text` (multiline), `file`, `select` / `selectOf<T>`, `multiSelect` / `multiSelectOf<T>`, `confirm`, `note`. Text-ish fields reuse `TextInputModel`/`TextAreaModel`/`FilePickerModel`.
+- **Key-based values** — `FormValues.get<T>(key)`; hidden fields are excluded from the result.
+- **Validation** — per-field `validate` with inline errors; blocks advancing and submit.
+- **Dynamic / conditional fields** — any field or group takes `hidden: (FormValues) => bool`; titles and select options can be computed from other fields' values (`titleFor`, `optionsFor`), recomputed on every change with selection clamping.
+- **Navigation** — `Tab`/`Enter` advance (Enter inserts a newline in multiline `text`; `Tab`/`Ctrl+D` advance there), `Shift+Tab` back, `Esc`/`Ctrl+C` cancel.
+- **`FormStyles`** — Catppuccin Mocha defaults.
+- New `form.dart` example + VHS tape.
+
+### Fixes
+
+- **`TextInputModel` / `TextAreaModel`**: typing a space inserted the literal string `"space"` (and F-keys inserted `"f1"`, etc.) because the default branch inserted the keystroke name rather than the character. Now only unmodified printable runes are inserted, using the actual rune text — so text fields (and form inputs) accept spaces correctly.
+
 ## 1.3.0
 
 ### New components & helpers
