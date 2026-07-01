@@ -1,0 +1,3 @@
+# Exclude the dev-only implementation plans from the published package.
+# Scoped to docs/ so the root .gitignore excludes still apply.
+*
