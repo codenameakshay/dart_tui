@@ -16,7 +16,7 @@ FFMPEG   := $(HOME)/ffmpeg-local
 DART     := fvm dart
 TAPES    := $(wildcard example/tapes/*.tape)
 
-.PHONY: help test analyze format run kernels run-fast bench gifs new-example clean
+.PHONY: help test analyze format coverage run kernels run-fast bench gifs new-example clean
 
 # ── Help ───────────────────────────────────────────────────────────────────────
 help:
@@ -53,6 +53,12 @@ test:
 
 analyze:
 	$(DART) analyze lib/
+
+# Measure lib/ line coverage and fail below the floor (default 90%).
+# Usage: make coverage [FLOOR=90]
+FLOOR ?= 90
+coverage:
+	DART="$(DART)" bash tool/coverage.sh $(FLOOR)
 
 format:
 	$(DART) format .
