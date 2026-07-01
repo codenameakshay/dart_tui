@@ -10,6 +10,10 @@
 - **`ListModel` runtime mutation API** — `withItems`, `appendItem`, `insertItem`, `removeItemAt`, `setItemAt`, `select`, and `selectedIndex`; all clamp the cursor.
 - **Readline / emacs editing keys** for `TextInputModel` and `TextAreaModel` — `ctrl+a`/`ctrl+e` (home/end), `ctrl+b`/`ctrl+f` (char left/right), `alt+←`/`alt+→` (word motion), and `ctrl+w` / `alt+backspace` (delete previous word).
 
+### Examples
+
+Five new runnable examples (each with a VHS tape): `spring`, `gum` (filter/spin/pager), `list_mutation`, `readline`, and `file_log`.
+
 ### Performance
 
 Hot-path allocation and CPU reductions on the per-frame render and per-keystroke paths (all behaviour-preserving, covered by regression tests):

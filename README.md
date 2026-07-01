@@ -617,7 +617,7 @@ await log.close();
 
 ## Examples
 
-54 runnable examples covering every feature:
+60 runnable examples covering every feature:
 
 | Example | What it shows |
 |---------|---------------|
@@ -625,10 +625,12 @@ await log.close();
 | `textinput.dart` | Single-line text input |
 | `textinputs.dart` | Multi-field form with Tab focus |
 | `textarea.dart` | Multi-line editor |
+| `readline.dart` | **Readline editing keys** — `ctrl+a/e/b/f/w`, `alt` word motion |
 | `autocomplete.dart` | Tab-completion suggestions |
 | `list_simple.dart` | Basic SelectListModel |
 | `list_default.dart` | List with selection state |
 | `list_filter.dart` | ListModel with fuzzy filtering |
+| `list_mutation.dart` | **ListModel mutation API** — add / remove items live |
 | `multi_select.dart` | **MultiSelectModel** — checkbox list with toggle-all |
 | `table.dart` | City data table |
 | `tree.dart` | Expandable language/framework tree |
@@ -637,7 +639,9 @@ await log.close();
 | `spinners.dart` | All built-in spinner styles |
 | `progress_bar.dart` | Interactive progress bar |
 | `progress_animated.dart` | Auto-incrementing progress |
+| `spring.dart` | **Spring** — harmonica-style eased motion |
 | `pager.dart` | Scrollable viewport |
+| `gum.dart` | **gum helpers** — `filter` / `spin` / `pager` |
 | `file_picker.dart` | Directory browser |
 | `help.dart` | HelpModel + KeyMap |
 | `timer.dart` | Countdown timer |
@@ -655,6 +659,7 @@ await log.close();
 | `mouse.dart` | Mouse click / scroll events |
 | `exec_cmd.dart` | External editor via execProcess |
 | `http.dart` | HTTP fetch with spinner |
+| `file_log.dart` | **FileLog** — write diagnostics to a file, not the UI |
 | `result.dart` | OutcomeModel returning a value |
 | `isbn_form.dart` | Validated TextInputModel |
 | `showcase.dart` | Full-featured gallery |
@@ -736,7 +741,7 @@ Typical results:
 ### Re-recording GIFs
 
 ```bash
-make gifs          # builds all kernels, then records all 54 GIFs
+make gifs          # builds all kernels, then records all 59 GIFs
 make gif EXAMPLE=showcase   # record one
 ```
 
