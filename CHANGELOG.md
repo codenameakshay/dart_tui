@@ -26,7 +26,7 @@ Hot-path allocation and CPU reductions on the per-frame render and per-keystroke
 
 ### Quality
 
-- Test suite grown from 423 to 550+ cases; measured `lib/` line coverage raised from ~67% to **92%**.
+- Test suite grown from 423 to 560+ cases; measured `lib/` line coverage raised from ~67% to **92%**.
 - New `make coverage [FLOOR=90]` target and a CI coverage gate (Linux/macOS) that fails below the floor, honouring `// coverage:ignore-*` markers for genuinely-untestable code (Win32 FFI, raw-mode TTY, OS signals).
 
 ## 1.2.0

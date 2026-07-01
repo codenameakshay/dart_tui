@@ -17,6 +17,10 @@ Build rich, interactive CLI applications with a clean **Model–Update–View** 
 - **Model–Update–View** — same architecture as Elm and Bubble Tea; pure, testable state
 - **Async commands** (`Cmd`) for timers, HTTP, subprocesses, and any async work
 - **27+ ready-made components** — spinners, progress bars, text inputs, tables, trees, multi-select, list with fuzzy filter, tabbed views, in-line cursor, and more
+- **One-shot helpers** — `promptSelect` / `promptConfirm` / `promptInput`, plus gum-style `filter`, `spin`, and `pager`
+- **Spring animation** — harmonica-style damped-spring easing for smooth progress, scroll, and cursor motion
+- **Readline editing keys** — emacs bindings in text input & area (`ctrl+a/e/b/f/w`, `alt`-word motion, `ctrl+w`)
+- **File logging** — `FileLog` writes diagnostics to a file without corrupting the rendered UI
 - **Lipgloss-inspired styling** — true-color RGB, borders with titles, padding, word-wrap, gradients, SGR attributes
 - **Style utilities** — `getWidth()`, `getHeight()`, `truncate()`, `truncateLeft()`, per-side border flags, `tabWidth`, `marginBackground`
 - **Style inheritance** — `Style.inherit(parent)` fills unset fields; `CompleteColor` for per-profile color downgrade
@@ -34,7 +38,7 @@ Build rich, interactive CLI applications with a clean **Model–Update–View** 
 ```yaml
 # pubspec.yaml
 dependencies:
-  dart_tui: ^1.2.0
+  dart_tui: ^1.3.0
 ```
 
 ```bash
@@ -553,6 +557,62 @@ FilePickerModel(
 
 ![file_picker](example/tapes/output/file_picker.gif)
 
+### Spring animation
+
+Harmonica-style damped-harmonic-oscillator for smooth, eased motion of any scalar — a progress value, a scroll offset, a cursor position. Pure math, no terminal I/O; drive it one frame per `TickMsg`.
+
+```dart
+final spring = Spring(fps: 60, frequency: 6, damping: 1);
+var (pos, vel) = (0.0, 0.0);
+
+// each TickMsg, ease toward the target:
+(pos, vel) = spring.update(pos, vel, target);
+```
+
+`damping < 1` overshoots and oscillates, `1` is critical, `> 1` is over-damped (no overshoot). `fpsToDelta(fps)` returns the per-frame delta.
+
+### One-shot helpers
+
+Quick, self-contained flows built on `Program` — no model to write. Each returns a `Future` and accepts a `programOptions` list so it can be scripted/tested headlessly.
+
+```dart
+// prompts
+final choice  = await promptSelect(['apple', 'banana'], title: 'Pick one');
+final ok      = await promptConfirm('Continue?');
+final name    = await promptInput('Name');
+
+// gum-style
+final picked  = await filter(['red', 'green', 'blue']);   // interactive fuzzy filter
+final result  = await spin(fetchData(), label: 'Loading…'); // spinner while awaiting a Future
+await pager(longText);                                       // scrollable viewer (q/Esc to exit)
+```
+
+All prompts and `filter` return `null` when cancelled with `Esc` / `Ctrl+C`.
+
+### Readline editing keys
+
+`TextInputModel` and `TextAreaModel` understand the common emacs/readline bindings:
+
+| Key | Action |
+|-----|--------|
+| `ctrl+a` / `ctrl+e` | jump to start / end of line |
+| `ctrl+b` / `ctrl+f` | move one character left / right |
+| `alt+←` / `alt+→` | move one word left / right |
+| `ctrl+w` / `alt+backspace` | delete the previous word |
+
+### File logging
+
+A running `Program` owns stdout, so `print()` corrupts the UI. Write diagnostics to a file instead and `tail -f` it in another terminal:
+
+```dart
+final log = FileLog('debug.log');
+log('got message: $msg');
+// on shutdown:
+await log.close();
+```
+
+`FileLog.none()` returns a logger that silently discards everything.
+
 ---
 
 ## Examples
@@ -626,6 +686,7 @@ dart run tool/bin/simple.dill
 ```bash
 make test                     # run all unit tests
 make analyze                  # dart analyze lib/
+make coverage                 # measure lib/ line coverage, fail below FLOOR (default 90%)
 make run EXAMPLE=simple       # run example/simple.dart (JIT)
 make kernels                  # compile all examples to .dill snapshots
 make run-fast EXAMPLE=simple  # run tool/bin/simple.dill (kernel snapshot)

@@ -1,0 +1,2 @@
+# Dev-only artifacts — keep them in the repo but out of the published package.
+docs/
