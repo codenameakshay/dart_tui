@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dart_tui/dart_tui.dart';
+import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 KeyPressMsg _k(KeyCode c) => KeyPressMsg(TeaKey(code: c));
@@ -110,7 +111,7 @@ void main() {
       final m = loaded(FilePickerModel(
           currentDir: tmp.path, allowedExtensions: const ['.txt']));
       expect(m.loading, isFalse);
-      final names = m.entries.map((e) => e.path.split('/').last).toSet();
+      final names = m.entries.map((e) => p.basename(e.path)).toSet();
       expect(names, contains('sub')); // directory always shown
       expect(names, contains('a.txt')); // allowed extension
       expect(names, isNot(contains('b.dart'))); // filtered out
@@ -122,7 +123,7 @@ void main() {
       m = m.update(_r('h')).$1
           as FilePickerModel; // toggles showHidden + reloads
       m = loaded(m);
-      final names = m.entries.map((e) => e.path.split('/').last).toSet();
+      final names = m.entries.map((e) => p.basename(e.path)).toSet();
       expect(names, contains('.hidden'));
     });
 
@@ -159,4 +160,4 @@ void main() {
   });
 }
 
-String pathJoin(String a, String b) => '$a/$b';
+String pathJoin(String a, String b) => p.join(a, b);
