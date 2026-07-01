@@ -91,4 +91,43 @@ void main() {
       expect(buf.toString(), isNot(contains(_el)));
     });
   });
+
+  group('insertAbove clears the row before writing (issue #7)', () {
+    // In alt-screen mode the scrolled-in row must be erased *before* the line
+    // is written, not after: a trailing erase lands on the pending-wrap last
+    // column of a full-width line and wipes it (same defect as render()).
+    final renderers = <String, TeaRenderer Function(StringBuffer)>{
+      'AnsiRenderer': (buf) => AnsiRenderer(
+            output: _CaptureSink(buf),
+            defaultAltScreen: false,
+            defaultHideCursor: false,
+          ),
+      'CellRenderer': (buf) => CellRenderer(
+            output: _CaptureSink(buf),
+            defaultAltScreen: false,
+            defaultHideCursor: false,
+          ),
+    };
+
+    renderers.forEach((name, make) {
+      test('$name erases the target row before the inserted text', () {
+        final buf = StringBuffer();
+        final r = make(buf);
+        r.render(View(content: 'x', altScreen: true)); // enter alt-screen
+        buf.clear();
+        r.insertAbove('LOGLINE');
+        final out = buf.toString();
+        final erase = out.indexOf(_el);
+        final text = out.indexOf('LOGLINE');
+        expect(erase, isNonNegative, reason: 'the row should still be cleared');
+        expect(text, isNonNegative);
+        expect(
+          erase,
+          lessThan(text),
+          reason: 'erase must precede the text, otherwise a full-width line '
+              'loses its last column',
+        );
+      });
+    });
+  });
 }
