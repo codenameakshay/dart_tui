@@ -234,8 +234,12 @@ final class TextAreaModel extends TeaModel {
           return (copyWith(value: ls.join('\n'), cursorCol: 0), null);
         }
         if (!focused) return (this, null);
-        if (msg.key.isNotEmpty) {
-          return (_insertText(msg.key)._scroll(cursorRow), null);
+        // Insert the actual rune text (msg.key would be 'space' for space, etc.).
+        final ke = msg.keyEvent;
+        if (ke.code == KeyCode.rune &&
+            ke.text.isNotEmpty &&
+            ke.modifiers.isEmpty) {
+          return (_insertText(ke.text)._scroll(cursorRow), null);
         }
         return (this, null);
     }
