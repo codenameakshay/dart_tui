@@ -50,4 +50,36 @@ void main() {
     f = step(f, rune('Z'));
     expect(f.values.get<String>('after'), 'Z');
   });
+
+  test('a failing validator blocks advance and shows the error', () {
+    var f = Form([
+      Group([
+        Field.input(
+            key: 'a',
+            title: 'A',
+            validate: (v) => v.isEmpty ? 'required' : null),
+        Field.input(key: 'b', title: 'B'),
+      ]),
+    ]);
+    f = step(f, key(KeyCode.tab)); // try to advance with empty 'a'
+    expect(f.fieldIndexForTest, 0); // blocked, still on field a
+    expect(f.view().content, contains('required'));
+    f = step(f, rune('x')); // fix it
+    f = step(f, key(KeyCode.tab)); // now advances
+    expect(f.fieldIndexForTest, 1);
+  });
+
+  test('submit re-validates whole form and blocks on the first error', () {
+    var f = Form([
+      Group([
+        Field.input(
+            key: 'a',
+            title: 'A',
+            validate: (v) => v.isEmpty ? 'required' : null),
+      ]),
+    ]);
+    f = step(f, key(KeyCode.enter)); // empty → blocked
+    expect(f.submitted, isFalse);
+    expect(f.view().content, contains('required'));
+  });
 }

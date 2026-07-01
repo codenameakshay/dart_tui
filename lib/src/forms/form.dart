@@ -122,14 +122,47 @@ final class Form extends TeaModel implements OutcomeModel<FormValues> {
           if (g.fields[i].acceptsInput && !g.fields[i].isHidden(v)) i,
       ];
 
-  (Model, Cmd?) _advance() {
+  Form _setActiveError(String? error) {
     final g = groups[groupIndex];
-    final targets = _focusable(g, values);
-    final pos = targets.indexOf(fieldIndex);
+    final fields = [...g.fields];
+    fields[fieldIndex] = fields[fieldIndex].withError(error);
+    final next = [...groups];
+    next[groupIndex] = Group(fields, title: g.title, hidden: g.hidden);
+    return _withGroups(next);
+  }
+
+  (Model, Cmd?) _advance() {
+    final active = groups[groupIndex].fields[fieldIndex];
+    final err = active.validate();
+    if (err != null) return (_setActiveError(err), null); // blocked
+    final cleared = active.error == null ? this : _setActiveError(null);
+
+    final g = cleared.groups[cleared.groupIndex];
+    final targets = cleared._focusable(g, cleared.values);
+    final pos = targets.indexOf(cleared.fieldIndex);
     if (pos >= 0 && pos < targets.length - 1) {
-      return (_copy(fieldIndex: targets[pos + 1]), null);
+      return (cleared._copy(fieldIndex: targets[pos + 1]), null);
     }
-    // past the last focusable field of the (only, for now) group → submit
+    return cleared._submit();
+  }
+
+  // Validate every visible keyed field; jump to the first error, else submit.
+  (Model, Cmd?) _submit() {
+    for (var gi = 0; gi < groups.length; gi++) {
+      final g = groups[gi];
+      if (g.hidden?.call(values) ?? false) continue;
+      for (var fi = 0; fi < g.fields.length; fi++) {
+        final f = g.fields[fi];
+        if (f.isHidden(values)) continue;
+        final err = f.validate();
+        if (err != null) {
+          return (
+            _copy(groupIndex: gi, fieldIndex: fi)._setActiveError(err),
+            null,
+          );
+        }
+      }
+    }
     return (_copy(submitted: true), null);
   }
 
