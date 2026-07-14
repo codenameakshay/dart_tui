@@ -19,6 +19,10 @@ A composable, immutable, key-based forms subsystem — the equivalent of Charm's
 
 - **`TextInputModel` / `TextAreaModel`**: typing a space inserted the literal string `"space"` (and F-keys inserted `"f1"`, etc.) because the default branch inserted the keystroke name rather than the character. Now only unmodified printable runes are inserted, using the actual rune text — so text fields (and form inputs) accept spaces correctly.
 
+### Docs
+
+- New [documentation website](https://dart-tui.vercel.app) — a searchable gallery of every component, block and guide with live GIF previews and copyable source. Lives in `website/` (excluded from the published package via `.pubignore`).
+
 ## 1.3.0
 
 ### New components & helpers

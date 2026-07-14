@@ -1,0 +1,38 @@
+# pub uses THIS file INSTEAD of the root .gitignore (a .pubignore overrides the
+# .gitignore in the same directory), so it must reproduce every root .gitignore
+# rule, plus the dev-only paths that shouldn't ship in the package.
+
+# --- mirror of root .gitignore ---
+.dart_tool/
+.packages
+build/
+pubspec.lock
+
+# Build artifacts (kernel snapshots, AOT binaries) — ~8 MB each, 60+ of them
+tool/bin/
+
+# IDE
+.idea/
+*.iml
+
+# Logs
+*.log
+debug.log
+
+# FVM version cache (can be gigabytes)
+.fvm/
+
+# Coverage output
+.coverage_out/
+coverage/
+
+# --- extra: dev-only paths that are not part of the Dart package ---
+
+# The documentation website is a standalone Next.js app deployed to Vercel.
+website/
+
+# Repo / editor / CI configuration
+.github/
+.vscode/
+.cursor/
+.fvmrc

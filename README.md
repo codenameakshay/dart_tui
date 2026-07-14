@@ -8,6 +8,8 @@ Elm-style terminal UI framework for Dart, inspired by [Bubble Tea](https://githu
 
 Build rich, interactive CLI applications with a clean **Model–Update–View** architecture, a full component library, and Lipgloss-quality styling — all in pure Dart.
 
+**📖 [Documentation & component gallery](https://dart-tui.vercel.app)** — browse every component, block and guide with live previews.
+
 ![showcase](example/tapes/output/showcase.gif)
 
 ---
@@ -38,7 +40,7 @@ Build rich, interactive CLI applications with a clean **Model–Update–View** 
 ```yaml
 # pubspec.yaml
 dependencies:
-  dart_tui: ^1.3.0
+  dart_tui: ^1.4.0
 ```
 
 ```bash
