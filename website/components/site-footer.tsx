@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { Logo } from "@/components/logo";
-import { componentsList, blocksList, guidesList } from "@/content";
+import {
+  componentsList,
+  blocksList,
+  guidesList,
+  examplesList,
+} from "@/content";
 import { siteConfig } from "@/lib/utils";
 
 const columns = [
@@ -16,6 +21,13 @@ const columns = [
     links: blocksList.slice(0, 6).map((e) => ({
       label: e.name,
       href: `/blocks/${e.slug}`,
+    })),
+  },
+  {
+    title: "Examples",
+    links: examplesList.slice(0, 6).map((e) => ({
+      label: e.name,
+      href: `/examples/${e.slug}`,
     })),
   },
   {
@@ -40,7 +52,7 @@ export function SiteFooter() {
   return (
     <footer className="border-t border-border/70">
       <div className="container py-14">
-        <div className="grid gap-10 md:grid-cols-[1.4fr_repeat(4,1fr)]">
+        <div className="grid grid-cols-2 gap-10 md:grid-cols-3 lg:grid-cols-[1.4fr_repeat(5,1fr)]">
           <div className="max-w-xs">
             <Logo />
             <p className="mt-4 text-sm leading-relaxed text-muted-foreground">

@@ -13,8 +13,8 @@ import { siteConfig, cn } from "@/lib/utils";
 const nav = [
   { href: "/components", label: "Components" },
   { href: "/blocks", label: "Blocks" },
+  { href: "/examples", label: "Examples" },
   { href: "/guides/installation", label: "Guides", match: "/guides" },
-  { href: "/guides/examples", label: "Examples", match: "/guides/examples" },
 ];
 
 export function SiteHeader() {

@@ -3,7 +3,14 @@
 import { Command } from "cmdk";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { Box, BookOpen, Blocks, Search, Github } from "lucide-react";
+import {
+  Box,
+  BookOpen,
+  Blocks,
+  Search,
+  Github,
+  SquareTerminal,
+} from "lucide-react";
 import { allEntries, CATEGORY_META, type Category } from "@/content";
 import { siteConfig } from "@/lib/utils";
 
@@ -17,6 +24,7 @@ const categoryIcon: Record<Category, React.ReactNode> = {
   components: <Box className="h-4 w-4 text-mauve" />,
   blocks: <Blocks className="h-4 w-4 text-sky" />,
   guides: <BookOpen className="h-4 w-4 text-green" />,
+  examples: <SquareTerminal className="h-4 w-4 text-peach" />,
 };
 
 export function CommandMenu() {
@@ -47,7 +55,7 @@ export function CommandMenu() {
     [router],
   );
 
-  const groups: Category[] = ["components", "blocks", "guides"];
+  const groups: Category[] = ["components", "blocks", "examples", "guides"];
 
   return (
     <Command.Dialog

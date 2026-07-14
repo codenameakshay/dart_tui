@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { componentsList, blocksList, guidesList } from "@/content";
+import {
+  componentsList,
+  blocksList,
+  guidesList,
+  examplesList,
+} from "@/content";
 import type { DocEntry } from "@/content";
 import { cn } from "@/lib/utils";
 
@@ -10,6 +15,7 @@ const sections: { title: string; base: string; items: DocEntry[] }[] = [
   { title: "Guides", base: "guides", items: guidesList },
   { title: "Components", base: "components", items: componentsList },
   { title: "Blocks", base: "blocks", items: blocksList },
+  { title: "Examples", base: "examples", items: examplesList },
 ];
 
 export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {

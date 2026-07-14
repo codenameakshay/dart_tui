@@ -1,4 +1,4 @@
-export type Category = "components" | "blocks" | "guides";
+export type Category = "components" | "blocks" | "guides" | "examples";
 
 export interface CodeSnippet {
   /** Tab label, e.g. "Usage", "Setup". Defaults to "Code". */
@@ -70,5 +70,11 @@ export const CATEGORY_META: Record<
     label: "Guides",
     blurb:
       "Learn the Model–Update–View architecture, commands, program options, styling and the runtime internals.",
+  },
+  examples: {
+    title: "Examples",
+    label: "Examples",
+    blurb:
+      "Small, runnable recipes — real programs showing a single runtime feature end to end, with full source you can copy.",
   },
 };

@@ -1,16 +1,23 @@
 import { components } from "./components";
 import { blocks } from "./blocks";
 import { guides } from "./guides";
+import { examples } from "./examples";
 import type { Category, DocEntry } from "./registry";
 
 export * from "./registry";
 
-export const allEntries: DocEntry[] = [...components, ...blocks, ...guides];
+export const allEntries: DocEntry[] = [
+  ...components,
+  ...blocks,
+  ...guides,
+  ...examples,
+];
 
 const byCategory: Record<Category, DocEntry[]> = {
   components: sortEntries(components),
   blocks: sortEntries(blocks),
   guides: sortEntries(guides),
+  examples: sortEntries(examples),
 };
 
 function sortEntries(entries: DocEntry[]): DocEntry[] {
@@ -51,3 +58,4 @@ export function getSiblings(category: Category, slug: string) {
 export const componentsList = byCategory.components;
 export const blocksList = byCategory.blocks;
 export const guidesList = byCategory.guides;
+export const examplesList = byCategory.examples;
