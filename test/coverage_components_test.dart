@@ -15,6 +15,12 @@ void main() {
       expect(m.update(WindowSizeMsg(4, 4)).$1, same(m));
     });
 
+    test('space key inserts a literal space', () {
+      final m =
+          _u<TextAreaModel>(TextAreaModel(value: 'a', cursorCol: 1), _r(' '));
+      expect(m.value, 'a ');
+    });
+
     test('typing inserts and enter splits into a new line', () {
       var m = TextAreaModel();
       m = _u(m, _r('h'));

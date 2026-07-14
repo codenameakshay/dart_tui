@@ -214,11 +214,15 @@ final class TextInputModel extends TeaModel {
 
       default:
         if (!focused) return (this, null);
-        if (msg.key.isNotEmpty) {
-          // In dart_tui, msg.key for runes is the actual string
+        // Insert the actual rune text — msg.key would be 'space' for the space
+        // key, 'f1' for F-keys, etc. Only unmodified printable runes are typed.
+        final ke = msg.keyEvent;
+        if (ke.code == KeyCode.rune &&
+            ke.text.isNotEmpty &&
+            ke.modifiers.isEmpty) {
           if (charLimit > 0 && chars.length >= charLimit) return (this, null);
           final nextChars = List<String>.from(chars)
-            ..insert(cursorPos, msg.key);
+            ..insert(cursorPos, ke.text);
           return (
             copyWith(value: nextChars.join(), cursorPos: cursorPos + 1),
             null

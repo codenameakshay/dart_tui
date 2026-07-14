@@ -22,6 +22,11 @@ void main() {
       expect(m.cursorPos, 2);
     });
 
+    test('space key inserts a literal space, not "space"', () {
+      final m = _apply(TextInputModel(value: 'a', cursorPos: 1), _rune(' '));
+      expect(m.value, 'a ');
+    });
+
     test('insert in the middle', () {
       var m = TextInputModel(value: 'ac', cursorPos: 1);
       m = _apply(m, _rune('b'));

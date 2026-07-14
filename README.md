@@ -613,11 +613,39 @@ await log.close();
 
 `FileLog.none()` returns a logger that silently discards everything.
 
+### Forms
+
+A composable, huh-style form: typed fields grouped into (optionally conditional) wizard pages, per-field validation with inline errors, and dynamic fields whose visibility/options depend on other fields' values. Key-based and immutable — a `Form` is a `TeaModel` you can embed, or run one-shot with `form.run()`.
+
+```dart
+final form = Form([
+  Group([
+    Field.input(key: 'name', title: 'Service name',
+        validate: (v) => v.contains(' ') ? 'no spaces allowed' : null),
+    Field.select(key: 'runtime', title: 'Runtime',
+        options: ['Dart', 'Go', 'Node'], initial: 'Dart'),
+    Field.confirm(key: 'deploy', title: 'Deploy now?', initial: true),
+  ], title: 'Basics'),
+  Group([
+    Field.multiSelect(key: 'regions', title: 'Regions',
+        options: ['iad', 'fra', 'sfo']),
+    Field.note(title: 'Review', description: 'Press enter to submit.'),
+  ], title: 'Deploy', hidden: (v) => v.get<bool>('deploy') != true), // dynamic page
+]);
+
+final values = await form.run();               // FormValues? — null if cancelled
+final regions = values?.get<List<String>>('regions');
+```
+
+Field types: `Field.input`, `.password`, `.text` (multiline), `.file`, `.select` / `.selectOf<T>`, `.multiSelect` / `.multiSelectOf<T>`, `.confirm`, `.note`. Any field or group takes `hidden`, and titles/options can be dynamic (`titleFor`, `optionsFor`).
+
+![form](example/tapes/output/form.gif)
+
 ---
 
 ## Examples
 
-60 runnable examples covering every feature:
+61 runnable examples covering every feature:
 
 | Example | What it shows |
 |---------|---------------|
@@ -660,6 +688,7 @@ await log.close();
 | `exec_cmd.dart` | External editor via execProcess |
 | `http.dart` | HTTP fetch with spinner |
 | `file_log.dart` | **FileLog** — write diagnostics to a file, not the UI |
+| `form.dart` | **Forms** — huh-style fields, validation, wizard, dynamic pages |
 | `result.dart` | OutcomeModel returning a value |
 | `isbn_form.dart` | Validated TextInputModel |
 | `showcase.dart` | Full-featured gallery |
@@ -741,7 +770,7 @@ Typical results:
 ### Re-recording GIFs
 
 ```bash
-make gifs          # builds all kernels, then records all 59 GIFs
+make gifs          # builds all kernels, then records all 60 GIFs
 make gif EXAMPLE=showcase   # record one
 ```
 
