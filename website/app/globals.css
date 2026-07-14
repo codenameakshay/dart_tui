@@ -1,0 +1,149 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * dart_tui docs — palette derived from Catppuccin (the same family the library's
+ * own examples render with), so the site chrome and the recorded GIFs feel unified.
+ * Dark = Mocha, Light = Latte. Variables hold bare "H S% L%" triplets so Tailwind's
+ * `hsl(var(--token) / <alpha-value>)` can apply opacity.
+ */
+
+@layer base {
+  :root {
+    /* Latte (light) */
+    --background: 220 23% 95%;
+    --foreground: 234 16% 35%;
+    --card: 0 0% 100%;
+    --card-foreground: 234 16% 35%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 234 16% 35%;
+    --muted: 223 16% 90%;
+    --muted-foreground: 233 10% 47%;
+    --border: 223 16% 83%;
+    --input: 223 16% 83%;
+    --ring: 266 85% 58%;
+
+    --mauve: 266 85% 58%;
+    --green: 109 58% 40%;
+    --sky: 197 97% 46%;
+    --peach: 22 99% 52%;
+
+    /* Terminal chrome always renders dark — matches the recorded GIFs. */
+    --term-bg: 240 21% 15%;
+    --term-fg: 226 64% 88%;
+    --term-bar: 237 16% 23%;
+  }
+
+  .dark {
+    /* Mocha (dark) */
+    --background: 240 23% 9%;
+    --foreground: 226 64% 88%;
+    --card: 240 21% 13%;
+    --card-foreground: 226 64% 88%;
+    --popover: 240 21% 12%;
+    --popover-foreground: 226 64% 88%;
+    --muted: 237 16% 20%;
+    --muted-foreground: 228 24% 72%;
+    --border: 237 16% 24%;
+    --input: 237 16% 24%;
+    --ring: 267 84% 81%;
+
+    --mauve: 267 84% 81%;
+    --green: 115 54% 76%;
+    --sky: 189 71% 73%;
+    --peach: 23 92% 75%;
+
+    --term-bg: 240 21% 12%;
+    --term-fg: 226 64% 88%;
+    --term-bar: 237 16% 20%;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: hsl(var(--mauve) / 0.3);
+  }
+
+  /* Slim, theme-aware scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border));
+    border-radius: 9999px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.5);
+  }
+}
+
+@layer components {
+  /* Subtle dotted grid used behind the hero. */
+  .bg-grid {
+    background-image: radial-gradient(
+      hsl(var(--muted-foreground) / 0.18) 1px,
+      transparent 1px
+    );
+    background-size: 22px 22px;
+  }
+
+  .bg-grid-fade {
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 40%, transparent 100%);
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 40%, transparent 100%);
+  }
+
+  /* Gradient text used for accents in headings. */
+  .text-gradient {
+    background: linear-gradient(
+      110deg,
+      hsl(var(--mauve)),
+      hsl(var(--sky)) 55%,
+      hsl(var(--green))
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .glass {
+    background-color: hsl(var(--background) / 0.72);
+    backdrop-filter: saturate(180%) blur(12px);
+    -webkit-backdrop-filter: saturate(180%) blur(12px);
+  }
+}
+
+/* Shiki: let both themes coexist and switch with .dark on <html>. */
+.shiki,
+.shiki span {
+  background-color: transparent !important;
+}
+html:not(.dark) .shiki,
+html:not(.dark) .shiki span {
+  color: var(--shiki-light) !important;
+  font-style: var(--shiki-light-font-style) !important;
+  font-weight: var(--shiki-light-font-weight) !important;
+  text-decoration: var(--shiki-light-text-decoration) !important;
+}
+html.dark .shiki,
+html.dark .shiki span {
+  color: var(--shiki-dark) !important;
+  font-style: var(--shiki-dark-font-style) !important;
+  font-weight: var(--shiki-dark-font-weight) !important;
+  text-decoration: var(--shiki-dark-text-decoration) !important;
+}
