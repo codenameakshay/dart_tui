@@ -53,6 +53,21 @@ final class _DriverModel extends TeaModel {
 }
 
 void main() {
+  test('kill wakes a program waiting without queued messages', () async {
+    final ready = Completer<void>();
+    final program = Program(programOptions: [
+      withInput(null),
+      withoutRenderer(),
+    ]);
+    final runFuture = program.run(_IdleModel(ready));
+    await ready.future.timeout(const Duration(seconds: 1));
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+
+    program.kill();
+
+    await runFuture.timeout(const Duration(milliseconds: 200));
+  });
+
   test('applyMsg drives the terminal-control switch + renderer methods',
       () async {
     final sink = _StringSink();
@@ -103,6 +118,21 @@ void main() {
     ]).run(model).timeout(const Duration(seconds: 10));
     expect(model.exitCode, 0);
   }, timeout: const Timeout(Duration(seconds: 15)));
+}
+
+final class _IdleModel extends TeaModel {
+  _IdleModel(this.ready);
+
+  final Completer<void> ready;
+
+  @override
+  (Model, Cmd?) update(Msg msg) {
+    if (msg is EnvMsg && !ready.isCompleted) ready.complete();
+    return (this, null);
+  }
+
+  @override
+  View view() => newView('idle');
 }
 
 final class _ExecModel extends TeaModel {

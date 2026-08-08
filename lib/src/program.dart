@@ -140,6 +140,7 @@ final class Program {
   bool _running = false;
   bool _killed = false;
   Completer<void>? _finished;
+  Completer<void>? _activityWake;
   Timer? _tickTimer;
   Timer? _loneEscTimer;
   StreamSubscription<List<int>>? _inputSub;
@@ -222,6 +223,7 @@ final class Program {
     _running = true;
     _killed = false;
     _finished = Completer<void>();
+    _activityWake = null;
     _runningModel = initial;
 
     // Opt-in startup phase timer: set DART_TUI_BENCH=1 to enable.
@@ -235,12 +237,11 @@ final class Program {
     bench('start');
 
     final queue = Queue<Msg>();
-    Completer<void>? wake;
 
     void enqueue(Msg msg) {
       queue.add(msg);
-      wake?.complete();
-      wake = null;
+      _activityWake?.complete();
+      _activityWake = null;
     }
 
     // [send] pushes to [_msgs]; bridge it into the same queue as stdin/ticks.
@@ -256,8 +257,8 @@ final class Program {
 
     Future<void> waitForActivity() async {
       while (_running && queue.isEmpty) {
-        wake = Completer<void>();
-        await wake!.future;
+        _activityWake = Completer<void>();
+        await _activityWake!.future;
       }
     }
 
@@ -606,6 +607,11 @@ final class Program {
   void _shutdown() {
     if (!_running && (_finished?.isCompleted ?? true)) return;
     _running = false;
+    final activityWake = _activityWake;
+    _activityWake = null;
+    if (activityWake != null && !activityWake.isCompleted) {
+      activityWake.complete();
+    }
     _tickTimer?.cancel();
     _tickTimer = null;
     _loneEscTimer?.cancel();
