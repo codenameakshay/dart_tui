@@ -714,7 +714,8 @@ dart run tool/bin/simple.dill
 
 ### Prerequisites
 
-- Dart SDK ≥ 3.5
+- Dart SDK ≥ 3.11 for development (`dart_tui` consumers remain compatible
+  with Dart ≥ 3.5)
 - [VHS](https://github.com/charmbracelet/vhs) — only needed to re-record GIFs
 
 Make targets use `dart` by default. FVM users can opt in per command with
