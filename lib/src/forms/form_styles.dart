@@ -16,6 +16,11 @@ final class FormStyles {
     this.pageIndicator = const Style(),
   });
 
+  factory FormStyles.forDarkBackground(bool isDark) => isDark ? dark : light;
+
+  factory FormStyles.forBackground(int rgb) =>
+      FormStyles.forDarkBackground(isDarkRgb(rgb));
+
   final Style title; // inactive field title
   final Style activeTitle; // focused field title
   final Style description; // field description / note body
@@ -28,7 +33,7 @@ final class FormStyles {
   final Style help; // footer help line
   final Style pageIndicator; // Group N/M
 
-  static const FormStyles defaults = FormStyles(
+  static const FormStyles dark = FormStyles(
     title: Style(foregroundRgb: RgbColor(205, 214, 244)),
     activeTitle: Style(foregroundRgb: RgbColor(203, 166, 247), isBold: true),
     description: Style(foregroundRgb: RgbColor(166, 173, 200), isDim: true),
@@ -41,4 +46,21 @@ final class FormStyles {
     help: Style(foregroundRgb: RgbColor(108, 112, 134), isDim: true),
     pageIndicator: Style(foregroundRgb: RgbColor(137, 180, 250), isBold: true),
   );
+
+  static const FormStyles light = FormStyles(
+    title: Style(foregroundRgb: RgbColor(76, 79, 105)),
+    activeTitle: Style(foregroundRgb: RgbColor(136, 57, 239), isBold: true),
+    description: Style(foregroundRgb: RgbColor(108, 111, 133)),
+    error: Style(foregroundRgb: RgbColor(210, 15, 57)),
+    cursor: Style(foregroundRgb: RgbColor(136, 57, 239), isBold: true),
+    option: Style(foregroundRgb: RgbColor(76, 79, 105)),
+    selectedOption: Style(foregroundRgb: RgbColor(64, 160, 43), isBold: true),
+    checkedBox: Style(foregroundRgb: RgbColor(64, 160, 43)),
+    uncheckedBox: Style(foregroundRgb: RgbColor(108, 111, 133)),
+    help: Style(foregroundRgb: RgbColor(108, 111, 133)),
+    pageIndicator: Style(foregroundRgb: RgbColor(30, 102, 245), isBold: true),
+  );
+
+  /// Defaults remain optimized for dark terminal backgrounds.
+  static const FormStyles defaults = dark;
 }

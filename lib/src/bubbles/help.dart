@@ -16,6 +16,11 @@ final class HelpStyles {
     this.separator = const Style(),
   });
 
+  factory HelpStyles.forDarkBackground(bool isDark) => isDark ? dark : light;
+
+  factory HelpStyles.forBackground(int rgb) =>
+      HelpStyles.forDarkBackground(isDarkRgb(rgb));
+
   /// Applied to the title / header.
   final Style title;
 
@@ -28,8 +33,7 @@ final class HelpStyles {
   /// Applied to border separator lines (when [HelpModel.showBorder] is true).
   final Style separator;
 
-  /// Beautiful defaults using the Catppuccin Mocha palette.
-  static const HelpStyles defaults = HelpStyles(
+  static const HelpStyles dark = HelpStyles(
     title: Style(
       foregroundRgb: RgbColor(203, 166, 247), // Mauve
       isBold: true,
@@ -46,6 +50,16 @@ final class HelpStyles {
       foregroundRgb: RgbColor(88, 91, 112), // Surface2
     ),
   );
+
+  static const HelpStyles light = HelpStyles(
+    title: Style(foregroundRgb: RgbColor(136, 57, 239), isBold: true),
+    key: Style(foregroundRgb: RgbColor(136, 57, 239), isBold: true),
+    description: Style(foregroundRgb: RgbColor(76, 79, 105)),
+    separator: Style(foregroundRgb: RgbColor(108, 111, 133)),
+  );
+
+  /// Defaults remain optimized for dark terminal backgrounds.
+  static const HelpStyles defaults = dark;
 }
 
 final class HelpModel extends TeaModel {

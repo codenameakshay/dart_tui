@@ -28,6 +28,11 @@ final class InputStyles {
     this.suggestion = const Style(),
   });
 
+  factory InputStyles.forDarkBackground(bool isDark) => isDark ? dark : light;
+
+  factory InputStyles.forBackground(int rgb) =>
+      InputStyles.forDarkBackground(isDarkRgb(rgb));
+
   /// Applied to the label when unfocused.
   final Style label;
 
@@ -43,8 +48,7 @@ final class InputStyles {
   /// Applied to the dimmed autocomplete suggestion suffix.
   final Style suggestion;
 
-  /// Beautiful defaults using the Catppuccin Mocha palette.
-  static const InputStyles defaults = InputStyles(
+  static const InputStyles dark = InputStyles(
     label: Style(
       foregroundRgb: RgbColor(166, 173, 200), // Subtext0
     ),
@@ -65,6 +69,23 @@ final class InputStyles {
       isDim: true,
     ),
   );
+
+  static const InputStyles light = InputStyles(
+    label: Style(foregroundRgb: RgbColor(108, 111, 133)),
+    focusedLabel: Style(
+      foregroundRgb: RgbColor(136, 57, 239),
+      isBold: true,
+    ),
+    text: Style(foregroundRgb: RgbColor(76, 79, 105)),
+    placeholder: Style(
+      foregroundRgb: RgbColor(108, 111, 133),
+      isItalic: true,
+    ),
+    suggestion: Style(foregroundRgb: RgbColor(108, 111, 133)),
+  );
+
+  /// Defaults remain optimized for dark terminal backgrounds.
+  static const InputStyles defaults = dark;
 }
 
 /// Single-line text field with full Bubbletea-compatible feature set.

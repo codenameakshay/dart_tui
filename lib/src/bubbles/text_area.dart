@@ -5,7 +5,44 @@ import '../grapheme_width.dart';
 import '../model.dart';
 import '../msg.dart';
 import '../view.dart';
-import 'text_input.dart' show InputStyles;
+import 'style.dart';
+
+/// Style configuration for [TextAreaModel].
+final class TextAreaStyles {
+  const TextAreaStyles({
+    this.text = const Style(),
+    this.placeholder = const Style(),
+  });
+
+  factory TextAreaStyles.forDarkBackground(bool isDark) =>
+      isDark ? dark : light;
+
+  factory TextAreaStyles.forBackground(int rgb) =>
+      TextAreaStyles.forDarkBackground(isDarkRgb(rgb));
+
+  final Style text;
+  final Style placeholder;
+
+  static const TextAreaStyles dark = TextAreaStyles(
+    text: Style(foregroundRgb: RgbColor(205, 214, 244)),
+    placeholder: Style(
+      foregroundRgb: RgbColor(108, 112, 134),
+      isDim: true,
+      isItalic: true,
+    ),
+  );
+
+  static const TextAreaStyles light = TextAreaStyles(
+    text: Style(foregroundRgb: RgbColor(76, 79, 105)),
+    placeholder: Style(
+      foregroundRgb: RgbColor(108, 111, 133),
+      isItalic: true,
+    ),
+  );
+
+  /// Defaults remain optimized for dark terminal backgrounds.
+  static const TextAreaStyles defaults = dark;
+}
 
 /// Multi-line text editor bubble with grapheme-safe visual-row navigation.
 final class TextAreaModel extends TeaModel {
@@ -22,7 +59,7 @@ final class TextAreaModel extends TeaModel {
     this.charLimit = 0,
     this.focused = true,
     this.placeholder = '',
-    this.styles = InputStyles.defaults,
+    this.styles = TextAreaStyles.defaults,
   });
 
   final String value;
@@ -43,7 +80,7 @@ final class TextAreaModel extends TeaModel {
   final int charLimit;
   final bool focused;
   final String placeholder;
-  final InputStyles styles;
+  final TextAreaStyles styles;
 
   List<String> get lines => value.split('\n');
   List<_TextAreaVisualRow> get _visualRows => _buildVisualRows(value, width);
@@ -81,7 +118,7 @@ final class TextAreaModel extends TeaModel {
     int? charLimit,
     bool? focused,
     String? placeholder,
-    InputStyles? styles,
+    TextAreaStyles? styles,
   }) =>
       TextAreaModel(
         value: value ?? this.value,
