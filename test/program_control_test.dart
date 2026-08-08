@@ -82,6 +82,33 @@ void main() {
     await runFuture.timeout(const Duration(milliseconds: 200));
   });
 
+  test('last rendered view handles mouse events through the command queue',
+      () async {
+    final ready = Completer<void>();
+    final handled = Completer<Mouse>();
+    final program = Program(programOptions: [
+      withOutput(_StringSink()),
+      withInput(null),
+    ]);
+    final runFuture = program.run(_MouseCallbackModel(ready, handled));
+    addTearDown(() async {
+      program.kill();
+      await runFuture;
+    });
+    await ready.future.timeout(const Duration(seconds: 1));
+
+    program.send(MouseClickMsg(const Mouse(
+      x: 7,
+      y: 3,
+      button: MouseButton.left,
+    )));
+
+    final mouse =
+        await handled.future.timeout(const Duration(milliseconds: 300));
+    expect((mouse.x, mouse.y, mouse.button), (7, 3, MouseButton.left));
+    await runFuture.timeout(const Duration(seconds: 1));
+  });
+
   test('applyMsg drives the terminal-control switch + renderer methods',
       () async {
     final sink = _StringSink();
@@ -147,6 +174,36 @@ final class _IdleModel extends TeaModel {
 
   @override
   View view() => newView('idle');
+}
+
+final class _MouseHandledMsg extends Msg {
+  _MouseHandledMsg(this.mouse);
+
+  final Mouse mouse;
+}
+
+final class _MouseCallbackModel extends TeaModel {
+  _MouseCallbackModel(this.ready, this.handled);
+
+  final Completer<void> ready;
+  final Completer<Mouse> handled;
+
+  @override
+  (Model, Cmd?) update(Msg msg) {
+    if (msg is EnvMsg && !ready.isCompleted) ready.complete();
+    if (msg case _MouseHandledMsg(:final mouse)) {
+      if (!handled.isCompleted) handled.complete(mouse);
+      return (this, () => QuitMsg());
+    }
+    return (this, null);
+  }
+
+  @override
+  View view() => View(
+        content: 'mouse callback',
+        mouseMode: MouseMode.cellMotion,
+        onMouse: (msg) => () => _MouseHandledMsg(msg.mouse),
+      );
 }
 
 final class _ExecModel extends TeaModel {

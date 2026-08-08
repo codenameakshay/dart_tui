@@ -110,6 +110,64 @@ void main() {
     expect(buf.toString(), equals('\x1b[5 q\x1b]112\x07\x1b[2;3H'));
   });
 
+  test('AnsiRenderer applies and resets terminal colors and progress', () {
+    final buf = StringBuffer();
+    final renderer = AnsiRenderer(
+      output: _StringSink(buf),
+      defaultAltScreen: false,
+      defaultHideCursor: false,
+    );
+    final active = View(
+      content: 'value',
+      foregroundColor: 0x123456,
+      backgroundColor: 0xabcdef,
+      progressBar: const ProgressBar(
+        state: ProgressBarState.normal,
+        value: 150,
+      ),
+    );
+
+    renderer.render(active);
+
+    expect(buf.toString(), contains('\x1b]10;#123456\x07'));
+    expect(buf.toString(), contains('\x1b]11;#abcdef\x07'));
+    expect(buf.toString(), contains('\x1b]9;4;1;100\x07'));
+
+    buf.clear();
+    renderer.render(active);
+    expect(buf.toString(), isEmpty);
+
+    renderer.render(newView('value'));
+    expect(
+      buf.toString(),
+      equals('\x1b]110\x07\x1b]111\x07\x1b]9;4;0\x07'),
+    );
+  });
+
+  test('AnsiRenderer release resets active terminal colors and progress', () {
+    final buf = StringBuffer();
+    final renderer = AnsiRenderer(
+      output: _StringSink(buf),
+      defaultAltScreen: false,
+      defaultHideCursor: false,
+    );
+    renderer.render(View(
+      content: 'value',
+      foregroundColor: 0x123456,
+      backgroundColor: 0xabcdef,
+      progressBar: const ProgressBar(
+        state: ProgressBarState.indeterminate,
+        value: 0,
+      ),
+    ));
+    buf.clear();
+
+    renderer.release();
+
+    final output = buf.toString();
+    expect(output, startsWith('\x1b]110\x07\x1b]111\x07\x1b]9;4;0\x07'));
+  });
+
   test('renderer skips identical frame content', () async {
     final chunks = <String>[];
     final controller = StreamController<List<int>>();

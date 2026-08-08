@@ -280,6 +280,7 @@ final class Program {
     final minFrameMicros = _fps > 0 ? (1000000 / _fps).round() : 0;
     final frameClock = Stopwatch()..start();
     var lastRenderMicros = -1;
+    View? lastRenderedView;
     Future<void> render(View v) async {
       final nowMicros = frameClock.elapsedMicroseconds;
       if (lastRenderMicros >= 0 && minFrameMicros > 0) {
@@ -291,6 +292,7 @@ final class Program {
         }
       }
       _renderer?.render(v);
+      lastRenderedView = v;
       lastRenderMicros = frameClock.elapsedMicroseconds;
     }
 
@@ -450,6 +452,20 @@ final class Program {
           msg.mode == 2026 &&
           (msg.value == 1 || msg.value == 2)) {
         _renderer?.setSyncUpdates(true);
+      }
+      if (msg is MouseMsg) {
+        final onMouse = lastRenderedView?.onMouse;
+        if (onMouse != null) {
+          try {
+            unawaited(runCmd(onMouse(msg)));
+          } catch (e, st) {
+            if (!_disableCatchPanics) {
+              stderr.writeln('Caught mouse handler exception: $e');
+              stderr.writeln(st);
+            }
+            enqueue(InterruptMsg());
+          }
+        }
       }
       final (nextModel, cmd) = model.update(msg);
       _runningModel = nextModel;

@@ -4,6 +4,7 @@ import 'package:characters/characters.dart';
 
 import 'bubbles/style.dart' show getWidth;
 import 'terminal_control.dart';
+import 'terminal_view_state.dart';
 import 'view.dart';
 
 abstract interface class TeaRenderer {
@@ -127,10 +128,12 @@ final class AnsiRenderer implements TeaRenderer {
   bool _hasRenderedFrame = false;
   bool _syncUpdates = false;
   final _cursorState = _CursorRendererState();
+  final _terminalViewState = TerminalViewState();
 
   @override
   void render(View view) {
     _applyModes(view);
+    _terminalViewState.apply(_output, view);
     if (view.windowTitle.isNotEmpty) {
       _output.write(windowTitleSequence(view.windowTitle));
     }
@@ -202,6 +205,7 @@ final class AnsiRenderer implements TeaRenderer {
 
   @override
   void release({bool reset = false}) {
+    _terminalViewState.reset(_output);
     _cursorState.reset(_output);
     _output.write('\x1b[?25h');
     _output.write('\x1b[?1049l');
@@ -370,10 +374,12 @@ final class CellRenderer implements TeaRenderer {
   List<List<_Cell>>? _lastGrid;
   String? _lastContent;
   final _cursorState = _CursorRendererState();
+  final _terminalViewState = TerminalViewState();
 
   @override
   void render(View view) {
     _applyModes(view);
+    _terminalViewState.apply(_output, view);
     if (view.windowTitle.isNotEmpty) {
       _output.write(windowTitleSequence(view.windowTitle));
     }
@@ -417,6 +423,7 @@ final class CellRenderer implements TeaRenderer {
 
   @override
   void release({bool reset = false}) {
+    _terminalViewState.reset(_output);
     _cursorState.reset(_output);
     _output.write('\x1b[?25h');
     _output.write('\x1b[?1049l');

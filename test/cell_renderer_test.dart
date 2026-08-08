@@ -82,6 +82,54 @@ void main() {
       expect(output, endsWith('\x1b[3;5H'));
     });
 
+    test('applies and resets terminal colors and progress', () {
+      final active = View(
+        content: 'value',
+        foregroundColor: 0x123456,
+        backgroundColor: 0xabcdef,
+        progressBar: const ProgressBar(
+          state: ProgressBarState.warning,
+          value: -20,
+        ),
+      );
+
+      renderer.render(active);
+
+      expect(buf.toString(), contains('\x1b]10;#123456\x07'));
+      expect(buf.toString(), contains('\x1b]11;#abcdef\x07'));
+      expect(buf.toString(), contains('\x1b]9;4;4;0\x07'));
+
+      buf.clear();
+      renderer.render(active);
+      expect(buf.toString(), isEmpty);
+
+      renderer.render(newView('value'));
+      expect(
+        buf.toString(),
+        equals('\x1b]110\x07\x1b]111\x07\x1b]9;4;0\x07'),
+      );
+    });
+
+    test('release resets active terminal colors and progress', () {
+      renderer.render(View(
+        content: 'value',
+        foregroundColor: 0x123456,
+        backgroundColor: 0xabcdef,
+        progressBar: const ProgressBar(
+          state: ProgressBarState.error,
+          value: 30,
+        ),
+      ));
+      buf.clear();
+
+      renderer.release();
+
+      expect(
+        buf.toString(),
+        startsWith('\x1b]110\x07\x1b]111\x07\x1b]9;4;0\x07'),
+      );
+    });
+
     test('does not render ST-terminated OSC payloads or terminators', () {
       renderer.render(newView('A\x1b]0;hidden\x1b\\B'));
 
