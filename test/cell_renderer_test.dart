@@ -54,6 +54,24 @@ void main() {
       expect(buf.toString(), equals('\x1b[1;3Hb'));
     });
 
+    test('applies cursor position, shape, blink, and color', () {
+      renderer.render(View(
+        content: 'value',
+        cursor: const Cursor(
+          x: 4,
+          y: 2,
+          color: 0x12abef,
+          shape: CursorShape.underline,
+          blink: false,
+        ),
+      ));
+
+      final output = buf.toString();
+      expect(output, contains('\x1b[4 q'));
+      expect(output, contains('\x1b]12;#12abef\x07'));
+      expect(output, endsWith('\x1b[3;5H'));
+    });
+
     test('unchanged frame emits no diff output', () {
       renderer.render(newView('hello'));
       buf.clear();

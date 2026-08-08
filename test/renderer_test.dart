@@ -37,6 +37,62 @@ class _StringSink implements IOSink {
 }
 
 void main() {
+  test('AnsiRenderer applies cursor position, shape, blink, and color', () {
+    final buf = StringBuffer();
+    final renderer = AnsiRenderer(
+      output: _StringSink(buf),
+      defaultAltScreen: false,
+      defaultHideCursor: true,
+    );
+
+    renderer.render(View(
+      content: 'value',
+      cursor: const Cursor(
+        x: 4,
+        y: 2,
+        color: 0x12abef,
+        shape: CursorShape.underline,
+        blink: false,
+      ),
+    ));
+
+    final output = buf.toString();
+    expect(output, contains('\x1b[4 q'));
+    expect(output, contains('\x1b]12;#12abef\x07'));
+    expect(output, endsWith('\x1b[3;5H'));
+  });
+
+  test('AnsiRenderer updates cursor state when frame content is unchanged', () {
+    final buf = StringBuffer();
+    final renderer = AnsiRenderer(
+      output: _StringSink(buf),
+      defaultAltScreen: false,
+      defaultHideCursor: true,
+    );
+    renderer.render(View(
+      content: 'value',
+      cursor: const Cursor(
+        x: 0,
+        y: 0,
+        color: 0xffffff,
+        shape: CursorShape.underline,
+        blink: false,
+      ),
+    ));
+    buf.clear();
+
+    renderer.render(View(
+      content: 'value',
+      cursor: const Cursor(
+        x: 2,
+        y: 1,
+        shape: CursorShape.bar,
+      ),
+    ));
+
+    expect(buf.toString(), equals('\x1b[5 q\x1b]112\x07\x1b[2;3H'));
+  });
+
   test('renderer skips identical frame content', () async {
     final chunks = <String>[];
     final controller = StreamController<List<int>>();

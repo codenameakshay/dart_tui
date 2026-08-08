@@ -47,6 +47,53 @@ final class NilRenderer implements TeaRenderer {
   void scroll(int n, {bool up = true}) {}
 }
 
+final class _CursorRendererState {
+  CursorShape? _shape;
+  bool? _blink;
+  int? _color;
+
+  void apply(IOSink output, Cursor? cursor) {
+    if (cursor == null) {
+      reset(output);
+      return;
+    }
+
+    if (cursor.shape != _shape || cursor.blink != _blink) {
+      final style = switch (cursor.shape) {
+        CursorShape.block => cursor.blink ? 1 : 2,
+        CursorShape.underline => cursor.blink ? 3 : 4,
+        CursorShape.bar => cursor.blink ? 5 : 6,
+      };
+      output.write('\x1b[$style q');
+      _shape = cursor.shape;
+      _blink = cursor.blink;
+    }
+
+    if (cursor.color != _color) {
+      if (cursor.color == null) {
+        output.write('\x1b]112\x07');
+      } else {
+        final hex =
+            (cursor.color! & 0xffffff).toRadixString(16).padLeft(6, '0');
+        output.write('\x1b]12;#$hex\x07');
+      }
+      _color = cursor.color;
+    }
+
+    final row = cursor.y.clamp(0, 0x7ffffffe) + 1;
+    final column = cursor.x.clamp(0, 0x7ffffffe) + 1;
+    output.write('\x1b[$row;${column}H');
+  }
+
+  void reset(IOSink output) {
+    if (_shape != null) output.write('\x1b[0 q');
+    if (_color != null) output.write('\x1b]112\x07');
+    _shape = null;
+    _blink = null;
+    _color = null;
+  }
+}
+
 final class AnsiRenderer implements TeaRenderer {
   AnsiRenderer({
     required IOSink output,
@@ -78,6 +125,7 @@ final class AnsiRenderer implements TeaRenderer {
   String _lastContent = '';
   bool _hasRenderedFrame = false;
   bool _syncUpdates = false;
+  final _cursorState = _CursorRendererState();
 
   @override
   void render(View view) {
@@ -86,6 +134,7 @@ final class AnsiRenderer implements TeaRenderer {
       _output.write('\x1b]0;${view.windowTitle}\x07');
     }
     if (_hasRenderedFrame && view.content == _lastContent) {
+      _cursorState.apply(_output, view.cursor);
       return;
     }
     final nextLines = view.content.split('\n');
@@ -113,6 +162,7 @@ final class AnsiRenderer implements TeaRenderer {
     _lastLines = nextLines;
     _lastContent = view.content;
     _hasRenderedFrame = true;
+    _cursorState.apply(_output, view.cursor);
     _logSink?.writeln('--- frame (diff) ---\n${view.content}');
   }
 
@@ -151,6 +201,7 @@ final class AnsiRenderer implements TeaRenderer {
 
   @override
   void release({bool reset = false}) {
+    _cursorState.reset(_output);
     _output.write('\x1b[?25h');
     _output.write('\x1b[?1049l');
     _output.write('\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l');
@@ -317,6 +368,7 @@ final class CellRenderer implements TeaRenderer {
 
   List<List<_Cell>>? _lastGrid;
   String? _lastContent;
+  final _cursorState = _CursorRendererState();
 
   @override
   void render(View view) {
@@ -325,12 +377,14 @@ final class CellRenderer implements TeaRenderer {
       _output.write('\x1b]0;${view.windowTitle}\x07');
     }
     if (_lastGrid != null && _lastContent == view.content) {
+      _cursorState.apply(_output, view.cursor);
       return; // identical frame — skip rebuild + diff walk
     }
     final nextGrid = _buildGrid(view.content);
     _diffAndEmit(nextGrid);
     _lastGrid = nextGrid;
     _lastContent = view.content;
+    _cursorState.apply(_output, view.cursor);
     _logSink?.writeln('--- cell frame ---\n${view.content}');
   }
 
@@ -362,6 +416,7 @@ final class CellRenderer implements TeaRenderer {
 
   @override
   void release({bool reset = false}) {
+    _cursorState.reset(_output);
     _output.write('\x1b[?25h');
     _output.write('\x1b[?1049l');
     _output.write('\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l');
