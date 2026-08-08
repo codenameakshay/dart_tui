@@ -12,7 +12,7 @@ GIFs are recorded with [VHS](https://github.com/charmbracelet/vhs). Run `vhs exa
 
 A 5-second tick-driven countdown that auto-quits when it reaches zero. Demonstrates the `tick()` command and minimal model lifecycle.
 
-![simple](tapes/output/simple.gif)
+![simple](https://dart-tui.vercel.app/gifs/simple.gif)
 
 ```bash
 dart run example/simple.dart
@@ -24,7 +24,7 @@ dart run example/simple.dart
 
 Displays the current terminal dimensions (columns × rows) using `WindowSizeMsg`. Press `q` to quit.
 
-![window_size](tapes/output/window_size.gif)
+![window_size](https://dart-tui.vercel.app/gifs/window_size.gif)
 
 ```bash
 dart run example/window_size.dart
@@ -36,7 +36,7 @@ dart run example/window_size.dart
 
 Runs a countdown inside the alternate screen buffer, keeping the normal terminal history clean. Auto-quits at zero.
 
-![fullscreen](tapes/output/fullscreen.gif)
+![fullscreen](https://dart-tui.vercel.app/gifs/fullscreen.gif)
 
 ```bash
 dart run example/fullscreen.dart
@@ -48,7 +48,7 @@ dart run example/fullscreen.dart
 
 Sets the terminal window/tab title via an ANSI escape sequence. Demonstrates `setWindowTitle`. Press `q` to quit.
 
-![set_window_title](tapes/output/set_window_title.gif)
+![set_window_title](https://dart-tui.vercel.app/gifs/set_window_title.gif)
 
 ```bash
 dart run example/set_window_title.dart
@@ -60,7 +60,7 @@ dart run example/set_window_title.dart
 
 Toggles between the normal screen and the alternate screen buffer each time you press Space. Press `q` to quit.
 
-![altscreen_toggle](tapes/output/altscreen_toggle.gif)
+![altscreen_toggle](https://dart-tui.vercel.app/gifs/altscreen_toggle.gif)
 
 ```bash
 dart run example/altscreen_toggle.dart
@@ -72,7 +72,7 @@ dart run example/altscreen_toggle.dart
 
 Demonstrates the "vanish" pattern: the program renders nothing on exit so it leaves no visible output in the scrollback. Press Enter to quit cleanly.
 
-![vanish](tapes/output/vanish.gif)
+![vanish](https://dart-tui.vercel.app/gifs/vanish.gif)
 
 ```bash
 dart run example/vanish.dart
@@ -86,7 +86,7 @@ dart run example/vanish.dart
 
 A single-line text field with placeholder text and cursor navigation. Press Enter to submit the value, `q` to quit.
 
-![textinput](tapes/output/textinput.gif)
+![textinput](https://dart-tui.vercel.app/gifs/textinput.gif)
 
 ```bash
 dart run example/textinput.dart
@@ -98,7 +98,7 @@ dart run example/textinput.dart
 
 Three stacked text fields — name, email, and password — navigated with Tab. Password field masks its characters. Press Ctrl+C to exit.
 
-![textinputs](tapes/output/textinputs.gif)
+![textinputs](https://dart-tui.vercel.app/gifs/textinputs.gif)
 
 ```bash
 dart run example/textinputs.dart
@@ -110,7 +110,7 @@ dart run example/textinputs.dart
 
 A multi-line scrollable text editor backed by `TextareaModel`. Supports newlines, wrapping, and standard cursor movement. Press Ctrl+C to quit.
 
-![textarea](tapes/output/textarea.gif)
+![textarea](https://dart-tui.vercel.app/gifs/textarea.gif)
 
 ```bash
 dart run example/textarea.dart
@@ -122,7 +122,7 @@ dart run example/textarea.dart
 
 A text input with inline ghost-text completion. Start typing to trigger a suggestion; press Tab to accept it. Press `q` to quit.
 
-![autocomplete](tapes/output/autocomplete.gif)
+![autocomplete](https://dart-tui.vercel.app/gifs/autocomplete.gif)
 
 ```bash
 dart run example/autocomplete.dart
@@ -134,7 +134,7 @@ dart run example/autocomplete.dart
 
 `TextInputModel` and `TextAreaModel` understand emacs/readline editing keys: `ctrl+a`/`ctrl+e` (start/end), `ctrl+b`/`ctrl+f` (char), `alt+←`/`alt+→` (word), and `ctrl+w` / `alt+⌫` (delete previous word). Press Esc or Ctrl+C to quit.
 
-![readline](tapes/output/readline.gif)
+![readline](https://dart-tui.vercel.app/gifs/readline.gif)
 
 ```bash
 dart run example/readline.dart
@@ -148,7 +148,7 @@ dart run example/readline.dart
 
 A bare-bones scrollable list using `ListModel` without extra chrome. Navigate with arrow keys; press `q` to quit.
 
-![list_simple](tapes/output/list_simple.gif)
+![list_simple](https://dart-tui.vercel.app/gifs/list_simple.gif)
 
 ```bash
 dart run example/list_simple.dart
@@ -160,7 +160,7 @@ dart run example/list_simple.dart
 
 A styled list with title, status bar, and help footer. Navigate with arrows and press Enter to select an item. Press `q` to quit.
 
-![list_default](tapes/output/list_default.gif)
+![list_default](https://dart-tui.vercel.app/gifs/list_default.gif)
 
 ```bash
 dart run example/list_default.dart
@@ -172,7 +172,7 @@ dart run example/list_default.dart
 
 Mutate a `ListModel` at runtime with its immutable helper API: press `a` to append a task, `d` to delete the selected one, `↑↓`/`jk` to move. Press `q` to quit.
 
-![list_mutation](tapes/output/list_mutation.gif)
+![list_mutation](https://dart-tui.vercel.app/gifs/list_mutation.gif)
 
 ```bash
 dart run example/list_mutation.dart
@@ -184,7 +184,7 @@ dart run example/list_mutation.dart
 
 Selects an item from a list and returns the chosen value to the calling code. Shows how to use `Program.run` return value. Navigate and press Enter to confirm.
 
-![result](tapes/output/result.gif)
+![result](https://dart-tui.vercel.app/gifs/result.gif)
 
 ```bash
 dart run example/result.dart
@@ -196,7 +196,7 @@ dart run example/result.dart
 
 A dot-indicator paginator that lets you page through a set of items. Use Left/Right arrows to move between pages. Press `q` to quit.
 
-![paginator](tapes/output/paginator.gif)
+![paginator](https://dart-tui.vercel.app/gifs/paginator.gif)
 
 ```bash
 dart run example/paginator.dart
@@ -210,7 +210,7 @@ dart run example/paginator.dart
 
 A scrollable data table with column headers and highlighted rows. Navigate rows with Up/Down arrows. Press `q` to quit.
 
-![table](tapes/output/table.gif)
+![table](https://dart-tui.vercel.app/gifs/table.gif)
 
 ```bash
 dart run example/table.dart
@@ -222,7 +222,7 @@ dart run example/table.dart
 
 Simulates installing a list of packages, each with its own animated progress bar. Runs to completion automatically.
 
-![package_manager](tapes/output/package_manager.gif)
+![package_manager](https://dart-tui.vercel.app/gifs/package_manager.gif)
 
 ```bash
 dart run example/package_manager.dart
@@ -236,7 +236,7 @@ dart run example/package_manager.dart
 
 A single animated spinner with a "Loading…" prefix. Demonstrates `SpinnerModel` with a 100 ms tick interval. Press `q` to quit.
 
-![spinner](tapes/output/spinner.gif)
+![spinner](https://dart-tui.vercel.app/gifs/spinner.gif)
 
 ```bash
 dart run example/spinner.dart
@@ -248,7 +248,7 @@ dart run example/spinner.dart
 
 Displays all built-in spinner styles side-by-side so you can compare their animation patterns. Press `q` to quit.
 
-![spinners](tapes/output/spinners.gif)
+![spinners](https://dart-tui.vercel.app/gifs/spinners.gif)
 
 ```bash
 dart run example/spinners.dart
@@ -260,7 +260,7 @@ dart run example/spinners.dart
 
 A manually-driven progress bar. Use Right/Left arrows to increase or decrease the fill percentage. Press `q` to quit.
 
-![progress_bar](tapes/output/progress_bar.gif)
+![progress_bar](https://dart-tui.vercel.app/gifs/progress_bar.gif)
 
 ```bash
 dart run example/progress_bar.dart
@@ -272,7 +272,7 @@ dart run example/progress_bar.dart
 
 An auto-incrementing progress bar driven by ticks. Watch it fill from 0 % to 100 % and quit automatically.
 
-![progress_animated](tapes/output/progress_animated.gif)
+![progress_animated](https://dart-tui.vercel.app/gifs/progress_animated.gif)
 
 ```bash
 dart run example/progress_animated.dart
@@ -284,7 +284,7 @@ dart run example/progress_animated.dart
 
 Harmonica-style `Spring` easing: a dot springs toward a target with bouncy, under-damped motion. Press `←`/`→` (or `h`/`l`) to move the target; `q` to quit.
 
-![spring](tapes/output/spring.gif)
+![spring](https://dart-tui.vercel.app/gifs/spring.gif)
 
 ```bash
 dart run example/spring.dart
@@ -298,7 +298,7 @@ dart run example/spring.dart
 
 Composes a `TimerModel` and a `SpinnerModel` inside a single parent model, demonstrating how to delegate `update` calls to sub-models.
 
-![composable_views](tapes/output/composable_views.gif)
+![composable_views](https://dart-tui.vercel.app/gifs/composable_views.gif)
 
 ```bash
 dart run example/composable_views.dart
@@ -310,7 +310,7 @@ dart run example/composable_views.dart
 
 A tabbed interface with Left/Right arrow navigation. Each tab shows different content; the active tab is highlighted. Press `q` to quit.
 
-![tabs](tapes/output/tabs.gif)
+![tabs](https://dart-tui.vercel.app/gifs/tabs.gif)
 
 ```bash
 dart run example/tabs.dart
@@ -322,7 +322,7 @@ dart run example/tabs.dart
 
 A two-phase view: an initial screen transitions to a second view after pressing Enter, then counts down before quitting. Press `q` at any time.
 
-![views](tapes/output/views.gif)
+![views](https://dart-tui.vercel.app/gifs/views.gif)
 
 ```bash
 dart run example/views.dart
@@ -334,7 +334,7 @@ dart run example/views.dart
 
 A scrollable viewport over a long body of text. Use Up/Down arrows (or j/k) to scroll. Press `q` to quit.
 
-![pager](tapes/output/pager.gif)
+![pager](https://dart-tui.vercel.app/gifs/pager.gif)
 
 ```bash
 dart run example/pager.dart
@@ -348,7 +348,7 @@ dart run example/pager.dart
 
 Echoes every key press to the screen in real time, including modifier combinations and special keys. Press Escape to quit.
 
-![print_key](tapes/output/print_key.gif)
+![print_key](https://dart-tui.vercel.app/gifs/print_key.gif)
 
 ```bash
 dart run example/print_key.dart
@@ -360,7 +360,7 @@ dart run example/print_key.dart
 
 Cycles through the available terminal cursor shapes (block, underline, bar) with Right arrow. Toggle blink with Space. Press `q` to quit.
 
-![cursor_style](tapes/output/cursor_style.gif)
+![cursor_style](https://dart-tui.vercel.app/gifs/cursor_style.gif)
 
 ```bash
 dart run example/cursor_style.dart
@@ -372,7 +372,7 @@ dart run example/cursor_style.dart
 
 Enables mouse tracking and displays click coordinates and button events as you interact. Press `q` to quit.
 
-![mouse](tapes/output/mouse.gif)
+![mouse](https://dart-tui.vercel.app/gifs/mouse.gif)
 
 ```bash
 dart run example/mouse.dart
@@ -386,7 +386,7 @@ dart run example/mouse.dart
 
 Fires a background `Future` from `init` and displays its result when it completes, showing async message delivery. Press `q` to quit.
 
-![realtime](tapes/output/realtime.gif)
+![realtime](https://dart-tui.vercel.app/gifs/realtime.gif)
 
 ```bash
 dart run example/realtime.dart
@@ -398,7 +398,7 @@ dart run example/realtime.dart
 
 Demonstrates sending messages from outside the model loop using a ticker that fires on an independent `Timer`. Press `q` to quit.
 
-![send_msg](tapes/output/send_msg.gif)
+![send_msg](https://dart-tui.vercel.app/gifs/send_msg.gif)
 
 ```bash
 dart run example/send_msg.dart
@@ -410,7 +410,7 @@ dart run example/send_msg.dart
 
 A 1-minute countdown `TimerModel` demo. Press `s` to start/stop, `r` to reset, and `q` to quit.
 
-![timer](tapes/output/timer.gif)
+![timer](https://dart-tui.vercel.app/gifs/timer.gif)
 
 ```bash
 dart run example/timer.dart
@@ -422,7 +422,7 @@ dart run example/timer.dart
 
 An elapsed-time `StopwatchModel` demo. Press `s` to start/stop, `r` to reset, and `q` to quit.
 
-![stopwatch](tapes/output/stopwatch.gif)
+![stopwatch](https://dart-tui.vercel.app/gifs/stopwatch.gif)
 
 ```bash
 dart run example/stopwatch.dart
@@ -436,7 +436,7 @@ dart run example/stopwatch.dart
 
 Listens for terminal focus and blur events (sent by supporting terminals via escape sequences) and displays the current focus state.
 
-![focus_blur](tapes/output/focus_blur.gif)
+![focus_blur](https://dart-tui.vercel.app/gifs/focus_blur.gif)
 
 ```bash
 dart run example/focus_blur.dart
@@ -448,7 +448,7 @@ dart run example/focus_blur.dart
 
 Intercepts Ctrl+C twice before allowing the program to exit, demonstrating how to override default quit behaviour. Press `q` to force-quit.
 
-![prevent_quit](tapes/output/prevent_quit.gif)
+![prevent_quit](https://dart-tui.vercel.app/gifs/prevent_quit.gif)
 
 ```bash
 dart run example/prevent_quit.dart
@@ -460,7 +460,7 @@ dart run example/prevent_quit.dart
 
 Issues a batch of commands in strict sequence using `Cmd.sequence`, showing each step complete before the next begins. Runs to completion automatically.
 
-![sequence](tapes/output/sequence.gif)
+![sequence](https://dart-tui.vercel.app/gifs/sequence.gif)
 
 ```bash
 dart run example/sequence.dart
@@ -472,7 +472,7 @@ dart run example/sequence.dart
 
 Suspends the TUI, launches an external command (e.g. an editor), and resumes when the subprocess exits. Press `q` to quit.
 
-![exec_cmd](tapes/output/exec_cmd.gif)
+![exec_cmd](https://dart-tui.vercel.app/gifs/exec_cmd.gif)
 
 ```bash
 dart run example/exec_cmd.dart
@@ -484,7 +484,7 @@ dart run example/exec_cmd.dart
 
 Reads from stdin when the program is used in a pipeline (e.g. `echo "hello" | dart run example/pipe.dart`), displaying the piped content.
 
-![pipe](tapes/output/pipe.gif)
+![pipe](https://dart-tui.vercel.app/gifs/pipe.gif)
 
 ```bash
 echo "hello world" | dart run example/pipe.dart
@@ -496,7 +496,7 @@ echo "hello world" | dart run example/pipe.dart
 
 Makes an HTTP GET request while showing a spinner, then displays the response body. Demonstrates async commands with `Cmd`. Press `q` to quit.
 
-![http](tapes/output/http.gif)
+![http](https://dart-tui.vercel.app/gifs/http.gif)
 
 ```bash
 dart run example/http.dart
@@ -508,7 +508,7 @@ dart run example/http.dart
 
 `FileLog` writes diagnostics to a file while the TUI runs — `print()` would corrupt the screen. Every keypress is logged; `tail -f dart_tui_example.log` in another terminal to watch. Press `q` to quit.
 
-![file_log](tapes/output/file_log.gif)
+![file_log](https://dart-tui.vercel.app/gifs/file_log.gif)
 
 ```bash
 dart run example/file_log.dart
@@ -520,7 +520,7 @@ dart run example/file_log.dart
 
 An interactive file-system browser. Navigate directories with arrows, Enter to descend, Escape to go up. Press `q` to quit.
 
-![file_picker](tapes/output/file_picker.gif)
+![file_picker](https://dart-tui.vercel.app/gifs/file_picker.gif)
 
 ```bash
 dart run example/file_picker.dart
@@ -532,7 +532,7 @@ dart run example/file_picker.dart
 
 Renders a compact key-binding help bar at the bottom of the screen. Press `?` to expand it to a full help view and again to collapse. Press `q` to quit.
 
-![help](tapes/output/help.gif)
+![help](https://dart-tui.vercel.app/gifs/help.gif)
 
 ```bash
 dart run example/help.dart
@@ -544,7 +544,7 @@ dart run example/help.dart
 
 Detects the terminal color profile (TrueColor, 256-color, ANSI, or no color) and renders a colour swatch for each supported level.
 
-![color_profile](tapes/output/color_profile.gif)
+![color_profile](https://dart-tui.vercel.app/gifs/color_profile.gif)
 
 ```bash
 dart run example/color_profile.dart
@@ -556,7 +556,7 @@ dart run example/color_profile.dart
 
 A validated form that accepts an ISBN-13 number, checks the check digit in real time, and shows a pass/fail indicator. Press Ctrl+C to quit.
 
-![isbn_form](tapes/output/isbn_form.gif)
+![isbn_form](https://dart-tui.vercel.app/gifs/isbn_form.gif)
 
 ```bash
 dart run example/isbn_form.dart
@@ -570,7 +570,7 @@ dart run example/isbn_form.dart
 
 The classic Bubble Tea "getting started" tutorial ported to Dart. A checkbox list of grocery items; navigate with arrows and toggle with Space. Press Enter to confirm.
 
-![shopping_list](tapes/output/shopping_list.gif)
+![shopping_list](https://dart-tui.vercel.app/gifs/shopping_list.gif)
 
 ```bash
 dart run example/shopping_list.dart
@@ -582,7 +582,7 @@ dart run example/shopping_list.dart
 
 Chains `promptSelect` → `promptConfirm` → `promptInput` in sequence, each running its own `Program`. Shows how the prompt helpers compose together.
 
-![prompts_chain](tapes/output/prompts_chain.gif)
+![prompts_chain](https://dart-tui.vercel.app/gifs/prompts_chain.gif)
 
 ```bash
 dart run example/prompts_chain.dart
@@ -594,7 +594,7 @@ dart run example/prompts_chain.dart
 
 gum-style one-shot helpers chained together: `filter()` (fuzzy picker) → `spin()` (spinner while awaiting a `Future`) → `pager()` (scrollable viewer). Type to filter, Enter to pick, `q` to leave the pager.
 
-![gum](tapes/output/gum.gif)
+![gum](https://dart-tui.vercel.app/gifs/gum.gif)
 
 ```bash
 dart run example/gum.dart
@@ -606,7 +606,7 @@ dart run example/gum.dart
 
 A composable, huh-style form: typed fields (`input` / `select` / `multiSelect` / `confirm` / `note`) grouped into wizard pages, with per-field validation and a dynamic page that only appears when “Deploy now?” is Yes. `Enter`/`Tab` advance, `Esc` cancels.
 
-![form](tapes/output/form.gif)
+![form](https://dart-tui.vercel.app/gifs/form.gif)
 
 ```bash
 dart run example/form.dart
@@ -618,7 +618,7 @@ dart run example/form.dart
 
 A guided tour of every dart\_tui widget and API in a single file. Pages through spinners, progress bars, text inputs, lists, tables, and more.
 
-![all_features](tapes/output/all_features.gif)
+![all_features](https://dart-tui.vercel.app/gifs/all_features.gif)
 
 ```bash
 dart run example/all_features.dart
@@ -630,7 +630,7 @@ dart run example/all_features.dart
 
 A comprehensive interactive demo that lets you navigate between themed sections demonstrating the full dart\_tui component library.
 
-![showcase](tapes/output/showcase.gif)
+![showcase](https://dart-tui.vercel.app/gifs/showcase.gif)
 
 ```bash
 dart run example/showcase.dart

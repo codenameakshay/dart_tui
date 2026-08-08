@@ -10,7 +10,7 @@ Build rich, interactive CLI applications with a clean **Model–Update–View** 
 
 **📖 [Documentation & component gallery](https://dart-tui.vercel.app)** — browse every component, block and guide with live previews.
 
-![showcase](example/tapes/output/showcase.gif)
+![showcase](https://dart-tui.vercel.app/gifs/showcase.gif)
 
 ---
 
@@ -227,7 +227,7 @@ const Style(isBlink: true)         // blinking text
 const Style(isOverline: true)      // overline decoration
 ```
 
-![sgr_attrs](example/tapes/output/sgr_attrs.gif)
+![sgr_attrs](https://dart-tui.vercel.app/gifs/sgr_attrs.gif)
 
 ### Style inheritance
 
@@ -263,7 +263,7 @@ Border.rounded.topOnly    // pre-built single-side helpers
 Border.rounded.sidesOnly
 ```
 
-![border_style](example/tapes/output/border_style.gif)
+![border_style](https://dart-tui.vercel.app/gifs/border_style.gif)
 
 ### Style utilities
 
@@ -292,7 +292,7 @@ const Style(
 ).render(longText);
 ```
 
-![word_wrap](example/tapes/output/word_wrap.gif)
+![word_wrap](https://dart-tui.vercel.app/gifs/word_wrap.gif)
 
 ### Gradient text
 
@@ -311,7 +311,7 @@ final banner = gradientBackground('  Welcome!  ', [
 ], foreground: const Style(foregroundRgb: RgbColor(205, 214, 244)));
 ```
 
-![gradient](example/tapes/output/gradient.gif)
+![gradient](https://dart-tui.vercel.app/gifs/gradient.gif)
 
 ### Light / dark background detection
 
@@ -338,7 +338,7 @@ canvas.paint(18, 14, bannerStyle.render(animatedBanner), zIndex: 2);
 return newView(canvas.render());
 ```
 
-![canvas](example/tapes/output/canvas.gif)
+![canvas](https://dart-tui.vercel.app/gifs/canvas.gif)
 
 ---
 
@@ -354,7 +354,7 @@ Animated indeterminate activity indicator, driven by `TickMsg`.
 SpinnerModel(style: Spinner.dot, prefix: 'Loading ')
 ```
 
-![spinner](example/tapes/output/spinner.gif)
+![spinner](https://dart-tui.vercel.app/gifs/spinner.gif)
 
 ### Progress bar
 
@@ -364,7 +364,7 @@ Determinate progress (0.0–1.0) with `█`/`░` fill and configurable width/la
 ProgressModel(progress: 0.65, width: 40, showPercent: true)
 ```
 
-![progress_bar](example/tapes/output/progress_bar.gif)
+![progress_bar](https://dart-tui.vercel.app/gifs/progress_bar.gif)
 
 ### Text input
 
@@ -374,13 +374,13 @@ Single-line input with cursor, charLimit, EchoMode (password), validate, tab-com
 TextInputModel(placeholder: 'Type something…', charLimit: 80)
 ```
 
-![textinput](example/tapes/output/textinput.gif)
+![textinput](https://dart-tui.vercel.app/gifs/textinput.gif)
 
 ### Text area
 
 Multi-line editor with scroll, line-kill (`Ctrl+K`), and word movement.
 
-![textarea](example/tapes/output/textarea.gif)
+![textarea](https://dart-tui.vercel.app/gifs/textarea.gif)
 
 ### Select list
 
@@ -390,7 +390,7 @@ Vertical list with keyboard cursor (`↑↓ / jk`). Embeds into parent models fo
 SelectListModel(items: ['Option A', 'Option B', 'Option C'], height: 8)
 ```
 
-![list_default](example/tapes/output/list_default.gif)
+![list_default](https://dart-tui.vercel.app/gifs/list_default.gif)
 
 ### List with fuzzy filter
 
@@ -410,7 +410,7 @@ ListModel(
 // Press / to enter filter mode, type to narrow, Esc to clear.
 ```
 
-![list_filter](example/tapes/output/list_filter.gif)
+![list_filter](https://dart-tui.vercel.app/gifs/list_filter.gif)
 
 ### Tabs
 
@@ -425,7 +425,7 @@ TabsModel(tabs: [
 // Navigate: ← / → / h / l / Tab / Shift+Tab
 ```
 
-![tabs](example/tapes/output/tabs.gif)
+![tabs](https://dart-tui.vercel.app/gifs/tabs.gif)
 
 ### Table
 
@@ -442,7 +442,7 @@ TableModel(
 )
 ```
 
-![table](example/tapes/output/table.gif)
+![table](https://dart-tui.vercel.app/gifs/table.gif)
 
 ### Tree
 
@@ -458,7 +458,7 @@ TreeModel(
 )
 ```
 
-![tree](example/tapes/output/tree.gif)
+![tree](https://dart-tui.vercel.app/gifs/tree.gif)
 
 ### Multi-select
 
@@ -481,7 +481,7 @@ MultiSelectModel(
 final values = multi.selectedValues; // ['dart', 'rust']
 ```
 
-![multi_select](example/tapes/output/multi_select.gif)
+![multi_select](https://dart-tui.vercel.app/gifs/multi_select.gif)
 
 ### Cursor
 
@@ -499,7 +499,7 @@ final (next, _) = cursor.update(tickMsg);
 'hello${cursor.view().content}world'  // → 'hello█world'
 ```
 
-![cursor_model](example/tapes/output/cursor_model.gif)
+![cursor_model](https://dart-tui.vercel.app/gifs/cursor_model.gif)
 
 ### Viewport
 
@@ -509,7 +509,7 @@ Scrollable content pane with soft-wrap; useful for long text, logs, or file cont
 ViewportModel(content: longText, height: 20, wrap: true)
 ```
 
-![pager](example/tapes/output/pager.gif)
+![pager](https://dart-tui.vercel.app/gifs/pager.gif)
 
 ### Timer & Stopwatch
 
@@ -518,7 +518,7 @@ TimerModel(duration: Duration(minutes: 5))   // countdown; .finished, .remaining
 StopwatchModel()                              // elapsed time; .start()/.stop()/.reset()
 ```
 
-![timer](example/tapes/output/timer.gif)
+![timer](https://dart-tui.vercel.app/gifs/timer.gif)
 
 ### Paginator
 
@@ -528,7 +528,7 @@ Compact page indicator (dots or numeric) for multi-page flows.
 PaginatorModel(totalPages: 5, activePage: 0)
 ```
 
-![paginator](example/tapes/output/paginator.gif)
+![paginator](https://dart-tui.vercel.app/gifs/paginator.gif)
 
 ### Help
 
@@ -544,7 +544,7 @@ final keyMap = KeyMap([
 HelpModel.fromKeyMap(keyMap)
 ```
 
-![help](example/tapes/output/help.gif)
+![help](https://dart-tui.vercel.app/gifs/help.gif)
 
 ### File picker
 
@@ -557,7 +557,7 @@ FilePickerModel(
 )
 ```
 
-![file_picker](example/tapes/output/file_picker.gif)
+![file_picker](https://dart-tui.vercel.app/gifs/file_picker.gif)
 
 ### Spring animation
 
@@ -641,7 +641,7 @@ final regions = values?.get<List<String>>('regions');
 
 Field types: `Field.input`, `.password`, `.text` (multiline), `.file`, `.select` / `.selectOf<T>`, `.multiSelect` / `.multiSelectOf<T>`, `.confirm`, `.note`. Any field or group takes `hidden`, and titles/options can be dynamic (`titleFor`, `optionsFor`).
 
-![form](example/tapes/output/form.gif)
+![form](https://dart-tui.vercel.app/gifs/form.gif)
 
 ---
 
