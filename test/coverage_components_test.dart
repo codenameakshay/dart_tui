@@ -127,8 +127,8 @@ void main() {
       var m = ViewportModel(
           content: 'abcdef', width: 3, height: 2, softWrap: false);
       m = _u(m, _k(KeyCode.right));
-      expect(m.xOffset, 1);
-      expect(m.view().content, 'bcdef');
+      expect(m.xOffset, 3);
+      expect(m.view().content, 'def');
       m = _u(m, _k(KeyCode.left));
       expect(m.xOffset, 0);
     });
