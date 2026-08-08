@@ -646,15 +646,22 @@ _EscSeq _consumeEscape(String s, int start) {
     // SGR sequences end with 'm'
     final isSgr = i > 0 && s[i - 1] == 'm';
     return _EscSeq(raw: raw, length: i - start, isSgr: isSgr);
-  } else if (next == ']') {
-    // OSC sequence: \x1b] ... BEL or ST
+  } else if (next == ']' || next == 'P') {
+    // OSC strings end with BEL or ST; DCS strings end with ST. Consume the
+    // complete two-byte ST so its trailing backslash cannot become content.
+    final isOsc = next == ']';
     var i = start + 2;
-    while (i < s.length &&
-        s[i] != '\x07' &&
-        !(s[i] == '\x1b' && i + 1 < s.length && s[i + 1] == '\\')) {
+    while (i < s.length) {
+      if (isOsc && s[i] == '\x07') {
+        i++;
+        break;
+      }
+      if (s[i] == '\x1b' && i + 1 < s.length && s[i + 1] == '\\') {
+        i += 2;
+        break;
+      }
       i++;
     }
-    if (i < s.length) i++; // include BEL
     return _EscSeq(raw: s.substring(start, i), length: i - start, isSgr: false);
   } else {
     // Single-char escape (e.g. \x1b7, \x1b8)

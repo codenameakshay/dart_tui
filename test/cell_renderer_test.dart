@@ -72,6 +72,18 @@ void main() {
       expect(output, endsWith('\x1b[3;5H'));
     });
 
+    test('does not render ST-terminated OSC payloads or terminators', () {
+      renderer.render(newView('A\x1b]0;hidden\x1b\\B'));
+
+      expect(buf.toString(), endsWith('\x1b[1;1HAB'));
+    });
+
+    test('does not render ST-terminated DCS payloads or terminators', () {
+      renderer.render(newView('A\x1bP1;2|hidden\x1b\\B'));
+
+      expect(buf.toString(), endsWith('\x1b[1;1HAB'));
+    });
+
     test('unchanged frame emits no diff output', () {
       renderer.render(newView('hello'));
       buf.clear();
