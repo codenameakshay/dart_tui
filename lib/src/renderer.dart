@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:characters/characters.dart';
 
+import 'ansi_state.dart';
 import 'bubbles/style.dart' show getWidth;
 import 'grapheme_width.dart';
 import 'terminal_control.dart';
@@ -329,17 +330,19 @@ final class AnsiRenderer implements TeaRenderer {
 
 // ─── Cell-level diff renderer ──────────────────────────────────────────────
 
-/// A single terminal cell: one grapheme cluster plus the active SGR state.
+/// A single terminal cell with its active rendering state.
 final class _Cell {
-  const _Cell(this.char, this.attrs) : isContinuation = false;
+  const _Cell(this.char, this.attrs, [this.hyperlink = ''])
+      : isContinuation = false;
 
-  const _Cell.continuation(this.attrs)
+  const _Cell.continuation(this.attrs, [this.hyperlink = ''])
       : char = '',
         isContinuation = true;
 
   final String char; // one grapheme cluster (may be multi-byte)
   final String
       attrs; // the CSI SGR sequence(s) active at this cell, e.g. '\x1b[1;32m'
+  final String hyperlink; // active OSC 8 opening sequence
   final bool isContinuation;
 
   @override
@@ -347,10 +350,11 @@ final class _Cell {
       other is _Cell &&
       other.char == char &&
       other.attrs == attrs &&
+      other.hyperlink == hyperlink &&
       other.isContinuation == isContinuation;
 
   @override
-  int get hashCode => Object.hash(char, attrs, isContinuation);
+  int get hashCode => Object.hash(char, attrs, hyperlink, isContinuation);
 }
 
 /// Renderer that diffs at the individual cell level, emitting precise
@@ -507,29 +511,31 @@ final class CellRenderer implements TeaRenderer {
 
   /// Parse [content] into a 2-D grid of [_Cell]s.
   /// Rows are separated by '\n'. Within each row, we walk grapheme clusters
-  /// while tracking the active SGR state.
+  /// while tracking the active SGR and OSC 8 state.
   List<List<_Cell>> _buildGrid(String content) {
     final lines = content.split('\n');
     final grid = <List<_Cell>>[];
     for (final line in lines) {
       final cells = <_Cell>[];
-      var activeAttrs = '';
+      final state = AnsiStateTracker();
       var i = 0;
       final raw = line; // raw string with ANSI codes
       while (i < raw.length) {
         if (raw[i] == '\x1b') {
           // Consume the escape sequence
           final seq = _consumeEscape(raw, i);
-          if (seq.isSgr) activeAttrs = seq.raw;
+          state.accept(seq.raw);
           i += seq.length;
         } else {
           final nextEscape = raw.indexOf('\x1b', i);
           final plainEnd = nextEscape < 0 ? raw.length : nextEscape;
           final plainText = raw.substring(i, plainEnd);
           for (final cluster in plainText.characters) {
-            cells.add(_Cell(cluster, activeAttrs));
+            final attrs = state.sgrOpenSequence;
+            final hyperlink = state.hyperlinkOpenSequence;
+            cells.add(_Cell(cluster, attrs, hyperlink));
             for (var column = 1; column < graphemeWidth(cluster); column++) {
-              cells.add(_Cell.continuation(activeAttrs));
+              cells.add(_Cell.continuation(attrs, hyperlink));
             }
           }
           i = plainEnd;
@@ -548,6 +554,7 @@ final class CellRenderer implements TeaRenderer {
     var lastRow = -1;
     var lastCol = -1;
     var lastAttrs = '';
+    var lastHyperlink = '';
 
     for (var row = 0; row < rows; row++) {
       final nextRow = row < next.length ? next[row] : const <_Cell>[];
@@ -577,6 +584,14 @@ final class CellRenderer implements TeaRenderer {
           lastCol = col;
         }
 
+        if (nextCell.hyperlink != lastHyperlink) {
+          if (lastHyperlink.isNotEmpty) _output.write('\x1b]8;;\x1b\\');
+          if (nextCell.hyperlink.isNotEmpty) {
+            _output.write(nextCell.hyperlink);
+          }
+          lastHyperlink = nextCell.hyperlink;
+        }
+
         // Apply attrs if changed
         if (nextCell.attrs != lastAttrs) {
           if (nextCell.attrs.isEmpty) {
@@ -595,6 +610,9 @@ final class CellRenderer implements TeaRenderer {
     // Reset SGR if we wrote anything with attrs
     if (lastAttrs.isNotEmpty) {
       _output.write('\x1b[0m');
+    }
+    if (lastHyperlink.isNotEmpty) {
+      _output.write('\x1b]8;;\x1b\\');
     }
   }
 
@@ -651,18 +669,17 @@ final class CellRenderer implements TeaRenderer {
 // ── Escape sequence parser helper ─────────────────────────────────────────────
 
 final class _EscSeq {
-  const _EscSeq({required this.raw, required this.length, required this.isSgr});
+  const _EscSeq({required this.raw, required this.length});
   final String raw;
   final int length;
-  final bool isSgr;
 }
 
 /// Consume one escape sequence starting at [start] in [s].
-/// Returns the raw sequence, its length, and whether it's an SGR sequence.
+/// Returns the raw sequence and its length.
 _EscSeq _consumeEscape(String s, int start) {
   // Expect s[start] == '\x1b'
   if (start + 1 >= s.length) {
-    return const _EscSeq(raw: '\x1b', length: 1, isSgr: false);
+    return const _EscSeq(raw: '\x1b', length: 1);
   }
 
   final next = s[start + 1];
@@ -674,9 +691,7 @@ _EscSeq _consumeEscape(String s, int start) {
     }
     if (i < s.length) i++; // include the final byte
     final raw = s.substring(start, i);
-    // SGR sequences end with 'm'
-    final isSgr = i > 0 && s[i - 1] == 'm';
-    return _EscSeq(raw: raw, length: i - start, isSgr: isSgr);
+    return _EscSeq(raw: raw, length: i - start);
   } else if (next == ']' || next == 'P') {
     // OSC strings end with BEL or ST; DCS strings end with ST. Consume the
     // complete two-byte ST so its trailing backslash cannot become content.
@@ -693,9 +708,9 @@ _EscSeq _consumeEscape(String s, int start) {
       }
       i++;
     }
-    return _EscSeq(raw: s.substring(start, i), length: i - start, isSgr: false);
+    return _EscSeq(raw: s.substring(start, i), length: i - start);
   } else {
     // Single-char escape (e.g. \x1b7, \x1b8)
-    return _EscSeq(raw: s.substring(start, start + 2), length: 2, isSgr: false);
+    return _EscSeq(raw: s.substring(start, start + 2), length: 2);
   }
 }

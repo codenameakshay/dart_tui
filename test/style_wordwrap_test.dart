@@ -19,6 +19,38 @@ void main() {
   });
 
   group('wordWrap = true', () {
+    test('closes and reopens embedded style and link state at each wrap', () {
+      const openLink = '\x1b]8;id=docs;https://example.com\x1b\\';
+      const closeLink = '\x1b]8;;\x1b\\';
+      final out = const Style(wordWrap: true, width: 3)
+          .render('$openLink\x1b[31mabcdef');
+      final lines = out.split('\n');
+
+      expect(lines, hasLength(2));
+      expect(lines.first, endsWith('\x1b[0m$closeLink'));
+      expect(lines.last, startsWith('$openLink\x1b[31m'));
+      expect(lines.last, endsWith('\x1b[0m$closeLink'));
+      expect(plain(out).replaceAll('\n', ''), 'abcdef');
+    });
+
+    test('balances Style hyperlink and underline state around wrapped lines',
+        () {
+      final out = const Style(
+        wordWrap: true,
+        width: 3,
+        underlineStyle: UnderlineStyle.dotted,
+        hyperlinkUrl: 'https://example.com',
+      ).render('abcdef');
+      final lines = out.split('\n');
+
+      expect(lines, hasLength(2));
+      for (final line in lines) {
+        expect(line, startsWith('\x1b]8;;https://example.com\x1b\\'));
+        expect(line, contains('\x1b[4:4m'));
+        expect(line, endsWith('\x1b[0m\x1b]8;;\x1b\\'));
+      }
+    });
+
     test('short text is returned unchanged', () {
       final out = const Style(wordWrap: true, width: 20).render('hi');
       expect(plain(out).trim(), equals('hi'));

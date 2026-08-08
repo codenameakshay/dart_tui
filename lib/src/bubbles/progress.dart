@@ -118,6 +118,8 @@ final class ProgressModel extends TeaModel {
       isDim: base.isDim,
       isItalic: base.isItalic,
       isUnderline: base.isUnderline,
+      underlineStyle: base.underlineStyle,
+      underlineColor: base.underlineColor,
       isStrikethrough: base.isStrikethrough,
       isReverse: base.isReverse,
       isBlink: base.isBlink,
@@ -143,6 +145,8 @@ final class ProgressModel extends TeaModel {
       tabWidth: base.tabWidth,
       profile: base.profile,
       transform: base.transform,
+      hyperlinkUrl: base.hyperlinkUrl,
+      hyperlinkParams: base.hyperlinkParams,
     );
   }
 

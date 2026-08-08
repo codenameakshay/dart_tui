@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:test/test.dart';
 
 // Internal imports — use package paths to access src directly
+import 'package:dart_tui/src/bubbles/style.dart';
 import 'package:dart_tui/src/renderer.dart';
 import 'package:dart_tui/src/view.dart';
 
@@ -181,6 +182,39 @@ void main() {
       renderer.render(newView('A\x1bP1;2|hidden\x1b\\B'));
 
       expect(buf.toString(), endsWith('\x1b[1;1HAB'));
+    });
+
+    test('preserves hyperlinks and combined rich underline state', () {
+      final content = const Style(
+        underlineStyle: UnderlineStyle.curly,
+        underlineColor: RgbColor(12, 34, 56),
+        hyperlinkUrl: 'https://example.com',
+        hyperlinkParams: 'id=cell',
+      ).render('linked');
+
+      renderer.render(newView(content));
+
+      expect(
+        buf.toString(),
+        contains('\x1b]8;id=cell;https://example.com\x1b\\'),
+      );
+      expect(buf.toString(), contains('\x1b[4:3m'));
+      expect(buf.toString(), contains('\x1b[58;2;12;34;56m'));
+      expect(buf.toString(), endsWith('\x1b[0m\x1b]8;;\x1b\\'));
+    });
+
+    test('repaints unchanged text when only its hyperlink changes', () {
+      renderer.render(newView(
+        const Style(hyperlinkUrl: 'https://one.example').render('same'),
+      ));
+      buf.clear();
+
+      renderer.render(newView(
+        const Style(hyperlinkUrl: 'https://two.example').render('same'),
+      ));
+
+      expect(buf.toString(), contains('https://two.example'));
+      expect(buf.toString(), contains('same'));
     });
 
     test('unchanged frame emits no diff output', () {

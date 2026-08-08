@@ -2,6 +2,20 @@ import 'package:dart_tui/dart_tui.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('truncate closes active SGR and hyperlink state', () {
+    const openLink = '\x1b]8;;https://example.com\x1b\\';
+    final out = truncate('$openLink\x1b[31mabcdef', 3);
+
+    expect(stripAnsi(out), 'abc');
+    expect(out, endsWith('\x1b[0m\x1b]8;;\x1b\\'));
+  });
+
+  test('truncate recognizes colon-form SGR as zero-width state', () {
+    final out = truncate('\x1b[4:3mabcdef', 3);
+    expect(stripAnsi(out), 'abc');
+    expect(getWidth(out), 3);
+  });
+
   test('style applies ansi foreground and bold', () {
     final out = const Style().foregroundColor256(39).bold().render('hello');
     expect(out, contains('\x1b[1m'));

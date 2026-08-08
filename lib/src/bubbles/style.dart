@@ -1,7 +1,9 @@
 import 'package:characters/characters.dart';
 
+import '../ansi_state.dart';
 import '../grapheme_width.dart';
 import '../msg.dart';
+import '../terminal_control.dart';
 
 /// Horizontal text alignment.
 enum Align { left, center, right }
@@ -9,6 +11,9 @@ enum Align { left, center, right }
 /// Vertical content alignment (used when [Style.height] is set, or in
 /// [joinHorizontal]).
 enum AlignVertical { top, middle, bottom }
+
+/// Terminal underline variants encoded with SGR 4 subparameters.
+enum UnderlineStyle { none, single, double, curly, dotted, dashed }
 
 // ── AlignVertical → double helper ─────────────────────────────────────────────
 
@@ -48,6 +53,8 @@ final class Style {
     this.isDim,
     this.isItalic,
     this.isUnderline,
+    this.underlineStyle,
+    this.underlineColor,
     this.isStrikethrough,
     this.isReverse,
     this.isBlink,
@@ -73,6 +80,8 @@ final class Style {
     this.tabWidth = 4,
     this.profile,
     this.transform,
+    this.hyperlinkUrl,
+    this.hyperlinkParams = '',
   });
 
   final int? foreground256;
@@ -102,6 +111,12 @@ final class Style {
 
   /// SGR 4 — underline. `null` = unset (inheritable).
   final bool? isUnderline;
+
+  /// Rich underline form. When set, takes precedence over [isUnderline].
+  final UnderlineStyle? underlineStyle;
+
+  /// SGR 58 true-color underline color.
+  final RgbColor? underlineColor;
 
   /// SGR 9 — crossed-out / strikethrough. `null` = unset (inheritable).
   final bool? isStrikethrough;
@@ -163,6 +178,12 @@ final class Style {
   /// (after layout, before returning). Useful for custom transforms.
   final String Function(String)? transform;
 
+  /// OSC 8 hyperlink target. An empty or null target emits no hyperlink.
+  final String? hyperlinkUrl;
+
+  /// OSC 8 parameter field, commonly an `id=...` value.
+  final String hyperlinkParams;
+
   // ── Fluent builder methods ────────────────────────────────────────────────
 
   Style foregroundColor256(int value) => copyWith(foreground256: value);
@@ -178,7 +199,13 @@ final class Style {
   Style bold([bool value = true]) => copyWith(isBold: value);
   Style dim([bool value = true]) => copyWith(isDim: value);
   Style italic([bool value = true]) => copyWith(isItalic: value);
-  Style underline([bool value = true]) => copyWith(isUnderline: value);
+  Style underline([bool value = true]) => copyWith(
+        isUnderline: value,
+        underlineStyle: value ? UnderlineStyle.single : UnderlineStyle.none,
+      );
+  Style withUnderlineStyle(UnderlineStyle value) => copyWith(
+      underlineStyle: value, isUnderline: value != UnderlineStyle.none);
+  Style withUnderlineColor(RgbColor value) => copyWith(underlineColor: value);
   Style strikethrough([bool value = true]) => copyWith(isStrikethrough: value);
   Style reverse([bool value = true]) => copyWith(isReverse: value);
   Style blink([bool value = true]) => copyWith(isBlink: value);
@@ -235,6 +262,8 @@ final class Style {
   Style withAdaptiveBackground(AdaptiveColor value) =>
       copyWith(adaptiveBackground: value);
   Style withTransform(String Function(String)? fn) => copyWith(transform: fn);
+  Style withHyperlink(String url, {String params = ''}) =>
+      copyWith(hyperlinkUrl: url, hyperlinkParams: params);
 
   // Unset helpers (set nullable booleans back to null for inheritance)
   Style unsetBold() => _copyWithNullBool('isBold');
@@ -260,6 +289,8 @@ final class Style {
       isDim: field == 'isDim' ? null : isDim,
       isItalic: field == 'isItalic' ? null : isItalic,
       isUnderline: field == 'isUnderline' ? null : isUnderline,
+      underlineStyle: field == 'isUnderline' ? null : underlineStyle,
+      underlineColor: underlineColor,
       isStrikethrough: field == 'isStrikethrough' ? null : isStrikethrough,
       isReverse: field == 'isReverse' ? null : isReverse,
       isBlink: field == 'isBlink' ? null : isBlink,
@@ -285,6 +316,8 @@ final class Style {
       tabWidth: tabWidth,
       profile: profile,
       transform: transform,
+      hyperlinkUrl: hyperlinkUrl,
+      hyperlinkParams: hyperlinkParams,
     );
   }
 
@@ -301,6 +334,8 @@ final class Style {
     bool? isDim,
     bool? isItalic,
     bool? isUnderline,
+    UnderlineStyle? underlineStyle,
+    RgbColor? underlineColor,
     bool? isStrikethrough,
     bool? isReverse,
     bool? isBlink,
@@ -326,6 +361,8 @@ final class Style {
     int? tabWidth,
     ColorProfile? profile,
     String Function(String)? transform,
+    String? hyperlinkUrl,
+    String? hyperlinkParams,
   }) {
     return Style(
       foreground256: foreground256 ?? this.foreground256,
@@ -340,6 +377,8 @@ final class Style {
       isDim: isDim ?? this.isDim,
       isItalic: isItalic ?? this.isItalic,
       isUnderline: isUnderline ?? this.isUnderline,
+      underlineStyle: underlineStyle ?? this.underlineStyle,
+      underlineColor: underlineColor ?? this.underlineColor,
       isStrikethrough: isStrikethrough ?? this.isStrikethrough,
       isReverse: isReverse ?? this.isReverse,
       isBlink: isBlink ?? this.isBlink,
@@ -365,6 +404,8 @@ final class Style {
       tabWidth: tabWidth ?? this.tabWidth,
       profile: profile ?? this.profile,
       transform: transform ?? this.transform,
+      hyperlinkUrl: hyperlinkUrl ?? this.hyperlinkUrl,
+      hyperlinkParams: hyperlinkParams ?? this.hyperlinkParams,
     );
   }
 
@@ -386,6 +427,11 @@ final class Style {
       isDim: isDim ?? parent.isDim,
       isItalic: isItalic ?? parent.isItalic,
       isUnderline: isUnderline ?? parent.isUnderline,
+      underlineStyle: underlineStyle ??
+          (isUnderline == null
+              ? parent.underlineStyle
+              : (isUnderline! ? UnderlineStyle.single : UnderlineStyle.none)),
+      underlineColor: underlineColor ?? parent.underlineColor,
       isStrikethrough: isStrikethrough ?? parent.isStrikethrough,
       isReverse: isReverse ?? parent.isReverse,
       isBlink: isBlink ?? parent.isBlink,
@@ -411,6 +457,9 @@ final class Style {
       tabWidth: tabWidth,
       profile: profile ?? parent.profile,
       transform: transform ?? parent.transform,
+      hyperlinkUrl: hyperlinkUrl ?? parent.hyperlinkUrl,
+      hyperlinkParams:
+          hyperlinkUrl != null ? hyperlinkParams : parent.hyperlinkParams,
     );
   }
 
@@ -432,7 +481,7 @@ final class Style {
       final constrained = _applyConstraints(padded);
       final withBorder = _applyBorder(constrained);
       final withMargin = _applyMargin(withBorder);
-      final content = withMargin.join('\n');
+      final content = balanceAnsiState(withMargin.join('\n'));
       result = _wrapAnsi(content);
     }
     return transform != null ? transform!(result) : result;
@@ -671,7 +720,20 @@ final class Style {
     if (isBold ?? false) open.write('\x1b[1m');
     if (isDim ?? false) open.write('\x1b[2m');
     if (isItalic ?? false) open.write('\x1b[3m');
-    if (isUnderline ?? false) open.write('\x1b[4m');
+    final effectiveUnderline = underlineStyle ??
+        ((isUnderline ?? false) ? UnderlineStyle.single : UnderlineStyle.none);
+    final underlineCode = switch (effectiveUnderline) {
+      UnderlineStyle.none => null,
+      UnderlineStyle.single => '\x1b[4m',
+      UnderlineStyle.double => '\x1b[4:2m',
+      UnderlineStyle.curly => '\x1b[4:3m',
+      UnderlineStyle.dotted => '\x1b[4:4m',
+      UnderlineStyle.dashed => '\x1b[4:5m',
+    };
+    if (underlineCode != null) open.write(underlineCode);
+    if (underlineColor case final color?) {
+      open.write('\x1b[58;2;${color.r};${color.g};${color.b}m');
+    }
     if (isBlink ?? false) open.write('\x1b[5m');
     if (isReverse ?? false) open.write('\x1b[7m');
     if (isStrikethrough ?? false) open.write('\x1b[9m');
@@ -701,24 +763,33 @@ final class Style {
       open.write(_colorCode(effectiveBg, foreground: false));
     }
 
-    if (open.isEmpty) return value;
+    final safeUrl = sanitizeOscText(hyperlinkUrl ?? '');
+    final linkOpen = safeUrl.isEmpty
+        ? ''
+        : '\x1b]8;${sanitizeOscText(hyperlinkParams)};$safeUrl\x1b\\';
+    const linkClose = '\x1b]8;;\x1b\\';
+    if (open.isEmpty && linkOpen.isEmpty) return value;
+
+    final sgrOpen = open.toString();
+    final sgrClose = open.isEmpty
+        ? ''
+        : '${underlineColor == null ? '' : '\x1b[59m'}${TuiStyle.reset}';
+    final close = '$sgrClose${linkOpen.isEmpty ? '' : linkClose}';
+    final reOpen = '$linkOpen$sgrOpen';
+    final balancedValue = value.replaceAll('\n', '$close\n$reOpen');
 
     // When underlineSpaces is false and underline is set, wrap each word
     // individually.
-    if ((isUnderline ?? false) && !underlineSpaces) {
-      final reset = TuiStyle.reset;
-      final reOpen = open.toString();
-      final result = value.replaceAll(' ', '$reset $reOpen');
-      return '$reOpen$result$reset';
+    if (effectiveUnderline != UnderlineStyle.none && !underlineSpaces) {
+      final result = balancedValue.replaceAll(' ', '$close $reOpen');
+      return '$reOpen$result$close';
     }
     if ((isStrikethrough ?? false) && !strikethroughSpaces) {
-      final reset = TuiStyle.reset;
-      final reOpen = open.toString();
-      final result = value.replaceAll(' ', '$reset $reOpen');
-      return '$reOpen$result$reset';
+      final result = balancedValue.replaceAll(' ', '$close $reOpen');
+      return '$reOpen$result$close';
     }
 
-    return '$open$value${TuiStyle.reset}';
+    return '$reOpen$balancedValue$close';
   }
 
   /// Resolve a color, considering [CompleteColor], adaptive colors, and profile.
@@ -813,59 +884,47 @@ final class Style {
 /// Returns one or more lines.
 List<String> _wordWrapLine(String line, int maxWidth) {
   if (_visibleWidth(line) <= maxWidth) return [line];
-  final words = line.split(' ');
   final result = <String>[];
-  final current = StringBuffer();
+  var current = <AnsiToken>[];
   var currentWidth = 0;
+  int? lastSpace;
 
-  for (final word in words) {
-    final wordWidth = _visibleWidth(word);
-    if (current.isEmpty) {
-      if (wordWidth > maxWidth) {
-        result.addAll(_hardWrapWord(word, maxWidth));
-      } else {
-        current.write(word);
-        currentWidth = wordWidth;
-      }
+  void emit(List<AnsiToken> tokens) {
+    result.add(tokens.map((token) => token.value).join());
+  }
+
+  void recalculate() {
+    currentWidth = 0;
+    lastSpace = null;
+    for (var index = 0; index < current.length; index++) {
+      currentWidth += current[index].width;
+      if (current[index].isSpace) lastSpace = index;
+    }
+  }
+
+  for (final token in tokenizeAnsi(line)) {
+    current.add(token);
+    currentWidth += token.width;
+    if (token.isSpace) lastSpace = current.length - 1;
+    if (currentWidth <= maxWidth || token.isControl) continue;
+
+    if (lastSpace case final breakAt?) {
+      emit(current.sublist(0, breakAt));
+      current = current.sublist(breakAt + 1);
     } else {
-      if (currentWidth + 1 + wordWidth <= maxWidth) {
-        current.write(' $word');
-        currentWidth += 1 + wordWidth;
+      final overflow = current.removeLast();
+      if (current.any((item) => item.width > 0)) {
+        emit(current);
+        current = [overflow];
       } else {
-        result.add(current.toString());
-        current.clear();
-        currentWidth = 0;
-        if (wordWidth > maxWidth) {
-          result.addAll(_hardWrapWord(word, maxWidth));
-        } else {
-          current.write(word);
-          currentWidth = wordWidth;
-        }
+        current.add(overflow);
       }
     }
+    recalculate();
   }
-  if (current.isNotEmpty) result.add(current.toString());
-  return result.isEmpty ? [''] : result;
-}
 
-/// Hard-break a single long word across multiple lines.
-List<String> _hardWrapWord(String word, int maxWidth) {
-  final result = <String>[];
-  final chars = word.characters.toList();
-  final current = StringBuffer();
-  var currentWidth = 0;
-  for (final char in chars) {
-    final w = _visibleWidth(char);
-    if (currentWidth + w > maxWidth) {
-      if (current.isNotEmpty) result.add(current.toString());
-      current.clear();
-      currentWidth = 0;
-    }
-    current.write(char);
-    currentWidth += w;
-  }
-  if (current.isNotEmpty) result.add(current.toString());
-  return result;
+  if (current.isNotEmpty) emit(current);
+  return result.isEmpty ? [''] : result;
 }
 
 // ── Color resolution helpers ──────────────────────────────────────────────────
@@ -1021,12 +1080,9 @@ RgbColor blend(RgbColor a, RgbColor b, double t) {
 
 // ── Width helpers ─────────────────────────────────────────────────────────────
 
-final _ansiEscapeRe = RegExp(r'\x1b(?:\[[0-9;?]*[A-Za-z]|[\]O][^\x07]*\x07?)');
-
 /// Strip ANSI escape sequences from [s].
 String stripAnsi(String s) {
-  if (!s.contains('\x1b')) return s;
-  return s.replaceAll(_ansiEscapeRe, '');
+  return stripAnsiSequences(s);
 }
 
 /// Visible display width of [s] after stripping ANSI escape sequences.
@@ -1049,41 +1105,33 @@ String truncate(String s, int maxWidth) => _truncateVisible(s, maxWidth);
 /// Truncate [s] to at most [maxWidth] visible terminal columns from the
 /// right — i.e. keep the trailing portion and drop leading characters.
 ///
-/// ANSI codes in the leading (dropped) section are not preserved; codes in
-/// the kept section are preserved.
+/// Active ANSI state from the dropped section is reopened for the kept text
+/// and safely closed at the end.
 String truncateLeft(String s, int maxWidth) {
-  final stripped = stripAnsi(s);
-  final totalWidth = _visibleWidth(stripped);
+  final totalWidth = _visibleWidth(s);
   if (totalWidth <= maxWidth) return s;
-  final drop = totalWidth - maxWidth;
-  // Walk the stripped string grapheme-by-grapheme until we've consumed [drop]
-  // visible columns, then return from that character position onward in [s].
-  var consumed = 0;
-  for (final char in stripped.characters) {
-    if (consumed >= drop) break;
-    consumed += _graphemeWidth(char);
-  }
-  // Find the corresponding position in the original string by replaying
-  // from the front.  We rebuild by stripping the same leading graphemes
-  // from the raw string while skipping ANSI sequences.
-  var rawIdx = 0;
-  var rawConsumed = 0;
-  while (rawIdx < s.length && rawConsumed < drop) {
-    if (s[rawIdx] == '\x1b') {
-      final m = _ansiEscapeRe.matchAsPrefix(s, rawIdx);
-      if (m != null) {
-        rawIdx += m.group(0)!.length;
-        continue;
-      }
+  final dropWidth = totalWidth - maxWidth.clamp(0, totalWidth);
+  final state = AnsiStateTracker();
+  final kept = StringBuffer();
+  var dropped = 0;
+  var keeping = false;
+  for (final token in tokenizeAnsi(s)) {
+    if (token.isControl) {
+      state.accept(token.value);
+      if (keeping) kept.write(token.value);
+      continue;
     }
-    final remaining = s.substring(rawIdx);
-    final char = remaining.characters.first;
-    final w = _graphemeWidth(char);
-    if (rawConsumed + w > drop) break;
-    rawConsumed += w;
-    rawIdx += char.length;
+    if (!keeping && dropped + token.width <= dropWidth) {
+      dropped += token.width;
+      continue;
+    }
+    if (!keeping) {
+      keeping = true;
+      kept.write(state.openSequence);
+    }
+    kept.write(token.value);
   }
-  return s.substring(rawIdx);
+  return balanceAnsiState(kept.toString());
 }
 
 /// Visible display width of [s] (number of printable columns after stripping ANSI).
@@ -1092,38 +1140,24 @@ int _visibleWidth(String s) {
   return textWidth(stripAnsi(s));
 }
 
-/// Visible column width (1 or 2) of a single grapheme cluster [g].
-///
-/// Callers pass raw graphemes that never contain ANSI escapes, so this skips
-/// [stripAnsi] entirely — the hot inner-loop replacement for `_visibleWidth(char)`.
-int _graphemeWidth(String g) => graphemeWidth(g);
-
 /// Truncate [s] to at most [maxWidth] visible columns, preserving ANSI codes.
 String _truncateVisible(String s, int maxWidth) {
   if (_visibleWidth(s) <= maxWidth) return s;
+  if (maxWidth <= 0) return '';
   var currentWidth = 0;
   final b = StringBuffer();
-  var i = 0;
-  while (i < s.length && currentWidth < maxWidth) {
-    if (s[i] == '\x1b') {
-      final match = _ansiEscapeRe.matchAsPrefix(s, i);
-      if (match != null) {
-        b.write(match.group(0));
-        i += match.group(0)!.length;
-        continue;
-      }
+  final state = AnsiStateTracker();
+  for (final token in tokenizeAnsi(s)) {
+    if (token.isControl) {
+      b.write(token.value);
+      state.accept(token.value);
+      continue;
     }
-
-    final remaining = s.substring(i);
-    final char = remaining.characters.first;
-    final charWidth = _graphemeWidth(char);
-
-    if (currentWidth + charWidth > maxWidth) break;
-
-    b.write(char);
-    currentWidth += charWidth;
-    i += char.length;
+    if (currentWidth + token.width > maxWidth) break;
+    b.write(token.value);
+    currentWidth += token.width;
   }
+  b.write(state.closeSequence);
   return b.toString();
 }
 

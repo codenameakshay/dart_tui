@@ -58,7 +58,10 @@ void main() {
 
     test('truncate preserves ANSI and respects visible width', () {
       expect(truncate('abcdef', 3), 'abc');
-      expect(truncate('\x1b[31mabcdef\x1b[0m', 3), '\x1b[31mabc');
+      expect(
+        truncate('\x1b[31mabcdef\x1b[0m', 3),
+        '\x1b[31mabc\x1b[0m',
+      );
       expect(truncate('你好世界', 4), '你好'); // 2 cols each
     });
 
