@@ -34,8 +34,9 @@ void main() {
     test('CSI cursor position + mode reports', () {
       expect(feed('\x1b[12;34R').single, isA<CursorPositionMsg>());
       expect(feed('\x1b[?2026;1\$y').single, isA<ModeReportMsg>());
-      final kitty = feed('\x1b[?2027;1\$y');
-      expect(kitty.any((m) => m is KeyboardEnhancementsMsg), isTrue);
+      final unicodeMode = feed('\x1b[?2027;1\$y');
+      expect(unicodeMode.single, isA<ModeReportMsg>());
+      expect(unicodeMode.whereType<KeyboardEnhancementsMsg>(), isEmpty);
       expect(feed('\x1b[>1;95;0c').single, isA<TerminalVersionMsg>());
     });
 

@@ -199,11 +199,7 @@ List<Msg> _decodeCsi(String seq) {
       final mode = int.tryParse(parts[0]);
       final value = int.tryParse(parts[1]);
       if (mode != null && value != null) {
-        final msgs = <Msg>[ModeReportMsg(mode: mode, value: value)];
-        if (mode == 2027) {
-          msgs.add(KeyboardEnhancementsMsg(value));
-        }
-        return msgs;
+        return [ModeReportMsg(mode: mode, value: value)];
       }
     }
     return const <Msg>[];

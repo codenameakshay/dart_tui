@@ -465,13 +465,12 @@ void main() {
       expect(m.value, 1);
     });
 
-    test(
-        'keyboard enhancements report (mode 2027) also emits KeyboardEnhancementsMsg',
-        () {
+    test('mode 2027 does not fabricate a keyboard enhancements report', () {
       final d = TerminalInputDecoder();
       final msgs = d.feed(_str('\x1b[?2027;1\$y'));
-      expect(msgs.any((m) => m is ModeReportMsg), isTrue);
-      expect(msgs.any((m) => m is KeyboardEnhancementsMsg), isTrue);
+      expect(msgs, hasLength(1));
+      expect(msgs.single, isA<ModeReportMsg>());
+      expect(msgs.whereType<KeyboardEnhancementsMsg>(), isEmpty);
     });
   });
 }
