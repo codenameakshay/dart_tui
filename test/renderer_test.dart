@@ -265,6 +265,22 @@ void main() {
     await controller.close();
   });
 
+  test('AnsiRenderer repaints unchanged content after a screen change', () {
+    final buf = StringBuffer();
+    final renderer = AnsiRenderer(
+      output: _StringSink(buf),
+      defaultAltScreen: false,
+      defaultHideCursor: false,
+    );
+    renderer.render(newView('same'));
+    buf.clear();
+
+    renderer.render(View(content: 'same', altScreen: true));
+
+    expect(buf.toString(), contains('\x1b[?1049h'));
+    expect(buf.toString(), contains('\x1b[1;1Hsame'));
+  });
+
   group('insertAbove in alt-screen mode', () {
     test('emits save-cursor, scroll-up, and restore-cursor escape sequences',
         () {

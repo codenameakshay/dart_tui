@@ -226,6 +226,16 @@ void main() {
       expect(RegExp(r'\x1b\[\d+;\d+H').allMatches(output), isEmpty);
     });
 
+    test('repaints unchanged content after a screen change', () {
+      renderer.render(newView('same'));
+      buf.clear();
+
+      renderer.render(View(content: 'same', altScreen: true));
+
+      expect(buf.toString(), contains('\x1b[?1049h'));
+      expect(buf.toString(), contains('\x1b[1;1Hsame'));
+    });
+
     test('clearScreen resets grid state', () {
       renderer.render(newView('hello'));
       renderer.clearScreen();

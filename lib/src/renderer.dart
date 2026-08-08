@@ -6,6 +6,7 @@ import 'ansi_state.dart';
 import 'bubbles/style.dart' show getWidth;
 import 'grapheme_width.dart';
 import 'terminal_control.dart';
+import 'terminal_mode_state.dart';
 import 'terminal_view_state.dart';
 import 'view.dart';
 
@@ -111,23 +112,16 @@ final class AnsiRenderer implements TeaRenderer {
     bool defaultReportFocus = false,
   })  : _output = output,
         _logSink = logSink,
-        _defaultAltScreen = defaultAltScreen,
-        _defaultHideCursor = defaultHideCursor,
-        _defaultMouseMode = defaultMouseMode,
-        _defaultReportFocus = defaultReportFocus;
+        _modes = TerminalModeState(
+          defaultAltScreen: defaultAltScreen,
+          defaultHideCursor: defaultHideCursor,
+          defaultMouseMode: defaultMouseMode,
+          defaultReportFocus: defaultReportFocus,
+        );
 
   final IOSink _output;
   final IOSink? _logSink;
-  final bool _defaultAltScreen;
-  final bool _defaultHideCursor;
-  final MouseMode _defaultMouseMode;
-  final bool _defaultReportFocus;
-
-  bool _altScreenEnabled = false;
-  bool _cursorHidden = false;
-  bool _focusReportingEnabled = false;
-  bool _bracketedPasteEnabled = false;
-  MouseMode _mouseMode = MouseMode.none;
+  final TerminalModeState _modes;
   List<String> _lastLines = const <String>[];
   String _lastContent = '';
   bool _hasRenderedFrame = false;
@@ -138,9 +132,13 @@ final class AnsiRenderer implements TeaRenderer {
 
   @override
   void render(View view) {
-    final wantsAlt = view.altScreen || _defaultAltScreen;
+    final wantsAlt = _modes.effectiveAltScreen(view);
     _terminalViewState.beforeScreenChange(_output, wantsAlt);
-    _applyModes(view);
+    if (_modes.apply(_output, view)) {
+      _lastLines = const <String>[];
+      _lastContent = '';
+      _hasRenderedFrame = false;
+    }
     _terminalViewState.apply(_output, view, altScreen: wantsAlt);
     if (view.windowTitle.isNotEmpty) {
       _output.write(windowTitleSequence(view.windowTitle));
@@ -200,7 +198,7 @@ final class AnsiRenderer implements TeaRenderer {
 
   @override
   void insertAbove(String line) {
-    if (!_altScreenEnabled) {
+    if (!_modes.altScreenEnabled) {
       _output.writeln(line);
       return;
     }
@@ -223,16 +221,7 @@ final class AnsiRenderer implements TeaRenderer {
     setUnicodeCore(false);
     _terminalViewState.reset(_output);
     _cursorState.reset(_output);
-    _output.write('\x1b[?25h');
-    _output.write('\x1b[?1049l');
-    _output.write('\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l');
-    _output.write('\x1b[?1004l');
-    _output.write('\x1b[?2004l');
-    _cursorHidden = false;
-    _altScreenEnabled = false;
-    _focusReportingEnabled = false;
-    _bracketedPasteEnabled = false;
-    _mouseMode = MouseMode.none;
+    _modes.reset(_output);
     _lastLines = const <String>[];
     _lastContent = '';
     _hasRenderedFrame = false;
@@ -253,10 +242,8 @@ final class AnsiRenderer implements TeaRenderer {
 
   @override
   void setAltScreen(bool enabled) {
-    if (enabled == _altScreenEnabled) return;
     _terminalViewState.beforeScreenChange(_output, enabled);
-    _output.write(enabled ? '\x1b[?1049h' : '\x1b[?1049l');
-    _altScreenEnabled = enabled;
+    if (!_modes.setAltScreen(_output, enabled)) return;
     _terminalViewState.restoreKeyboard(_output, enabled);
     _lastLines = const <String>[];
     _lastContent = '';
@@ -264,11 +251,8 @@ final class AnsiRenderer implements TeaRenderer {
   }
 
   @override
-  void setCursorVisibility(bool visible) {
-    if (visible == !_cursorHidden) return;
-    _output.write(visible ? '\x1b[?25h' : '\x1b[?25l');
-    _cursorHidden = !visible;
-  }
+  void setCursorVisibility(bool visible) =>
+      _modes.setCursorVisibility(_output, visible);
 
   @override
   void scroll(int n, {bool up = true}) {
@@ -278,53 +262,6 @@ final class AnsiRenderer implements TeaRenderer {
     _lastLines = const <String>[];
     _lastContent = '';
     _hasRenderedFrame = false;
-  }
-
-  void _applyModes(View v) {
-    final wantsAlt = v.altScreen || _defaultAltScreen;
-    if (wantsAlt != _altScreenEnabled) {
-      _output.write(wantsAlt ? '\x1b[?1049h' : '\x1b[?1049l');
-      _altScreenEnabled = wantsAlt;
-    }
-
-    final wantsHiddenCursor = v.cursor == null && _defaultHideCursor;
-    if (wantsHiddenCursor != _cursorHidden) {
-      _output.write(wantsHiddenCursor ? '\x1b[?25l' : '\x1b[?25h');
-      _cursorHidden = wantsHiddenCursor;
-    }
-
-    final wantsFocus = v.reportFocus || _defaultReportFocus;
-    if (wantsFocus != _focusReportingEnabled) {
-      _output.write(wantsFocus ? '\x1b[?1004h' : '\x1b[?1004l');
-      _focusReportingEnabled = wantsFocus;
-    }
-
-    final wantsBracketedPaste = !v.disableBracketedPasteMode;
-    if (wantsBracketedPaste != _bracketedPasteEnabled) {
-      _output.write(wantsBracketedPaste ? '\x1b[?2004h' : '\x1b[?2004l');
-      _bracketedPasteEnabled = wantsBracketedPaste;
-    }
-
-    // Effective mouse mode is the higher of the per-frame view mode and the
-    // startup default (so withMouseCellMotion() stays on even when the View
-    // returns MouseMode.none).
-    final effectiveMouseMode = v.mouseMode.index >= _defaultMouseMode.index
-        ? v.mouseMode
-        : _defaultMouseMode;
-    if (effectiveMouseMode != _mouseMode) {
-      _output.write('\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l');
-      switch (effectiveMouseMode) {
-        case MouseMode.none:
-          break;
-        case MouseMode.cellMotion:
-          _output.write('\x1b[?1002h\x1b[?1006h');
-          break;
-        case MouseMode.allMotion:
-          _output.write('\x1b[?1003h\x1b[?1006h');
-          break;
-      }
-      _mouseMode = effectiveMouseMode;
-    }
   }
 }
 
@@ -374,23 +311,16 @@ final class CellRenderer implements TeaRenderer {
     bool defaultReportFocus = false,
   })  : _output = output,
         _logSink = logSink,
-        _defaultAltScreen = defaultAltScreen,
-        _defaultHideCursor = defaultHideCursor,
-        _defaultMouseMode = defaultMouseMode,
-        _defaultReportFocus = defaultReportFocus;
+        _modes = TerminalModeState(
+          defaultAltScreen: defaultAltScreen,
+          defaultHideCursor: defaultHideCursor,
+          defaultMouseMode: defaultMouseMode,
+          defaultReportFocus: defaultReportFocus,
+        );
 
   final IOSink _output;
   final IOSink? _logSink;
-  final bool _defaultAltScreen;
-  final bool _defaultHideCursor;
-  final MouseMode _defaultMouseMode;
-  final bool _defaultReportFocus;
-
-  bool _altScreenEnabled = false;
-  bool _cursorHidden = false;
-  bool _focusReportingEnabled = false;
-  bool _bracketedPasteEnabled = false;
-  MouseMode _mouseMode = MouseMode.none;
+  final TerminalModeState _modes;
   bool _unicodeCoreEnabled = false;
 
   List<List<_Cell>>? _lastGrid;
@@ -400,9 +330,12 @@ final class CellRenderer implements TeaRenderer {
 
   @override
   void render(View view) {
-    final wantsAlt = view.altScreen || _defaultAltScreen;
+    final wantsAlt = _modes.effectiveAltScreen(view);
     _terminalViewState.beforeScreenChange(_output, wantsAlt);
-    _applyModes(view);
+    if (_modes.apply(_output, view)) {
+      _lastGrid = null;
+      _lastContent = null;
+    }
     _terminalViewState.apply(_output, view, altScreen: wantsAlt);
     if (view.windowTitle.isNotEmpty) {
       _output.write(windowTitleSequence(view.windowTitle));
@@ -428,7 +361,7 @@ final class CellRenderer implements TeaRenderer {
 
   @override
   void insertAbove(String line) {
-    if (!_altScreenEnabled) {
+    if (!_modes.altScreenEnabled) {
       _output.writeln(line);
       return;
     }
@@ -450,16 +383,7 @@ final class CellRenderer implements TeaRenderer {
     setUnicodeCore(false);
     _terminalViewState.reset(_output);
     _cursorState.reset(_output);
-    _output.write('\x1b[?25h');
-    _output.write('\x1b[?1049l');
-    _output.write('\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l');
-    _output.write('\x1b[?1004l');
-    _output.write('\x1b[?2004l');
-    _cursorHidden = false;
-    _altScreenEnabled = false;
-    _focusReportingEnabled = false;
-    _bracketedPasteEnabled = false;
-    _mouseMode = MouseMode.none;
+    _modes.reset(_output);
     _lastGrid = null;
     _lastContent = null;
     if (reset) clearScreen();
@@ -483,21 +407,16 @@ final class CellRenderer implements TeaRenderer {
 
   @override
   void setAltScreen(bool enabled) {
-    if (enabled == _altScreenEnabled) return;
     _terminalViewState.beforeScreenChange(_output, enabled);
-    _output.write(enabled ? '\x1b[?1049h' : '\x1b[?1049l');
-    _altScreenEnabled = enabled;
+    if (!_modes.setAltScreen(_output, enabled)) return;
     _terminalViewState.restoreKeyboard(_output, enabled);
     _lastGrid = null;
     _lastContent = null;
   }
 
   @override
-  void setCursorVisibility(bool visible) {
-    if (visible == !_cursorHidden) return;
-    _output.write(visible ? '\x1b[?25h' : '\x1b[?25l');
-    _cursorHidden = !visible;
-  }
+  void setCursorVisibility(bool visible) =>
+      _modes.setCursorVisibility(_output, visible);
 
   @override
   void scroll(int n, {bool up = true}) {
@@ -613,55 +532,6 @@ final class CellRenderer implements TeaRenderer {
     }
     if (lastHyperlink.isNotEmpty) {
       _output.write('\x1b]8;;\x1b\\');
-    }
-  }
-
-  // ── Terminal mode application (mirrors AnsiRenderer._applyModes) ───────────
-
-  void _applyModes(View v) {
-    final wantsAlt = v.altScreen || _defaultAltScreen;
-    if (wantsAlt != _altScreenEnabled) {
-      _output.write(wantsAlt ? '\x1b[?1049h' : '\x1b[?1049l');
-      _altScreenEnabled = wantsAlt;
-    }
-
-    final wantsHiddenCursor = v.cursor == null && _defaultHideCursor;
-    if (wantsHiddenCursor != _cursorHidden) {
-      _output.write(wantsHiddenCursor ? '\x1b[?25l' : '\x1b[?25h');
-      _cursorHidden = wantsHiddenCursor;
-    }
-
-    final wantsFocus = v.reportFocus || _defaultReportFocus;
-    if (wantsFocus != _focusReportingEnabled) {
-      _output.write(wantsFocus ? '\x1b[?1004h' : '\x1b[?1004l');
-      _focusReportingEnabled = wantsFocus;
-    }
-
-    final wantsBracketedPaste = !v.disableBracketedPasteMode;
-    if (wantsBracketedPaste != _bracketedPasteEnabled) {
-      _output.write(wantsBracketedPaste ? '\x1b[?2004h' : '\x1b[?2004l');
-      _bracketedPasteEnabled = wantsBracketedPaste;
-    }
-
-    // Effective mouse mode is the higher of the per-frame view mode and the
-    // startup default (so withMouseCellMotion() stays on even when the View
-    // returns MouseMode.none).
-    final effectiveMouseMode = v.mouseMode.index >= _defaultMouseMode.index
-        ? v.mouseMode
-        : _defaultMouseMode;
-    if (effectiveMouseMode != _mouseMode) {
-      _output.write('\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l');
-      switch (effectiveMouseMode) {
-        case MouseMode.none:
-          break;
-        case MouseMode.cellMotion:
-          _output.write('\x1b[?1002h\x1b[?1006h');
-          break;
-        case MouseMode.allMotion:
-          _output.write('\x1b[?1003h\x1b[?1006h');
-          break;
-      }
-      _mouseMode = effectiveMouseMode;
     }
   }
 }
