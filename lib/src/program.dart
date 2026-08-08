@@ -328,13 +328,10 @@ final class Program {
         case SuspendMsg():
           await releaseTerminal(resetRenderer: true);
           if (!Platform.isWindows) {
-            final contCompleter = Completer<void>();
-            final contSub = ProcessSignal.sigcont.watch().listen((_) {
-              if (!contCompleter.isCompleted) contCompleter.complete();
-            });
             Process.killPid(pid, ProcessSignal.sigstop);
-            await contCompleter.future;
-            await contSub.cancel();
+            // SIGSTOP cannot be caught or ignored. Execution continues here
+            // only after an external SIGCONT resumes the process.
+            await Future<void>.delayed(Duration.zero);
           }
           await restoreTerminal();
           enqueue(ResumeMsg());

@@ -32,6 +32,8 @@ jobs:
       # The PTY smoke test relies on Python's Unix-only `pty` module.
       - if: runner.os != 'Windows'
         run: python3 tool/pty_examples_smoke.py
+      - if: runner.os != 'Windows'
+        run: python3 tool/pty_program_runtime_test.py
 
   website:
     runs-on: ubuntu-latest
