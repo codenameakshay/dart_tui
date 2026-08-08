@@ -1,4 +1,4 @@
-// Run: fvm dart run example/paginator.dart
+// Run: dart run example/paginator.dart
 // PaginatorModel with dot indicator. Left/right to navigate, q to quit.
 
 import 'package:dart_tui/dart_tui.dart';
@@ -23,7 +23,7 @@ Future<void> main() async {
   await Program().run(PaginatorExampleModel());
 }
 
-final class PaginatorExampleModel extends TeaModel {
+final class PaginatorExampleModel extends Model {
   PaginatorExampleModel({PaginatorModel? paginator})
       : paginator = paginator ??
             PaginatorModel(

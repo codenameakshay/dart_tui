@@ -20,7 +20,7 @@ Future<void> main() async {
   await Program().run(IsbnFormModel());
 }
 
-final class IsbnFormModel extends TeaModel {
+final class IsbnFormModel extends Model {
   IsbnFormModel({
     TextInputModel? input,
     this.errorMsg = '',

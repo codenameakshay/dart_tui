@@ -62,7 +62,7 @@ const _sampleRoot = TreeNode(
   ],
 );
 
-final class _TreeShowcaseModel extends TeaModel {
+final class _TreeShowcaseModel extends Model {
   _TreeShowcaseModel({TreeModel? tree})
       : tree = tree ??
             TreeModel(
@@ -73,7 +73,7 @@ final class _TreeShowcaseModel extends TeaModel {
   final TreeModel tree;
 
   @override
-  (TeaModel, Cmd?) update(Msg msg) {
+  (Model, Cmd?) update(Msg msg) {
     if (msg is KeyMsg) {
       switch (msg.key) {
         case 'q':

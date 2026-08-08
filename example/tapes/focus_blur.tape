@@ -6,7 +6,7 @@ Set Height 350
 Set Theme "Dracula"
 Set PlaybackSpeed 1.0
 
-Type "fvm dart run tool/bin/focus_blur.dill"
+Type "dart run tool/bin/focus_blur.dill"
 Enter
 Sleep 2s
 Type "q"

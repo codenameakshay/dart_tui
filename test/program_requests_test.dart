@@ -13,8 +13,10 @@ void main() {
     final sink = IOSink(controller.sink);
 
     final program = Program(
-      options: const ProgramOptions(altScreen: false),
-      programOptions: [withInput(null), withOutput(sink)],
+      options: [
+        withInput(const Stream<List<int>>.empty()),
+        withOutput(sink),
+      ],
     );
 
     await program.run(_RequestModel());
@@ -22,6 +24,8 @@ void main() {
     final out = chunks.join();
     expect(out, contains('\x1b]10;?\x07'));
     expect(out, contains('\x1b[6n'));
+    expect(out, contains('\x1b[?2026\$p'));
+    expect(out, contains('\x1b[?2027\$p'));
 
     await sink.close();
     await controller.close();
@@ -29,18 +33,17 @@ void main() {
 
   test('program with tickInterval exits cleanly after quit', () async {
     final program = Program(
-      options: const ProgramOptions(
-        altScreen: false,
-        tickInterval: Duration(milliseconds: 10),
-      ),
-      programOptions: [withInput(null)],
+      options: [
+        withInput(null),
+        withTickInterval(const Duration(milliseconds: 10)),
+      ],
     );
 
     await program.run(_ImmediateQuitModel());
   });
 }
 
-final class _RequestModel extends TeaModel {
+final class _RequestModel extends Model {
   @override
   Cmd? init() {
     return sequence([
@@ -51,18 +54,18 @@ final class _RequestModel extends TeaModel {
   }
 
   @override
-  (TeaModel, Cmd?) update(Msg msg) => (this, null);
+  (Model, Cmd?) update(Msg msg) => (this, null);
 
   @override
   View view() => newView('');
 }
 
-final class _ImmediateQuitModel extends TeaModel {
+final class _ImmediateQuitModel extends Model {
   @override
   Cmd? init() => () => quit();
 
   @override
-  (TeaModel, Cmd?) update(Msg msg) => (this, null);
+  (Model, Cmd?) update(Msg msg) => (this, null);
 
   @override
   View view() => newView('');

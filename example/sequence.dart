@@ -10,7 +10,7 @@ Future<void> main() async {
   await Program().run(SequenceModel());
 }
 
-final class SequenceModel extends TeaModel {
+final class SequenceModel extends Model {
   SequenceModel({this.lines = const [], this.done = false});
   final List<String> lines;
   final bool done;

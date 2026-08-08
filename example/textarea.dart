@@ -1,4 +1,4 @@
-// Run: fvm dart run example/textarea.dart
+// Run: dart run example/textarea.dart
 // Multi-line text editor. ctrl+c to quit.
 
 import 'package:dart_tui/dart_tui.dart';
@@ -7,7 +7,7 @@ Future<void> main() async {
   await Program().run(TextAreaExampleModel());
 }
 
-final class TextAreaExampleModel extends TeaModel {
+final class TextAreaExampleModel extends Model {
   TextAreaExampleModel({TextAreaModel? area})
       : area = area ??
             TextAreaModel(

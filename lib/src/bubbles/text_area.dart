@@ -1,41 +1,141 @@
 import 'package:characters/characters.dart';
 
 import '../cmd.dart';
+import '../grapheme_width.dart';
 import '../model.dart';
 import '../msg.dart';
 import '../view.dart';
-import 'text_input.dart' show InputStyles;
+import 'style.dart';
 
-/// Multi-line text editor bubble.
-///
-/// Uses grapheme clusters for correct Unicode cursor positioning.
-final class TextAreaModel extends TeaModel {
+/// Style configuration for [TextAreaModel].
+final class TextAreaStyles {
+  const TextAreaStyles({
+    this.text = const Style(),
+    this.placeholder = const Style(),
+  });
+
+  factory TextAreaStyles.forDarkBackground(bool isDark) =>
+      isDark ? dark : light;
+
+  factory TextAreaStyles.forBackground(int rgb) =>
+      TextAreaStyles.forDarkBackground(isDarkRgb(rgb));
+
+  final Style text;
+  final Style placeholder;
+
+  static const TextAreaStyles dark = TextAreaStyles(
+    text: Style(foregroundRgb: RgbColor(205, 214, 244)),
+    placeholder: Style(
+      foregroundRgb: RgbColor(108, 112, 134),
+      isDim: true,
+      isItalic: true,
+    ),
+  );
+
+  static const TextAreaStyles light = TextAreaStyles(
+    text: Style(foregroundRgb: RgbColor(76, 79, 105)),
+    placeholder: Style(
+      foregroundRgb: RgbColor(108, 111, 133),
+      isItalic: true,
+    ),
+  );
+
+  /// Defaults remain optimized for dark terminal backgrounds.
+  static const TextAreaStyles defaults = dark;
+}
+
+/// Multi-line text editor bubble with grapheme-safe visual-row navigation.
+final class TextAreaModel extends Model {
   TextAreaModel({
     this.value = '',
     this.cursorRow = 0,
     this.cursorCol = 0,
     this.scrollOffset = 0,
     this.maxHeight = 10,
+    this.minHeight = 1,
+    this.dynamicHeight = false,
+    this.maxContentHeight = 0,
     this.width = 60,
     this.charLimit = 0,
     this.focused = true,
     this.placeholder = '',
-    this.styles = InputStyles.defaults,
+    this.styles = TextAreaStyles.defaults,
   });
 
   final String value;
   final int cursorRow;
   final int cursorCol;
   final int scrollOffset;
+
+  /// Maximum number of visual rows displayed at once.
   final int maxHeight;
+
+  /// Minimum displayed height when [dynamicHeight] is enabled.
+  final int minHeight;
+  final bool dynamicHeight;
+
+  /// Maximum accepted content height in soft-wrapped visual rows. Zero is unlimited.
+  final int maxContentHeight;
   final int width;
   final int charLimit;
   final bool focused;
   final String placeholder;
-  final InputStyles styles;
+  final TextAreaStyles styles;
 
-  /// Split [value] into lines.
   List<String> get lines => value.split('\n');
+  List<_TextAreaVisualRow> get _visualRows => _buildVisualRows(value, width);
+  int get visualLineCount => _visualRows.length;
+
+  /// Zero-based logical line containing the cursor.
+  int get cursorLine => cursorRow.clamp(0, lines.length - 1);
+
+  /// Zero-based grapheme index within [cursorLine].
+  int get cursorColumn =>
+      cursorCol.clamp(0, lines[cursorLine].characters.length);
+
+  int get visibleHeight {
+    final contentHeight = visualLineCount;
+    if (!dynamicHeight) {
+      return maxHeight > 0 ? maxHeight : contentHeight;
+    }
+    final minimum = minHeight > 0 ? minHeight : 1;
+    final maximum = maxHeight > 0
+        ? maxHeight
+        : (contentHeight < minimum ? minimum : contentHeight);
+    return contentHeight.clamp(minimum, maximum < minimum ? minimum : maximum);
+  }
+
+  /// Top visual-row offset actually used by [view].
+  int get visibleScrollOffset {
+    final maximum = (visualLineCount - visibleHeight).clamp(0, visualLineCount);
+    return scrollOffset.clamp(0, maximum);
+  }
+
+  int get cursorVisualRow => _cursorLocation.visualRow;
+  int get cursorVisualColumn => _cursorLocation.cellColumn;
+  double get scrollPercent {
+    final maximum = (visualLineCount - visibleHeight).clamp(0, visualLineCount);
+    return maximum == 0 ? 1.0 : scrollOffset.clamp(0, maximum) / maximum;
+  }
+
+  TextAreaModel moveToLineStart() =>
+      copyWith(cursorRow: cursorLine, cursorCol: 0)._normalized();
+
+  TextAreaModel moveToLineEnd() => copyWith(
+        cursorRow: cursorLine,
+        cursorCol: lines[cursorLine].characters.length,
+      )._normalized();
+
+  TextAreaModel moveToDocumentStart() =>
+      copyWith(cursorRow: 0, cursorCol: 0)._normalized();
+
+  TextAreaModel moveToDocumentEnd() {
+    final lastLine = lines.length - 1;
+    return copyWith(
+      cursorRow: lastLine,
+      cursorCol: lines[lastLine].characters.length,
+    )._normalized();
+  }
 
   TextAreaModel copyWith({
     String? value,
@@ -43,11 +143,14 @@ final class TextAreaModel extends TeaModel {
     int? cursorCol,
     int? scrollOffset,
     int? maxHeight,
+    int? minHeight,
+    bool? dynamicHeight,
+    int? maxContentHeight,
     int? width,
     int? charLimit,
     bool? focused,
     String? placeholder,
-    InputStyles? styles,
+    TextAreaStyles? styles,
   }) =>
       TextAreaModel(
         value: value ?? this.value,
@@ -55,6 +158,9 @@ final class TextAreaModel extends TeaModel {
         cursorCol: cursorCol ?? this.cursorCol,
         scrollOffset: scrollOffset ?? this.scrollOffset,
         maxHeight: maxHeight ?? this.maxHeight,
+        minHeight: minHeight ?? this.minHeight,
+        dynamicHeight: dynamicHeight ?? this.dynamicHeight,
+        maxContentHeight: maxContentHeight ?? this.maxContentHeight,
         width: width ?? this.width,
         charLimit: charLimit ?? this.charLimit,
         focused: focused ?? this.focused,
@@ -62,8 +168,6 @@ final class TextAreaModel extends TeaModel {
         styles: styles ?? this.styles,
       );
 
-  /// Index of the start of the word before [pos] within [chars] (skips trailing
-  /// spaces, then the run of non-space characters).
   static int _wordStartBefore(List<String> chars, int pos) {
     var i = pos;
     while (i > 0 && chars[i - 1] == ' ') {
@@ -75,171 +179,245 @@ final class TextAreaModel extends TeaModel {
     return i;
   }
 
-  /// Insert [text] at the current cursor position.
-  TextAreaModel _insertText(String text) {
-    final ls = lines;
-    final row = cursorRow.clamp(0, ls.length - 1);
-    final lineChars = ls[row].characters.toList();
+  bool _accepts(String candidate) {
+    if (charLimit > 0 && candidate.characters.length > charLimit) return false;
+    if (maxContentHeight > 0 &&
+        _buildVisualRows(candidate, width).length > maxContentHeight) {
+      return false;
+    }
+    return true;
+  }
+
+  TextAreaModel _normalized() {
+    final currentLines = lines;
+    final row = cursorRow.clamp(0, currentLines.length - 1);
+    final col = cursorCol.clamp(0, currentLines[row].characters.length);
+    var next = copyWith(cursorRow: row, cursorCol: col);
+    final location = next._cursorLocation;
+    final maximum = (next.visualLineCount - next.visibleHeight)
+        .clamp(0, next.visualLineCount);
+    var offset = next.scrollOffset.clamp(0, maximum);
+    if (location.visualRow < offset) {
+      offset = location.visualRow;
+    } else if (location.visualRow >= offset + next.visibleHeight) {
+      offset = (location.visualRow - next.visibleHeight + 1).clamp(0, maximum);
+    }
+    next = next.copyWith(scrollOffset: offset);
+    return next;
+  }
+
+  _TextAreaCursorLocation get _cursorLocation {
+    final currentLines = lines;
+    final row = cursorRow.clamp(0, currentLines.length - 1);
+    final lineChars = currentLines[row].characters.toList();
     final col = cursorCol.clamp(0, lineChars.length);
-    lineChars.insert(col, text);
-    ls[row] = lineChars.join();
-    final newValue = ls.join('\n');
-    if (charLimit > 0 && newValue.characters.length > charLimit) return this;
-    return copyWith(value: newValue, cursorCol: col + 1);
+    final rows = _visualRows;
+    for (var visual = 0; visual < rows.length; visual++) {
+      final candidate = rows[visual];
+      if (candidate.logicalRow != row) continue;
+      final isLineEnd =
+          col == lineChars.length && candidate.end == lineChars.length;
+      if ((col >= candidate.start && col < candidate.end) || isLineEnd) {
+        final cellColumn = textWidth(
+          lineChars.sublist(candidate.start, col).join(),
+        );
+        return _TextAreaCursorLocation(visual, cellColumn);
+      }
+    }
+    return const _TextAreaCursorLocation(0, 0);
   }
 
-  /// Delete the character before the cursor.
+  TextAreaModel _insertText(String text) {
+    final currentLines = lines;
+    final row = cursorRow.clamp(0, currentLines.length - 1);
+    final chars = currentLines[row].characters.toList();
+    final col = cursorCol.clamp(0, chars.length);
+    final inserted = text.characters.toList();
+    chars.insertAll(col, inserted);
+    currentLines[row] = chars.join();
+    final candidate = currentLines.join('\n');
+    if (!_accepts(candidate)) return this;
+    return copyWith(
+      value: candidate,
+      cursorRow: row,
+      cursorCol: col + inserted.length,
+    )._normalized();
+  }
+
+  TextAreaModel _insertNewline() {
+    final currentLines = lines;
+    final row = cursorRow.clamp(0, currentLines.length - 1);
+    final chars = currentLines[row].characters.toList();
+    final col = cursorCol.clamp(0, chars.length);
+    currentLines[row] = chars.sublist(0, col).join();
+    currentLines.insert(row + 1, chars.sublist(col).join());
+    final candidate = currentLines.join('\n');
+    if (!_accepts(candidate)) return this;
+    return copyWith(
+      value: candidate,
+      cursorRow: row + 1,
+      cursorCol: 0,
+    )._normalized();
+  }
+
   TextAreaModel _deleteBackward() {
-    final ls = lines;
-    final row = cursorRow.clamp(0, ls.length - 1);
-    if (cursorCol > 0) {
-      final lineChars = ls[row].characters.toList();
-      lineChars.removeAt(cursorCol - 1);
-      ls[row] = lineChars.join();
-      return copyWith(value: ls.join('\n'), cursorCol: cursorCol - 1);
-    } else if (row > 0) {
-      // Merge with previous line
-      final prevChars = ls[row - 1].characters.toList();
-      final prevLen = prevChars.length;
-      ls[row - 1] = prevChars.join() + ls[row];
-      ls.removeAt(row);
+    final currentLines = lines;
+    final row = cursorRow.clamp(0, currentLines.length - 1);
+    final chars = currentLines[row].characters.toList();
+    final col = cursorCol.clamp(0, chars.length);
+    if (col > 0) {
+      chars.removeAt(col - 1);
+      currentLines[row] = chars.join();
       return copyWith(
-        value: ls.join('\n'),
-        cursorRow: row - 1,
-        cursorCol: prevLen,
-      );
+        value: currentLines.join('\n'),
+        cursorCol: col - 1,
+      )._normalized();
     }
-    return this;
+    if (row == 0) return this;
+    final previousLength = currentLines[row - 1].characters.length;
+    currentLines[row - 1] += currentLines[row];
+    currentLines.removeAt(row);
+    return copyWith(
+      value: currentLines.join('\n'),
+      cursorRow: row - 1,
+      cursorCol: previousLength,
+    )._normalized();
   }
 
-  /// Delete the character at the cursor.
   TextAreaModel _deleteForward() {
-    final ls = lines;
-    final row = cursorRow.clamp(0, ls.length - 1);
-    final lineChars = ls[row].characters.toList();
-    if (cursorCol < lineChars.length) {
-      lineChars.removeAt(cursorCol);
-      ls[row] = lineChars.join();
-      return copyWith(value: ls.join('\n'));
-    } else if (row < ls.length - 1) {
-      // Merge next line
-      ls[row] = ls[row] + ls[row + 1];
-      ls.removeAt(row + 1);
-      return copyWith(value: ls.join('\n'));
+    final currentLines = lines;
+    final row = cursorRow.clamp(0, currentLines.length - 1);
+    final chars = currentLines[row].characters.toList();
+    final col = cursorCol.clamp(0, chars.length);
+    if (col < chars.length) {
+      chars.removeAt(col);
+      currentLines[row] = chars.join();
+      return copyWith(value: currentLines.join('\n'))._normalized();
     }
-    return this;
+    if (row >= currentLines.length - 1) return this;
+    currentLines[row] += currentLines[row + 1];
+    currentLines.removeAt(row + 1);
+    return copyWith(value: currentLines.join('\n'))._normalized();
   }
 
-  TextAreaModel _scroll(int newRow) {
-    var offset = scrollOffset;
-    if (newRow < offset) offset = newRow;
-    if (newRow >= offset + maxHeight) offset = newRow - maxHeight + 1;
-    return copyWith(scrollOffset: offset);
+  TextAreaModel _moveVisual(int delta) {
+    final rows = _visualRows;
+    final location = _cursorLocation;
+    final target = (location.visualRow + delta).clamp(0, rows.length - 1);
+    if (target == location.visualRow) return this;
+    final targetRow = rows[target];
+    final targetChars = lines[targetRow.logicalRow].characters.toList();
+    var col = targetRow.start;
+    var cells = 0;
+    while (col < targetRow.end) {
+      final next = graphemeWidth(targetChars[col]);
+      if (cells + next > location.cellColumn) break;
+      cells += next;
+      col++;
+    }
+    return copyWith(
+      cursorRow: targetRow.logicalRow,
+      cursorCol: col,
+    )._normalized();
   }
 
   @override
   (Model, Cmd?) update(Msg msg) {
     if (msg is! KeyMsg) return (this, null);
-    final ls = lines;
-    final row = cursorRow.clamp(0, ls.length - 1);
-    final lineChars = ls[row].characters.toList();
-    final lineLen = lineChars.length;
+    final currentLines = lines;
+    final row = cursorRow.clamp(0, currentLines.length - 1);
+    final lineChars = currentLines[row].characters.toList();
+    final col = cursorCol.clamp(0, lineChars.length);
 
     switch (msg.key) {
       case 'backspace':
-        return (_deleteBackward()._scroll(cursorRow), null);
-
+        return (_deleteBackward(), null);
       case 'delete':
         return (_deleteForward(), null);
-
       case 'enter':
-        if (charLimit > 0 && value.characters.length >= charLimit) {
-          return (this, null);
-        }
-        final col = cursorCol.clamp(0, lineChars.length);
-        final newLine = lineChars.sublist(0, col).join();
-        final rest = lineChars.sublist(col).join();
-        ls[row] = newLine;
-        ls.insert(row + 1, rest);
-        final next = copyWith(
-          value: ls.join('\n'),
-          cursorRow: row + 1,
-          cursorCol: 0,
-        );
-        return (next._scroll(next.cursorRow), null);
-
+        return (_insertNewline(), null);
       case 'up':
-        if (row == 0) return (this, null);
-        final newColUp = cursorCol.clamp(0, ls[row - 1].characters.length);
-        final nextUp = copyWith(cursorRow: row - 1, cursorCol: newColUp);
-        return (nextUp._scroll(nextUp.cursorRow), null);
-
+        return (_moveVisual(-1), null);
       case 'down':
-        if (row >= ls.length - 1) return (this, null);
-        final newColDown = cursorCol.clamp(0, ls[row + 1].characters.length);
-        final nextDown = copyWith(cursorRow: row + 1, cursorCol: newColDown);
-        return (nextDown._scroll(nextDown.cursorRow), null);
-
+        return (_moveVisual(1), null);
+      case 'pgup':
+        return (_moveVisual(-visibleHeight), null);
+      case 'pgdown':
+        return (_moveVisual(visibleHeight), null);
       case 'left':
-        if (cursorCol > 0) {
-          return (copyWith(cursorCol: cursorCol - 1), null);
-        } else if (row > 0) {
-          final prevLen = ls[row - 1].characters.length;
-          final nextLeft = copyWith(cursorRow: row - 1, cursorCol: prevLen);
-          return (nextLeft._scroll(nextLeft.cursorRow), null);
+        if (col > 0) {
+          return (copyWith(cursorCol: col - 1)._normalized(), null);
+        }
+        if (row > 0) {
+          return (
+            copyWith(
+              cursorRow: row - 1,
+              cursorCol: currentLines[row - 1].characters.length,
+            )._normalized(),
+            null,
+          );
         }
         return (this, null);
-
       case 'right':
-        if (cursorCol < lineLen) {
-          return (copyWith(cursorCol: cursorCol + 1), null);
-        } else if (row < ls.length - 1) {
-          final nextRight = copyWith(cursorRow: row + 1, cursorCol: 0);
-          return (nextRight._scroll(nextRight.cursorRow), null);
+        if (col < lineChars.length) {
+          return (copyWith(cursorCol: col + 1)._normalized(), null);
+        }
+        if (row < currentLines.length - 1) {
+          return (
+            copyWith(cursorRow: row + 1, cursorCol: 0)._normalized(),
+            null,
+          );
         }
         return (this, null);
-
       case 'home':
-        return (copyWith(cursorCol: 0), null);
-
-      case 'end':
-        return (copyWith(cursorCol: lineLen), null);
-
-      // ── Readline / emacs bindings ──────────────────────────────────────────
       case 'ctrl+a':
-        return (copyWith(cursorCol: 0), null);
-
+        return (moveToLineStart(), null);
+      case 'end':
       case 'ctrl+e':
-        return (copyWith(cursorCol: lineLen), null);
-
+        return (moveToLineEnd(), null);
+      case 'ctrl+home':
+        return (moveToDocumentStart(), null);
+      case 'ctrl+end':
+        return (moveToDocumentEnd(), null);
       case 'ctrl+w':
       case 'alt+backspace':
-        final start = _wordStartBefore(lineChars, cursorCol);
-        if (start == cursorCol) return (this, null);
-        ls[row] = [
+        final start = _wordStartBefore(lineChars, col);
+        if (start == col) return (this, null);
+        currentLines[row] = [
           ...lineChars.sublist(0, start),
-          ...lineChars.sublist(cursorCol)
+          ...lineChars.sublist(col),
         ].join();
-        return (copyWith(value: ls.join('\n'), cursorCol: start), null);
-
+        return (
+          copyWith(
+            value: currentLines.join('\n'),
+            cursorCol: start,
+          )._normalized(),
+          null,
+        );
       default:
-        // ctrl+k: kill to end of line
         if (msg.key == 'ctrl+k') {
-          ls[row] = lineChars.sublist(0, cursorCol).join();
-          return (copyWith(value: ls.join('\n')), null);
+          currentLines[row] = lineChars.sublist(0, col).join();
+          return (
+            copyWith(value: currentLines.join('\n'))._normalized(),
+            null,
+          );
         }
-        // ctrl+u: kill to start of line
         if (msg.key == 'ctrl+u') {
-          ls[row] = lineChars.sublist(cursorCol).join();
-          return (copyWith(value: ls.join('\n'), cursorCol: 0), null);
+          currentLines[row] = lineChars.sublist(col).join();
+          return (
+            copyWith(
+              value: currentLines.join('\n'),
+              cursorCol: 0,
+            )._normalized(),
+            null,
+          );
         }
         if (!focused) return (this, null);
-        // Insert the actual rune text (msg.key would be 'space' for space, etc.).
-        final ke = msg.keyEvent;
-        if (ke.code == KeyCode.rune &&
-            ke.text.isNotEmpty &&
-            ke.modifiers.isEmpty) {
-          return (_insertText(ke.text)._scroll(cursorRow), null);
+        final key = msg.keyEvent;
+        if (key.code == KeyCode.rune &&
+            key.text.isNotEmpty &&
+            key.modifiers.isEmpty) {
+          return (_insertText(key.text), null);
         }
         return (this, null);
     }
@@ -247,14 +425,82 @@ final class TextAreaModel extends TeaModel {
 
   @override
   View view() {
-    final ls = lines;
-    if (ls.isEmpty || (ls.length == 1 && ls[0].isEmpty && !focused)) {
+    if (value.isEmpty && !focused) {
       return newView(styles.placeholder.render(placeholder));
     }
+    final rows = _visualRows;
+    final start = visibleScrollOffset;
+    final end = (start + visibleHeight).clamp(start, rows.length);
+    final rendered = <String>[
+      for (final row in rows.sublist(start, end)) styles.text.render(row.text),
+    ];
+    if (dynamicHeight) {
+      while (rendered.length < visibleHeight) {
+        rendered.add(styles.text.render(''));
+      }
+    }
 
-    final visibleStart = scrollOffset;
-    final visibleEnd = (scrollOffset + maxHeight).clamp(0, ls.length);
-    final visible = ls.sublist(visibleStart, visibleEnd);
-    return newView(visible.map(styles.text.render).join('\n'));
+    final result = newView(rendered.join('\n'));
+    if (focused) {
+      final location = _cursorLocation;
+      final cursorY = location.visualRow - start;
+      if (cursorY >= 0 && cursorY < visibleHeight) {
+        result.cursor = Cursor(
+          x: location.cellColumn,
+          y: cursorY,
+          shape: CursorShape.bar,
+        );
+      }
+    }
+    return result;
   }
+
+  static List<_TextAreaVisualRow> _buildVisualRows(String value, int width) {
+    final visualRows = <_TextAreaVisualRow>[];
+    final logicalLines = value.split('\n');
+    final available = width > 0 ? width : 0x7fffffff;
+    for (var logical = 0; logical < logicalLines.length; logical++) {
+      final chars = logicalLines[logical].characters.toList();
+      if (chars.isEmpty) {
+        visualRows.add(_TextAreaVisualRow('', logical, 0, 0));
+        continue;
+      }
+      var start = 0;
+      while (start < chars.length) {
+        var end = start;
+        var cells = 0;
+        while (end < chars.length) {
+          final next = graphemeWidth(chars[end]);
+          if (end > start && cells + next > available) break;
+          cells += next;
+          end++;
+          if (cells >= available) break;
+        }
+        visualRows.add(_TextAreaVisualRow(
+          chars.sublist(start, end).join(),
+          logical,
+          start,
+          end,
+        ));
+        start = end;
+      }
+    }
+    return visualRows;
+  }
+}
+
+final class _TextAreaVisualRow {
+  const _TextAreaVisualRow(this.text, this.logicalRow, this.start, this.end);
+
+  final String text;
+  final int logicalRow;
+  final int start;
+  final int end;
+}
+
+final class _TextAreaCursorLocation {
+  const _TextAreaCursorLocation(this.visualRow, this.cellColumn);
+
+  final int visualRow;
+  final int cellColumn;
 }

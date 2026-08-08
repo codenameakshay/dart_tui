@@ -35,6 +35,8 @@ class _Sink implements IOSink {
 }
 
 void _driveModes(TeaRenderer r, _Sink sink) {
+  r.setUnicodeCore(true);
+  r.setUnicodeCore(true);
   // Flip every mode on...
   r.render(View(
     content: 'x',
@@ -62,6 +64,7 @@ void _driveModes(TeaRenderer r, _Sink sink) {
   r.render(View(content: 'after'));
   r.restore(View(content: 'restored'));
   r.release(reset: true);
+  r.setUnicodeCore(true);
   r.close();
 }
 
@@ -77,6 +80,8 @@ void main() {
     _driveModes(r, sink);
     expect(sink.buf.toString(), contains('\x1b]0;Title\x07'));
     expect(sink.buf.toString(), contains('\x1b[2S')); // scroll up 2
+    expect(sink.buf.toString(), contains('\x1b[?2027h'));
+    expect(sink.buf.toString(), contains('\x1b[?2027l'));
   });
 
   test('CellRenderer drives modes + grid escape parsing (SGR/OSC/wide/lone)',
@@ -97,6 +102,7 @@ void main() {
     r.clearScreen();
     r.insertAbove('l');
     r.setSyncUpdates(true);
+    r.setUnicodeCore(true);
     r.setAltScreen(true);
     r.setCursorVisibility(false);
     r.scroll(1);

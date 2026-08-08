@@ -1,6 +1,10 @@
 include: package:lints/recommended.yaml
 
 analyzer:
+  # Verbatim website mirrors use URL slugs as filenames. Their canonical
+  # example/*.dart sources remain inside the repository-wide analysis scope.
+  exclude:
+    - website/content/examples-src/**
   language:
     strict-casts: true
     strict-inference: true

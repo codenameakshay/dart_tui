@@ -1,19 +1,19 @@
 // One-file, detailed tour of current dart_tui APIs.
 // Run:
-//   fvm dart run example/all_features.dart
+//   dart run example/all_features.dart
 
 import 'package:dart_tui/dart_tui.dart';
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(
-      altScreen: true,
-      tickInterval: Duration(milliseconds: 100),
-    ),
+    options: [
+      withAltScreen(),
+      withTickInterval(const Duration(milliseconds: 100)),
+    ],
   ).run(AllFeaturesModel());
 }
 
-final class AllFeaturesModel extends TeaModel {
+final class AllFeaturesModel extends Model {
   AllFeaturesModel({
     this.page = 0,
     this.progress = 0,
@@ -54,7 +54,7 @@ final class AllFeaturesModel extends TeaModel {
   }
 
   @override
-  (TeaModel, Cmd?) update(Msg msg) {
+  (Model, Cmd?) update(Msg msg) {
     if (msg is TickMsg) {
       final p = progress + 0.02 > 1 ? 0.0 : progress + 0.02;
       return (_copyWith(progress: p), null);
@@ -157,7 +157,7 @@ $header
 
 $body
 
-${TuiStyle.dim}Left/Right switch pages • q quit • p/w/f run command demos${TuiStyle.reset}
+${const Style(isDim: true).render('Left/Right switch pages • q quit • p/w/f run command demos')}
 ''');
   }
 
@@ -165,7 +165,7 @@ ${TuiStyle.dim}Left/Right switch pages • q quit • p/w/f run command demos${T
 This example demonstrates:
   • Model/update/view loop
   • Tick-driven animation
-  • Style + TuiStyle helpers
+  • Style rendering and layout
   • Bubbles components
   • Cmd helpers + typed Msg handling
 ''';
@@ -179,7 +179,7 @@ This example demonstrates:
     return '''
 $box
 
-Legacy helper: ${TuiStyle.wrap('TuiStyle.fg256(208)', open: TuiStyle.fg256(208))}
+Foreground color: ${const Style(foreground256: 208).render('Style(foreground256: 208)')}
 ''';
   }
 

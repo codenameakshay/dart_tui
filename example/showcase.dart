@@ -1,6 +1,6 @@
 // Comprehensive interactive demo of dart_tui APIs.
 // Run from package root:
-//   fvm dart run example/showcase.dart
+//   dart run example/showcase.dart
 
 import 'package:dart_tui/dart_tui.dart';
 
@@ -8,14 +8,14 @@ import 'shopping_list.dart';
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(
-      altScreen: true,
-      tickInterval: Duration(milliseconds: 80),
-    ),
+    options: [
+      withAltScreen(),
+      withTickInterval(const Duration(milliseconds: 80)),
+    ],
   ).run(ShowcaseModel());
 }
 
-final class ShowcaseModel extends TeaModel {
+final class ShowcaseModel extends Model {
   ShowcaseModel({
     this.screen = ShowcaseScreen.menu,
     this.menuCursor = 0,
@@ -26,7 +26,7 @@ final class ShowcaseModel extends TeaModel {
 
   final ShowcaseScreen screen;
   final int menuCursor;
-  final TeaModel? child;
+  final Model? child;
   final int width;
   final int height;
 
@@ -47,7 +47,7 @@ final class ShowcaseModel extends TeaModel {
   ShowcaseModel _copyWith({
     ShowcaseScreen? screen,
     int? menuCursor,
-    TeaModel? child,
+    Model? child,
     int? width,
     int? height,
     bool clearChild = false,
@@ -62,7 +62,7 @@ final class ShowcaseModel extends TeaModel {
   }
 
   @override
-  (TeaModel, Cmd?) update(Msg msg) {
+  (Model, Cmd?) update(Msg msg) {
     if (msg is WindowSizeMsg) {
       return (_copyWith(width: msg.width, height: msg.height), null);
     }
@@ -91,7 +91,7 @@ final class ShowcaseModel extends TeaModel {
     return (_copyWith(child: nextChild), cmd);
   }
 
-  (TeaModel, Cmd?) _updateMenu(Msg msg) {
+  (Model, Cmd?) _updateMenu(Msg msg) {
     if (msg is TickMsg) return (_copyWith(), null);
     if (msg is! KeyMsg) return (_copyWith(), null);
 
@@ -116,7 +116,7 @@ final class ShowcaseModel extends TeaModel {
     }
   }
 
-  (TeaModel, Cmd?) _openDemo(int index) {
+  (Model, Cmd?) _openDemo(int index) {
     switch (index) {
       case 0:
         return (
@@ -133,8 +133,8 @@ final class ShowcaseModel extends TeaModel {
           _copyWith(
             screen: ShowcaseScreen.spinner,
             child: SpinnerModel(
-              prefix: TuiStyle.wrap('Working ', open: TuiStyle.fg256(39)),
-              suffix: TuiStyle.wrap(' (spinner)', open: TuiStyle.dim),
+              prefix: const Style(foreground256: 39).render('Working '),
+              suffix: const Style(isDim: true).render(' (spinner)'),
             ),
           ),
           null,
@@ -152,7 +152,7 @@ final class ShowcaseModel extends TeaModel {
           _copyWith(
             screen: ShowcaseScreen.textInput,
             child: TextInputModel(
-              label: TuiStyle.wrap('name>', open: TuiStyle.bold),
+              label: const Style(isBold: true).render('name>'),
               placeholder: 'type here',
             ),
           ),
@@ -163,10 +163,8 @@ final class ShowcaseModel extends TeaModel {
           _copyWith(
             screen: ShowcaseScreen.selectList,
             child: SelectListModel(
-              title: TuiStyle.wrap(
-                'Pick a flavor',
-                open: '${TuiStyle.bold}${TuiStyle.fg256(208)}',
-              ),
+              title: const Style(isBold: true, foreground256: 208)
+                  .render('Pick a flavor'),
               items: const ['Vanilla', 'Chocolate', 'Mint', 'Coffee'],
             ),
           ),
@@ -242,13 +240,13 @@ final class ShowcaseModel extends TeaModel {
   String _menuView() {
     final b = StringBuffer()
       ..writeln(
-        TuiStyle.wrap(
-          'dart_tui — full showcase',
-          open: '${TuiStyle.bold}${TuiStyle.fg256(141)}',
-        ),
+        const Style(isBold: true, foreground256: 141)
+            .render('dart_tui — full showcase'),
       )
       ..writeln(
-        '${TuiStyle.dim}Window: ${width}x$height · Enter opens demo · q exits${TuiStyle.reset}',
+        const Style(isDim: true).render(
+          'Window: ${width}x$height · Enter opens demo · q exits',
+        ),
       )
       ..writeln();
     for (var i = 0; i < _menuItems.length; i++) {
@@ -258,7 +256,8 @@ final class ShowcaseModel extends TeaModel {
     b
       ..writeln()
       ..writeln(
-        '${TuiStyle.dim}↑/↓ or j/k navigate · Enter open · q quit${TuiStyle.reset}',
+        const Style(isDim: true)
+            .render('↑/↓ or j/k navigate · Enter open · q quit'),
       );
     return b.toString();
   }
@@ -273,28 +272,28 @@ final class ShowcaseModel extends TeaModel {
             'Style().foregroundColor256(39).bold()\\n.withPadding(1).withBorder(rounded)');
 
     return _wrapChild('''
-${TuiStyle.bold}Style API${TuiStyle.reset}
+${const Style(isBold: true).render('Style API')}
 
 $sample
 
-Compatibility helpers:
-  ${TuiStyle.wrap('TuiStyle.fg256(214)', open: TuiStyle.fg256(214))}
-  ${TuiStyle.wrap('TuiStyle.fgRgb(255,80,80)', open: TuiStyle.fgRgb(255, 80, 80))}
-  ${TuiStyle.wrap('TuiStyle.bold', open: TuiStyle.bold)}
-  ${TuiStyle.wrap('TuiStyle.dim', open: TuiStyle.dim)}
+Style constructors:
+  ${const Style(foreground256: 214).render('Style(foreground256: 214)')}
+  ${const Style(foregroundRgb: RgbColor(255, 80, 80)).render('Style(foregroundRgb: RgbColor(255, 80, 80))')}
+  ${const Style(isBold: true).render('Style(isBold: true)')}
+  ${const Style(isDim: true).render('Style(isDim: true)')}
 ''');
   }
 
   String _promptsView() {
     return _wrapChild('''
-${TuiStyle.bold}Prompts API${TuiStyle.reset}
+${const Style(isBold: true).render('Prompts API')}
 
   • promptSelect(choices)  → Future<String?>
   • promptConfirm(text)    → Future<bool?>
   • promptInput(label)     → Future<String?>
 
 Run:
-  fvm dart run example/prompts_chain.dart
+  dart run example/prompts_chain.dart
 
 Prompts run their own Program instances, so this showcase keeps them as
 documentation to avoid nested terminal sessions.
@@ -303,10 +302,10 @@ documentation to avoid nested terminal sessions.
 
   String _apiSummaryView() {
     return _wrapChild('''
-${TuiStyle.bold}Package API Summary${TuiStyle.reset}
+${const Style(isBold: true).render('Package API Summary')}
 
 Core:
-  • Model / TeaModel alias
+  • Model
   • Msg types: KeyPressMsg, WindowSizeMsg, TickMsg, PasteMsg, FocusMsg, ...
   • Cmd helpers: batch, sequence, tick, every, raw, request* commands
   • Program APIs: run, runForResult, send, quit, kill, wait,
@@ -318,18 +317,17 @@ Bubbles:
 
 Style:
   • Style() with color/emphasis/padding/margin/border
-  • TuiStyle legacy helper wrappers
 ''');
   }
 
   String _wrapChild(String body) {
     return '''
-${TuiStyle.bold}${TuiStyle.fg256(214)}dart_tui${TuiStyle.reset} ${TuiStyle.dim}showcase${TuiStyle.reset}
-${TuiStyle.dim}────────────────────────────────────────${TuiStyle.reset}
+${const Style(isBold: true, foreground256: 214).render('dart_tui')} ${const Style(isDim: true).render('showcase')}
+${const Style(isDim: true).render('────────────────────────────────────────')}
 
 $body
 
-${TuiStyle.dim}b / Esc / q / ctrl+c → back to menu${TuiStyle.reset}
+${const Style(isDim: true).render('b / Esc / q / ctrl+c → back to menu')}
 ''';
   }
 }
@@ -355,12 +353,12 @@ enum ShowcaseScreen {
   apiSummary,
 }
 
-final class ProgressDemoModel extends TeaModel {
+final class ProgressDemoModel extends Model {
   ProgressDemoModel({this.t = 0});
   final double t;
 
   @override
-  (TeaModel, Cmd?) update(Msg msg) {
+  (Model, Cmd?) update(Msg msg) {
     if (msg is TickMsg) {
       var next = t + 0.02;
       if (next > 1.0) next = 0;
@@ -374,12 +372,12 @@ final class ProgressDemoModel extends TeaModel {
     return ProgressModel(
       fraction: t,
       width: 48,
-      label: TuiStyle.wrap('download', open: TuiStyle.fg256(109)),
+      label: const Style(foreground256: 109).render('download'),
     ).view();
   }
 }
 
-final class CommandEventsModel extends TeaModel {
+final class CommandEventsModel extends Model {
   CommandEventsModel({
     this.last = const <String>[],
     this.counter = 0,
@@ -396,7 +394,7 @@ final class CommandEventsModel extends TeaModel {
   }
 
   @override
-  (TeaModel, Cmd?) update(Msg msg) {
+  (Model, Cmd?) update(Msg msg) {
     if (msg is KeyMsg) {
       switch (msg.key) {
         case 'p':
@@ -461,7 +459,7 @@ final class CommandEventsModel extends TeaModel {
   @override
   View view() {
     final b = StringBuffer()
-      ..writeln('${TuiStyle.bold}Command + Event Demo${TuiStyle.reset}')
+      ..writeln(const Style(isBold: true).render('Command + Event Demo'))
       ..writeln('Press keys:')
       ..writeln('  p = println')
       ..writeln('  r = raw')

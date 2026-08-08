@@ -10,7 +10,7 @@ Build rich, interactive CLI applications with a clean **Model–Update–View** 
 
 **📖 [Documentation & component gallery](https://dart-tui.vercel.app)** — browse every component, block and guide with live previews.
 
-![showcase](example/tapes/output/showcase.gif)
+![showcase](https://dart-tui.vercel.app/gifs/showcase.gif)
 
 ---
 
@@ -30,7 +30,7 @@ Build rich, interactive CLI applications with a clean **Model–Update–View** 
 - **Cell-level diff renderer** — only changed cells are written; zero flicker
 - **Synchronized updates** (`CSI ?2026`) for terminals that support them
 - **Auto background detection** — OSC 11 query fires at startup; your model receives `BackgroundColorMsg`
-- **Fluent `ProgramOption` functions** — `withAltScreen()`, `withHideCursor()`, `withTickInterval()`, `withMouseCellMotion()`, `withMouseAllMotion()`, `withReportFocus()`, `withWindowSize()`
+- **Fluent `ProgramOption` functions** — `withAltScreen()`, `withHideCursor()`, `withTickInterval()`, `withMouseCellMotion()`, `withMouseAllMotion()`, `withReportFocus()`, `withWindowSize()`, `withLogFile()`
 - **Fast startup** — kernel snapshots cut warm-JIT from ~1 s to ~500 ms; AOT compiles to native
 
 ---
@@ -40,12 +40,19 @@ Build rich, interactive CLI applications with a clean **Model–Update–View** 
 ```yaml
 # pubspec.yaml
 dependencies:
-  dart_tui: ^1.4.0
+  dart_tui: ^2.0.0
 ```
 
 ```bash
 dart pub get
 ```
+
+> **Migrating from 1.x?** Version 2.0 removes the `TeaModel`, `LegacyKeyMsg`,
+> `TuiStyle`, and `ProgramOptions` compatibility APIs. Use `Model`,
+> `KeyPressMsg`/`KeyMsg`, immutable `Style`, and a single
+> `Program(options: <ProgramOption>[...])` configuration path. See the
+> [2.0.0 changelog](CHANGELOG.md#200---2026-08-08) for the complete migration
+> notes.
 
 ---
 
@@ -56,11 +63,11 @@ import 'package:dart_tui/dart_tui.dart';
 
 void main() async {
   await Program(
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   ).run(CounterModel());
 }
 
-final class CounterModel extends TeaModel {
+final class CounterModel extends Model {
   CounterModel({this.count = 0});
   final int count;
 
@@ -152,13 +159,7 @@ Cmd scrollDown([int n = 1])// scroll viewport down n lines
 
 ```dart
 Program(
-  options: const ProgramOptions(
-    altScreen: true,
-    hideCursor: true,
-    tickInterval: Duration(milliseconds: 100),
-    logFile: File('debug.log'),
-  ),
-  programOptions: [
+  options: [
     withFps(60),              // default 60, max 120
     withCellRenderer(),       // cell-level diff (less flicker on older terminals)
     withAltScreen(),          // enter alternate screen buffer
@@ -168,6 +169,7 @@ Program(
     withMouseAllMotion(),     // enable all-motion mouse tracking
     withReportFocus(),        // enable focus/blur reporting (FocusMsg / BlurMsg)
     withWindowSize(120, 40),  // inject a fixed window size (useful in tests)
+    withLogFile(File('debug.log')), // append renderer output to a file
     withFilter((model, msg) { // intercept / transform messages
       if (msg is QuitMsg) return null; // suppress
       return msg;
@@ -227,7 +229,7 @@ const Style(isBlink: true)         // blinking text
 const Style(isOverline: true)      // overline decoration
 ```
 
-![sgr_attrs](example/tapes/output/sgr_attrs.gif)
+![sgr_attrs](https://dart-tui.vercel.app/gifs/sgr_attrs.gif)
 
 ### Style inheritance
 
@@ -263,7 +265,7 @@ Border.rounded.topOnly    // pre-built single-side helpers
 Border.rounded.sidesOnly
 ```
 
-![border_style](example/tapes/output/border_style.gif)
+![border_style](https://dart-tui.vercel.app/gifs/border_style.gif)
 
 ### Style utilities
 
@@ -292,7 +294,7 @@ const Style(
 ).render(longText);
 ```
 
-![word_wrap](example/tapes/output/word_wrap.gif)
+![word_wrap](https://dart-tui.vercel.app/gifs/word_wrap.gif)
 
 ### Gradient text
 
@@ -311,7 +313,7 @@ final banner = gradientBackground('  Welcome!  ', [
 ], foreground: const Style(foregroundRgb: RgbColor(205, 214, 244)));
 ```
 
-![gradient](example/tapes/output/gradient.gif)
+![gradient](https://dart-tui.vercel.app/gifs/gradient.gif)
 
 ### Light / dark background detection
 
@@ -338,7 +340,7 @@ canvas.paint(18, 14, bannerStyle.render(animatedBanner), zIndex: 2);
 return newView(canvas.render());
 ```
 
-![canvas](example/tapes/output/canvas.gif)
+![canvas](https://dart-tui.vercel.app/gifs/canvas.gif)
 
 ---
 
@@ -354,7 +356,7 @@ Animated indeterminate activity indicator, driven by `TickMsg`.
 SpinnerModel(style: Spinner.dot, prefix: 'Loading ')
 ```
 
-![spinner](example/tapes/output/spinner.gif)
+![spinner](https://dart-tui.vercel.app/gifs/spinner.gif)
 
 ### Progress bar
 
@@ -364,7 +366,7 @@ Determinate progress (0.0–1.0) with `█`/`░` fill and configurable width/la
 ProgressModel(progress: 0.65, width: 40, showPercent: true)
 ```
 
-![progress_bar](example/tapes/output/progress_bar.gif)
+![progress_bar](https://dart-tui.vercel.app/gifs/progress_bar.gif)
 
 ### Text input
 
@@ -374,13 +376,13 @@ Single-line input with cursor, charLimit, EchoMode (password), validate, tab-com
 TextInputModel(placeholder: 'Type something…', charLimit: 80)
 ```
 
-![textinput](example/tapes/output/textinput.gif)
+![textinput](https://dart-tui.vercel.app/gifs/textinput.gif)
 
 ### Text area
 
 Multi-line editor with scroll, line-kill (`Ctrl+K`), and word movement.
 
-![textarea](example/tapes/output/textarea.gif)
+![textarea](https://dart-tui.vercel.app/gifs/textarea.gif)
 
 ### Select list
 
@@ -390,7 +392,7 @@ Vertical list with keyboard cursor (`↑↓ / jk`). Embeds into parent models fo
 SelectListModel(items: ['Option A', 'Option B', 'Option C'], height: 8)
 ```
 
-![list_default](example/tapes/output/list_default.gif)
+![list_default](https://dart-tui.vercel.app/gifs/list_default.gif)
 
 ### List with fuzzy filter
 
@@ -410,7 +412,7 @@ ListModel(
 // Press / to enter filter mode, type to narrow, Esc to clear.
 ```
 
-![list_filter](example/tapes/output/list_filter.gif)
+![list_filter](https://dart-tui.vercel.app/gifs/list_filter.gif)
 
 ### Tabs
 
@@ -425,7 +427,7 @@ TabsModel(tabs: [
 // Navigate: ← / → / h / l / Tab / Shift+Tab
 ```
 
-![tabs](example/tapes/output/tabs.gif)
+![tabs](https://dart-tui.vercel.app/gifs/tabs.gif)
 
 ### Table
 
@@ -442,7 +444,7 @@ TableModel(
 )
 ```
 
-![table](example/tapes/output/table.gif)
+![table](https://dart-tui.vercel.app/gifs/table.gif)
 
 ### Tree
 
@@ -458,7 +460,7 @@ TreeModel(
 )
 ```
 
-![tree](example/tapes/output/tree.gif)
+![tree](https://dart-tui.vercel.app/gifs/tree.gif)
 
 ### Multi-select
 
@@ -481,7 +483,7 @@ MultiSelectModel(
 final values = multi.selectedValues; // ['dart', 'rust']
 ```
 
-![multi_select](example/tapes/output/multi_select.gif)
+![multi_select](https://dart-tui.vercel.app/gifs/multi_select.gif)
 
 ### Cursor
 
@@ -499,7 +501,7 @@ final (next, _) = cursor.update(tickMsg);
 'hello${cursor.view().content}world'  // → 'hello█world'
 ```
 
-![cursor_model](example/tapes/output/cursor_model.gif)
+![cursor_model](https://dart-tui.vercel.app/gifs/cursor_model.gif)
 
 ### Viewport
 
@@ -509,7 +511,7 @@ Scrollable content pane with soft-wrap; useful for long text, logs, or file cont
 ViewportModel(content: longText, height: 20, wrap: true)
 ```
 
-![pager](example/tapes/output/pager.gif)
+![pager](https://dart-tui.vercel.app/gifs/pager.gif)
 
 ### Timer & Stopwatch
 
@@ -518,7 +520,7 @@ TimerModel(duration: Duration(minutes: 5))   // countdown; .finished, .remaining
 StopwatchModel()                              // elapsed time; .start()/.stop()/.reset()
 ```
 
-![timer](example/tapes/output/timer.gif)
+![timer](https://dart-tui.vercel.app/gifs/timer.gif)
 
 ### Paginator
 
@@ -528,7 +530,7 @@ Compact page indicator (dots or numeric) for multi-page flows.
 PaginatorModel(totalPages: 5, activePage: 0)
 ```
 
-![paginator](example/tapes/output/paginator.gif)
+![paginator](https://dart-tui.vercel.app/gifs/paginator.gif)
 
 ### Help
 
@@ -544,7 +546,7 @@ final keyMap = KeyMap([
 HelpModel.fromKeyMap(keyMap)
 ```
 
-![help](example/tapes/output/help.gif)
+![help](https://dart-tui.vercel.app/gifs/help.gif)
 
 ### File picker
 
@@ -557,7 +559,7 @@ FilePickerModel(
 )
 ```
 
-![file_picker](example/tapes/output/file_picker.gif)
+![file_picker](https://dart-tui.vercel.app/gifs/file_picker.gif)
 
 ### Spring animation
 
@@ -575,7 +577,7 @@ var (pos, vel) = (0.0, 0.0);
 
 ### One-shot helpers
 
-Quick, self-contained flows built on `Program` — no model to write. Each returns a `Future` and accepts a `programOptions` list so it can be scripted/tested headlessly.
+Quick, self-contained flows built on `Program` — no model to write. Each returns a `Future` and accepts an `options` list so it can be scripted/tested headlessly.
 
 ```dart
 // prompts
@@ -617,7 +619,7 @@ await log.close();
 
 ### Forms
 
-A composable, huh-style form: typed fields grouped into (optionally conditional) wizard pages, per-field validation with inline errors, and dynamic fields whose visibility/options depend on other fields' values. Key-based and immutable — a `Form` is a `TeaModel` you can embed, or run one-shot with `form.run()`.
+A composable, huh-style form: typed fields grouped into (optionally conditional) wizard pages, per-field validation with inline errors, and dynamic fields whose visibility/options depend on other fields' values. Key-based and immutable — a `Form` is a `Model` you can embed, or run one-shot with `form.run()`.
 
 ```dart
 final form = Form([
@@ -641,7 +643,7 @@ final regions = values?.get<List<String>>('regions');
 
 Field types: `Field.input`, `.password`, `.text` (multiline), `.file`, `.select` / `.selectOf<T>`, `.multiSelect` / `.multiSelectOf<T>`, `.confirm`, `.note`. Any field or group takes `hidden`, and titles/options can be dynamic (`titleFor`, `optionsFor`).
 
-![form](example/tapes/output/form.gif)
+![form](https://dart-tui.vercel.app/gifs/form.gif)
 
 ---
 
@@ -714,14 +716,18 @@ dart run tool/bin/simple.dill
 
 ### Prerequisites
 
-- Dart SDK ≥ 3.5 (or Flutter SDK via [fvm](https://fvm.app))
+- Dart SDK ≥ 3.11 for development (`dart_tui` consumers remain compatible
+  with Dart ≥ 3.5)
 - [VHS](https://github.com/charmbracelet/vhs) — only needed to re-record GIFs
+
+Make targets use `dart` by default. FVM users can opt in per command with
+`DART='fvm dart' make <target>`.
 
 ### Makefile targets
 
 ```bash
 make test                     # run all unit tests
-make analyze                  # dart analyze lib/
+make analyze                  # dart analyze across the repository
 make coverage                 # measure lib/ line coverage, fail below FLOOR (default 90%)
 make run EXAMPLE=simple       # run example/simple.dart (JIT)
 make kernels                  # compile all examples to .dill snapshots
@@ -737,11 +743,11 @@ make clean                    # remove tool/bin/ build artifacts
 
 ```bash
 make new-example NAME=my_feature
-# → creates example/my_feature.dart with a minimal TeaModel scaffold
+# → creates example/my_feature.dart with a minimal Model scaffold
 make run EXAMPLE=my_feature
 ```
 
-The generated file has everything wired up: `Program`, `TeaModel`, key handling, and a styled view. Add your state and logic from there.
+The generated file has everything wired up: `Program`, `Model`, key handling, and a styled view. Add your state and logic from there.
 
 ### Fast startup with kernel snapshots
 
@@ -755,7 +761,7 @@ bash tool/build.sh --kernel example/simple.dart
 bash tool/build.sh --kernel
 
 # Benchmark
-fvm dart run tool/startup_bench.dart --dill tool/bin/simple.dill
+dart run tool/startup_bench.dart --dill tool/bin/simple.dill
 ```
 
 Typical results:

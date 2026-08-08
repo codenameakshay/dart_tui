@@ -6,7 +6,7 @@ Set Height 260
 Set Theme "Dracula"
 Set PlaybackSpeed 1.0
 
-Type "fvm dart run tool/bin/spring.dill"
+Type "dart run tool/bin/spring.dill"
 Enter
 Sleep 1s
 Right

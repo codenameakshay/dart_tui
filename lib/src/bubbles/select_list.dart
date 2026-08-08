@@ -47,7 +47,7 @@ final class ListStyles {
 }
 
 /// Vertical list with a cursor (arrow keys). Reusable building block.
-final class SelectListModel extends TeaModel {
+final class SelectListModel extends Model {
   SelectListModel({
     required this.items,
     this.cursor = 0,
@@ -67,7 +67,7 @@ final class SelectListModel extends TeaModel {
   int get _safeCursor => cursor.clamp(0, items.length - 1);
 
   @override
-  (TeaModel, Cmd?) update(Msg msg) {
+  (Model, Cmd?) update(Msg msg) {
     if (msg is! KeyMsg) return (this, null);
     switch (msg.key) {
       case 'up':

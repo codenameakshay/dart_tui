@@ -1,4 +1,4 @@
-// Run: fvm dart run example/package_manager.dart
+// Run: dart run example/package_manager.dart
 // Simulated package installer: spinner + progress bar, one package at a time.
 
 import 'package:dart_tui/dart_tui.dart';
@@ -19,7 +19,7 @@ Future<void> main() async {
 
 final class _InstallMsg extends Msg {}
 
-final class PackageManagerModel extends TeaModel {
+final class PackageManagerModel extends Model {
   PackageManagerModel({
     this.currentIndex = 0,
     this.done = false,

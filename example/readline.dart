@@ -1,15 +1,15 @@
 // Readline / emacs editing keys in a TextInputModel.
-//   fvm dart run example/readline.dart
+//   dart run example/readline.dart
 
 import 'package:dart_tui/dart_tui.dart';
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   ).run(ReadlineDemo());
 }
 
-final class ReadlineDemo extends TeaModel {
+final class ReadlineDemo extends Model {
   ReadlineDemo({TextInputModel? input})
       : input = input ??
             TextInputModel(

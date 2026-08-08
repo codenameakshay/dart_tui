@@ -1,15 +1,15 @@
-// Run: fvm dart run example/vanish.dart
+// Run: dart run example/vanish.dart
 // Single keystroke then quit. Alt-screen means no output remains.
 
 import 'package:dart_tui/dart_tui.dart';
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   ).run(VanishModel());
 }
 
-final class VanishModel extends TeaModel {
+final class VanishModel extends Model {
   @override
   (Model, Cmd?) update(Msg msg) {
     if (msg is KeyMsg) {

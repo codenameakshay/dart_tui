@@ -16,7 +16,7 @@ export const guides: DocEntry[] = [
       {
         type: "code",
         lang: "yaml",
-        code: `dependencies:\n  dart_tui: ^1.4.0`,
+        code: `dependencies:\n  dart_tui: ^2.0.0`,
       },
       { type: "prose", md: "Then fetch it:" },
       { type: "code", lang: "bash", code: `dart pub get` },
@@ -39,11 +39,11 @@ export const guides: DocEntry[] = [
 
 void main() async {
   await Program(
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   ).run(CounterModel());
 }
 
-final class CounterModel extends TeaModel {
+final class CounterModel extends Model {
   CounterModel({this.count = 0});
   final int count;
 
@@ -190,20 +190,14 @@ Cmd scrollDown([int n = 1])// scroll viewport down n lines`,
     order: 4,
     tagline: "Configure the runtime — alt screen, mouse, FPS, focus and more.",
     description:
-      "Configure a `Program` with the `ProgramOptions` struct for common flags, or the fluent `programOptions` function list for finer control over the renderer, input tracking and message filtering.",
+      "Configure a `Program` with one composable `options` list for renderer behavior, input tracking and message filtering.",
     blocks: [
       { type: "heading", text: "Configuring a Program" },
       {
         type: "code",
         lang: "dart",
         code: `Program(
-  options: const ProgramOptions(
-    altScreen: true,
-    hideCursor: true,
-    tickInterval: Duration(milliseconds: 100),
-    logFile: File('debug.log'),
-  ),
-  programOptions: [
+  options: [
     withFps(60),              // default 60, max 120
     withCellRenderer(),       // cell-level diff (less flicker on older terminals)
     withAltScreen(),          // enter alternate screen buffer
@@ -213,6 +207,7 @@ Cmd scrollDown([int n = 1])// scroll viewport down n lines`,
     withMouseAllMotion(),     // enable all-motion mouse tracking
     withReportFocus(),        // enable focus/blur reporting (FocusMsg / BlurMsg)
     withWindowSize(120, 40),  // inject a fixed window size (useful in tests)
+    withLogFile(File('debug.log')), // append renderer output to a file
     withFilter((model, msg) { // intercept / transform messages
       if (msg is QuitMsg) return null; // suppress
       return msg;
@@ -228,9 +223,11 @@ Cmd scrollDown([int n = 1])// scroll viewport down n lines`,
           ["withCellRenderer()", "Use the cell-level diff renderer for older terminals."],
           ["withAltScreen()", "Render on the alternate screen buffer."],
           ["withHideCursor()", "Hide the terminal cursor."],
+          ["withTickInterval(duration)", "Deliver TickMsg values on a fixed interval."],
           ["withMouseCellMotion() / withMouseAllMotion()", "Enable mouse tracking."],
           ["withReportFocus()", "Deliver FocusMsg / BlurMsg on focus changes."],
           ["withWindowSize(w, h)", "Inject a fixed window size (handy in tests)."],
+          ["withLogFile(file)", "Append renderer output to a file."],
           ["withFilter(fn)", "Intercept, transform or suppress messages globally."],
         ],
       },

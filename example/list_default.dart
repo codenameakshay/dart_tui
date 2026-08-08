@@ -1,4 +1,4 @@
-// Run: fvm dart run example/list_default.dart
+// Run: dart run example/list_default.dart
 // Extended list with item count and enter-to-select. Press q to quit.
 
 import 'package:dart_tui/dart_tui.dart';
@@ -20,7 +20,7 @@ Future<void> main() async {
   await Program().run(ListDefaultModel());
 }
 
-final class ListDefaultModel extends TeaModel {
+final class ListDefaultModel extends Model {
   ListDefaultModel({
     SelectListModel? list,
     this.chosen = '',

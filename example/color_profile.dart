@@ -5,7 +5,7 @@ Future<void> main() async {
   await Program().run(ColorProfileModel());
 }
 
-final class ColorProfileModel extends TeaModel {
+final class ColorProfileModel extends Model {
   ColorProfileModel({
     this.profile = ColorProfile.trueColor,
     this.bgRgb = 0x000000,

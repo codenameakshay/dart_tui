@@ -1,5 +1,5 @@
 // Border style showcase — demonstrates border types, titles, and colors.
-// Run: fvm dart run example/border_style.dart
+// Run: dart run example/border_style.dart
 
 // ignore_for_file: avoid_print
 import 'package:dart_tui/dart_tui.dart';

@@ -1,6 +1,6 @@
 // A huh-style form: input + select + confirm, with a dynamic wizard page that
 // only appears when "Deploy now?" is Yes.
-//   fvm dart run example/form.dart
+//   dart run example/form.dart
 
 import 'dart:io';
 
@@ -27,8 +27,7 @@ Future<void> main() async {
     ], title: 'Deploy', hidden: (v) => v.get<bool>('deploy') != true),
   ]);
 
-  final values =
-      await form.run(programSettings: const ProgramOptions(altScreen: true));
+  final values = await form.run(options: [withAltScreen()]);
 
   if (values == null) {
     stdout.writeln('Cancelled.');

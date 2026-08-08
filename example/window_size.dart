@@ -1,4 +1,4 @@
-// Run: fvm dart run example/window_size.dart
+// Run: dart run example/window_size.dart
 // Shows terminal dimensions, updates on resize. Press q to quit.
 
 import 'package:dart_tui/dart_tui.dart';
@@ -7,7 +7,7 @@ Future<void> main() async {
   await Program().run(WindowSizeModel());
 }
 
-final class WindowSizeModel extends TeaModel {
+final class WindowSizeModel extends Model {
   WindowSizeModel({this.width = 0, this.height = 0});
 
   final int width;

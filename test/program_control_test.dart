@@ -35,7 +35,7 @@ class _StringSink implements IOSink {
 }
 
 /// Runs [msgs] in order through a real Program + AnsiRenderer, then quits.
-final class _DriverModel extends TeaModel {
+final class _DriverModel extends Model {
   _DriverModel(this.msgs);
   final List<Msg> msgs;
 
@@ -53,6 +53,62 @@ final class _DriverModel extends TeaModel {
 }
 
 void main() {
+  test('SetWindowTitleMsg strips OSC control characters', () async {
+    final sink = _StringSink();
+    await Program(options: [
+      withOutput(sink),
+      withInput(null),
+    ]).run(_DriverModel([
+      SetWindowTitleMsg('safe\x07\x1b]2;owned\x07\x9c\x7fevil'),
+    ]));
+
+    final output = sink.buf.toString();
+    expect(output, contains('\x1b]0;safe]2;ownedevil\x07'));
+    expect(output, isNot(contains('\x1b]2;owned')));
+  });
+
+  test('kill wakes a program waiting without queued messages', () async {
+    final ready = Completer<void>();
+    final program = Program(options: [
+      withInput(null),
+      withoutRenderer(),
+    ]);
+    final runFuture = program.run(_IdleModel(ready));
+    await ready.future.timeout(const Duration(seconds: 1));
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+
+    program.kill();
+
+    await runFuture.timeout(const Duration(milliseconds: 200));
+  });
+
+  test('last rendered view handles mouse events through the command queue',
+      () async {
+    final ready = Completer<void>();
+    final handled = Completer<Mouse>();
+    final program = Program(options: [
+      withOutput(_StringSink()),
+      withInput(null),
+    ]);
+    final runFuture = program.run(_MouseCallbackModel(ready, handled));
+    addTearDown(() async {
+      program.kill();
+      await runFuture;
+    });
+    await ready.future.timeout(const Duration(seconds: 1));
+
+    program.send(MouseClickMsg(const Mouse(
+      x: 7,
+      y: 3,
+      button: MouseButton.left,
+    )));
+
+    final mouse =
+        await handled.future.timeout(const Duration(milliseconds: 300));
+    expect((mouse.x, mouse.y, mouse.button), (7, 3, MouseButton.left));
+    await runFuture.timeout(const Duration(seconds: 1));
+  });
+
   test('applyMsg drives the terminal-control switch + renderer methods',
       () async {
     final sink = _StringSink();
@@ -80,7 +136,7 @@ void main() {
       PrintLineMsg('above'),
     ];
 
-    await Program(programOptions: [
+    await Program(options: [
       withOutput(sink),
       withInput(null),
     ]).run(_DriverModel(controls)).timeout(const Duration(seconds: 5));
@@ -93,11 +149,27 @@ void main() {
     expect(out, contains('above')); // printLine
   }, timeout: const Timeout(Duration(seconds: 10)));
 
+  test('Unicode Core support enables mode 2027 and resets it at shutdown',
+      () async {
+    final sink = _StringSink();
+
+    await Program(options: [
+      withOutput(sink),
+      withInput(null),
+    ]).run(_DriverModel([
+      ModeReportMsg(mode: 2027, value: 3),
+    ]));
+
+    final output = sink.buf.toString();
+    expect(output, contains('\x1b[?2027h'));
+    expect(output, contains('\x1b[?2027l'));
+  });
+
   test('ExecMsg runs a subprocess and fires onExit', () async {
     final sink = _StringSink();
     // A model whose init execs `true` (exit 0), then quits on the callback.
     final model = _ExecModel();
-    await Program(programOptions: [
+    await Program(options: [
       withOutput(sink),
       withInput(null),
     ]).run(model).timeout(const Duration(seconds: 10));
@@ -105,7 +177,52 @@ void main() {
   }, timeout: const Timeout(Duration(seconds: 15)));
 }
 
-final class _ExecModel extends TeaModel {
+final class _IdleModel extends Model {
+  _IdleModel(this.ready);
+
+  final Completer<void> ready;
+
+  @override
+  (Model, Cmd?) update(Msg msg) {
+    if (msg is EnvMsg && !ready.isCompleted) ready.complete();
+    return (this, null);
+  }
+
+  @override
+  View view() => newView('idle');
+}
+
+final class _MouseHandledMsg extends Msg {
+  _MouseHandledMsg(this.mouse);
+
+  final Mouse mouse;
+}
+
+final class _MouseCallbackModel extends Model {
+  _MouseCallbackModel(this.ready, this.handled);
+
+  final Completer<void> ready;
+  final Completer<Mouse> handled;
+
+  @override
+  (Model, Cmd?) update(Msg msg) {
+    if (msg is EnvMsg && !ready.isCompleted) ready.complete();
+    if (msg case _MouseHandledMsg(:final mouse)) {
+      if (!handled.isCompleted) handled.complete(mouse);
+      return (this, () => QuitMsg());
+    }
+    return (this, null);
+  }
+
+  @override
+  View view() => View(
+        content: 'mouse callback',
+        mouseMode: MouseMode.cellMotion,
+        onMouse: (msg) => () => _MouseHandledMsg(msg.mouse),
+      );
+}
+
+final class _ExecModel extends Model {
   int? exitCode;
 
   @override

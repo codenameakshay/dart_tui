@@ -10,7 +10,7 @@ export const blocks: DocEntry[] = [
     isNew: true,
     tagline: "huh-style typed fields, validation and wizard pages.",
     description:
-      "A composable, huh-style form: typed fields grouped into (optionally conditional) wizard pages, per-field validation with inline errors, and dynamic fields whose visibility and options depend on other fields' values. Key-based and immutable — a `Form` is a `TeaModel` you can embed, or run one-shot with `form.run()`.",
+      "A composable, huh-style form: typed fields grouped into (optionally conditional) wizard pages, per-field validation with inline errors, and dynamic fields whose visibility and options depend on other fields' values. Key-based and immutable — a `Form` is a `Model` you can embed, or run one-shot with `form.run()`.",
     gif: "form.gif",
     snippets: [
       {
@@ -71,7 +71,7 @@ final regions = values?.get<List<String>>('regions');`,
     featured: true,
     tagline: "One-shot promptSelect / promptConfirm / promptInput.",
     description:
-      "Self-contained, one-shot flows built on `Program` — no model to write. Each returns a `Future` and accepts a `programOptions` list so it can be scripted or tested headlessly. All return `null` when cancelled with `Esc`/`Ctrl+C`.",
+      "Self-contained, one-shot flows built on `Program` — no model to write. Each returns a `Future` and accepts a `options` list so it can be scripted or tested headlessly. All return `null` when cancelled with `Esc`/`Ctrl+C`.",
     gif: "prompts_chain.gif",
     snippets: [
       {

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'key_buffer_parser.dart';
+import 'kitty_keyboard.dart';
 import 'msg.dart';
 
 final class TerminalInputDecoder {
@@ -165,7 +166,6 @@ _ParseResult _tryParseCsi(List<int> buffer) {
     if (b >= 0x40 && b <= 0x7e) {
       final seq = String.fromCharCodes(buffer.sublist(2, i + 1));
       final msgs = _decodeCsi(seq);
-      if (msgs.isEmpty) return _ParseState.none;
       return _ParsedMessages(consumed: i + 1, msgs: msgs);
     }
     i++;
@@ -189,7 +189,6 @@ List<Msg> _decodeCsi(String seq) {
         ];
       }
     }
-    return const <Msg>[];
   }
 
   if (seq.endsWith('\$y')) {
@@ -199,11 +198,7 @@ List<Msg> _decodeCsi(String seq) {
       final mode = int.tryParse(parts[0]);
       final value = int.tryParse(parts[1]);
       if (mode != null && value != null) {
-        final msgs = <Msg>[ModeReportMsg(mode: mode, value: value)];
-        if (mode == 2027) {
-          msgs.add(KeyboardEnhancementsMsg(value));
-        }
-        return msgs;
+        return [ModeReportMsg(mode: mode, value: value)];
       }
     }
     return const <Msg>[];
@@ -241,6 +236,9 @@ List<Msg> _decodeCsi(String seq) {
       }
     }
   }
+
+  final keyboard = decodeKittyKeyboard(seq);
+  if (keyboard != null) return keyboard;
 
   return const <Msg>[];
 }

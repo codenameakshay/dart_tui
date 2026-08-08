@@ -19,14 +19,13 @@ const _timeout = Timeout(Duration(seconds: 5));
 void main() {
   group('promptSelect', () {
     test('down + enter selects the second choice', () async {
-      final r = await promptSelect(['a', 'b', 'c'],
-          programOptions: _opts([_down, _enter]));
+      final r =
+          await promptSelect(['a', 'b', 'c'], options: _opts([_down, _enter]));
       expect(r, 'b');
     }, timeout: _timeout);
 
     test('ctrl+c cancels and returns null', () async {
-      final r =
-          await promptSelect(['a', 'b', 'c'], programOptions: _opts([_ctrlC]));
+      final r = await promptSelect(['a', 'b', 'c'], options: _opts([_ctrlC]));
       expect(r, isNull);
     }, timeout: _timeout);
 
@@ -38,7 +37,7 @@ void main() {
   group('promptConfirm', () {
     test('y returns true', () async {
       final r = await promptConfirm('ok?',
-          programOptions: _opts([
+          options: _opts([
             [0x79]
           ]));
       expect(r, isTrue);
@@ -46,14 +45,14 @@ void main() {
 
     test('n returns false', () async {
       final r = await promptConfirm('ok?',
-          programOptions: _opts([
+          options: _opts([
             [0x6e]
           ]));
       expect(r, isFalse);
     }, timeout: _timeout);
 
     test('ctrl+c cancels', () async {
-      final r = await promptConfirm('ok?', programOptions: _opts([_ctrlC]));
+      final r = await promptConfirm('ok?', options: _opts([_ctrlC]));
       expect(r, isNull);
     }, timeout: _timeout);
   });
@@ -61,7 +60,7 @@ void main() {
   group('promptInput', () {
     test('typing then enter returns the value', () async {
       final r = await promptInput('name',
-          programOptions: _opts([
+          options: _opts([
             [0x68],
             [0x69],
             _enter
@@ -71,7 +70,7 @@ void main() {
 
     test('backspace deletes before enter', () async {
       final r = await promptInput('name',
-          programOptions: _opts([
+          options: _opts([
             [0x68],
             [0x69],
             _backspace,
@@ -81,7 +80,7 @@ void main() {
     }, timeout: _timeout);
 
     test('ctrl+c cancels', () async {
-      final r = await promptInput('name', programOptions: _opts([_ctrlC]));
+      final r = await promptInput('name', options: _opts([_ctrlC]));
       expect(r, isNull);
     }, timeout: _timeout);
   });

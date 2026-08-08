@@ -2,13 +2,83 @@
 import 'package:dart_tui/dart_tui.dart';
 import 'package:test/test.dart';
 
+const _sgrReset = '\x1b[0m';
+
 void main() {
+  group('rich underline styles', () {
+    const expected = {
+      UnderlineStyle.single: '\x1b[4m',
+      UnderlineStyle.double: '\x1b[4:2m',
+      UnderlineStyle.curly: '\x1b[4:3m',
+      UnderlineStyle.dotted: '\x1b[4:4m',
+      UnderlineStyle.dashed: '\x1b[4:5m',
+    };
+
+    for (final entry in expected.entries) {
+      test('${entry.key.name} emits its SGR underline form', () {
+        final out = const Style().withUnderlineStyle(entry.key).render('text');
+        expect(out, contains(entry.value));
+      });
+    }
+
+    test('none explicitly disables an inherited underline', () {
+      final style = const Style(underlineStyle: UnderlineStyle.none)
+          .inherit(const Style(underlineStyle: UnderlineStyle.curly));
+      expect(style.render('text'), isNot(contains('\x1b[4')));
+    });
+
+    test('underline color emits RGB state and an explicit reset', () {
+      final out = const Style(
+        underlineStyle: UnderlineStyle.curly,
+        underlineColor: RgbColor(12, 34, 56),
+      ).render('text');
+      expect(out, contains('\x1b[58;2;12;34;56m'));
+      expect(out, contains('\x1b[59m'));
+    });
+
+    test('underline(bool) maps to single and none', () {
+      expect(const Style().underline().underlineStyle, UnderlineStyle.single);
+      expect(
+          const Style().underline(false).underlineStyle, UnderlineStyle.none);
+    });
+  });
+
+  group('OSC 8 hyperlinks', () {
+    test('renders a balanced URL and parameter pair', () {
+      final out = const Style(
+        hyperlinkUrl: 'https://example.com',
+        hyperlinkParams: 'id=docs',
+      ).render('docs');
+      expect(out, startsWith('\x1b]8;id=docs;https://example.com\x1b\\'));
+      expect(out, endsWith('\x1b]8;;\x1b\\'));
+      expect(stripAnsi(out), 'docs');
+    });
+
+    test('removes terminal controls from URL and parameters', () {
+      final out = const Style()
+          .withHyperlink(
+            'https://safe.example/\x1b]8;;evil\x07\u009bpath',
+            params: 'id=x\x1b\\\nnext\u007f',
+          )
+          .render('safe');
+      expect(out, isNot(contains('evil\x07')));
+      expect(out, isNot(contains('\u009b')));
+      expect(out, isNot(contains('\n')));
+      expect(out, contains('https://safe.example/]8;;evilpath'));
+      expect(out, contains('id=xnext'));
+    });
+
+    test('empty URL does not emit OSC 8', () {
+      expect(const Style(hyperlinkUrl: '').render('plain'), 'plain');
+    });
+  });
+
   group('SGR reverse (SGR 7)', () {
     test('isReverse emits \\x1b[7m', () {
       final out = const Style().reverse().render('text');
       expect(out, contains('\x1b[7m'));
       expect(out, contains('text'));
-      expect(out, endsWith(TuiStyle.reset));
+      expect(out, endsWith(_sgrReset));
     });
 
     test('reverse(false) does not emit \\x1b[7m', () {
@@ -108,7 +178,7 @@ void main() {
       final out = const Style(isUnderline: true).render('hello world');
       // Standard: single open sequence, single close
       expect(out, startsWith('\x1b[4m'));
-      expect(out, endsWith(TuiStyle.reset));
+      expect(out, endsWith(_sgrReset));
     });
   });
 

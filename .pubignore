@@ -31,6 +31,9 @@ coverage/
 # The documentation website is a standalone Next.js app deployed to Vercel.
 website/
 
+# README examples use the copies hosted by the documentation site.
+example/tapes/output/
+
 # Repo / editor / CI configuration
 .github/
 .vscode/

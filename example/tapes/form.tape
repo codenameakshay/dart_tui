@@ -6,7 +6,7 @@ Set Height 460
 Set Theme "Dracula"
 Set PlaybackSpeed 1.0
 
-Type "fvm dart run tool/bin/form.dill"
+Type "dart run tool/bin/form.dill"
 Enter
 Sleep 1s
 Type "billing-api"

@@ -1,5 +1,5 @@
 // Runs promptSelect → promptConfirm → promptInput in sequence (each run uses Program).
-//   fvm dart run example/prompts_chain.dart
+//   dart run example/prompts_chain.dart
 
 import 'dart:io';
 
@@ -14,19 +14,19 @@ Future<void> main() async {
   final flavor = await promptSelect(
     const ['Vanilla', 'Chocolate', 'Strawberry'],
     title: 'Favorite ice cream',
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   );
   stdout.writeln('Selected: $flavor');
 
   final ok = await promptConfirm(
     'Ship to production?',
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   );
   stdout.writeln('Confirmed: $ok');
 
   final note = await promptInput(
     'Notes: ',
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   );
   stdout.writeln('Notes: $note');
 

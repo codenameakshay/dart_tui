@@ -1,15 +1,15 @@
 // Show info about each key press.
-// Run: fvm dart run example/print_key.dart
+// Run: dart run example/print_key.dart
 
 import 'package:dart_tui/dart_tui.dart';
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   ).run(PrintKeyModel());
 }
 
-final class PrintKeyModel extends TeaModel {
+final class PrintKeyModel extends Model {
   PrintKeyModel({this.log = const []});
 
   final List<String> log;

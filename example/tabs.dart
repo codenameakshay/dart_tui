@@ -1,5 +1,5 @@
 // Tabbed interface — demonstrates the TabsModel bubble.
-// Run: fvm dart run example/tabs.dart
+// Run: dart run example/tabs.dart
 
 import 'package:dart_tui/dart_tui.dart';
 
@@ -37,17 +37,17 @@ const _tabs = [
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   ).run(_AppModel());
 }
 
-final class _AppModel extends TeaModel {
+final class _AppModel extends Model {
   _AppModel({TabsModel? tabs}) : tabs = tabs ?? TabsModel(tabs: _tabs);
 
   final TabsModel tabs;
 
   @override
-  (TeaModel, Cmd?) update(Msg msg) {
+  (Model, Cmd?) update(Msg msg) {
     if (msg is KeyMsg) {
       switch (msg.key) {
         case 'q':

@@ -1,16 +1,16 @@
 // Multi-select checkbox list — demonstrates MultiSelectModel.
 // Navigate with ↑↓/jk, Space/x to toggle, a to toggle all, Enter to confirm.
-// Run: fvm dart run example/multi_select.dart
+// Run: dart run example/multi_select.dart
 
 import 'package:dart_tui/dart_tui.dart';
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   ).run(_MultiSelectDemoModel());
 }
 
-final class _MultiSelectDemoModel extends TeaModel {
+final class _MultiSelectDemoModel extends Model {
   _MultiSelectDemoModel({MultiSelectModel? multi, this.confirmed = false})
       : multi = multi ??
             MultiSelectModel(

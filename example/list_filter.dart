@@ -1,5 +1,5 @@
 // Interactive list with fuzzy filtering — demonstrates ListModel.
-// Run: fvm dart run example/list_filter.dart
+// Run: dart run example/list_filter.dart
 
 import 'package:dart_tui/dart_tui.dart';
 
@@ -20,11 +20,11 @@ const _items = [
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   ).run(_AppModel());
 }
 
-final class _AppModel extends TeaModel {
+final class _AppModel extends Model {
   _AppModel({ListModel? list, this.selected = ''})
       : list = list ??
             ListModel(
@@ -39,7 +39,7 @@ final class _AppModel extends TeaModel {
   final String selected;
 
   @override
-  (TeaModel, Cmd?) update(Msg msg) {
+  (Model, Cmd?) update(Msg msg) {
     if (msg is KeyMsg) {
       switch (msg.key) {
         case 'q':

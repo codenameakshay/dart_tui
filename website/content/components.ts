@@ -19,7 +19,7 @@ export const components: DocEntry[] = [
 
 const dots = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
-final class LoadingModel extends TeaModel {
+final class LoadingModel extends Model {
   LoadingModel({SpinnerModel? spinner})
       : spinner = spinner ?? SpinnerModel(frames: dots, prefix: 'Loading ');
 

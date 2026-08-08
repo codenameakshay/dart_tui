@@ -14,11 +14,11 @@ final class _ErrMsg extends Msg {
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(tickInterval: Duration(milliseconds: 100)),
+    options: [withTickInterval(const Duration(milliseconds: 100))],
   ).run(HttpModel());
 }
 
-final class HttpModel extends TeaModel {
+final class HttpModel extends Model {
   HttpModel({
     SpinnerModel? spinner,
     this.status,

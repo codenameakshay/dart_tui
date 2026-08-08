@@ -1,11 +1,11 @@
 // Two-view app: task list → download progress.
-// Run: fvm dart run example/views.dart
+// Run: dart run example/views.dart
 
 import 'package:dart_tui/dart_tui.dart';
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   ).run(_ViewsModel());
 }
 
@@ -20,7 +20,7 @@ const _items = [
   'package-d v3.1.4',
 ];
 
-final class _ViewsModel extends TeaModel {
+final class _ViewsModel extends Model {
   _ViewsModel({
     this.phase = _Phase.list,
     this.cursor = 0,

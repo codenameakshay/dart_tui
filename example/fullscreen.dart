@@ -1,17 +1,17 @@
-// Run: fvm dart run example/fullscreen.dart
+// Run: dart run example/fullscreen.dart
 // Fullscreen alt-screen countdown. Exits after 5 seconds (or press q).
 
 import 'package:dart_tui/dart_tui.dart';
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   ).run(FullscreenModel());
 }
 
 final class _TickMsg extends Msg {}
 
-final class FullscreenModel extends TeaModel {
+final class FullscreenModel extends Model {
   FullscreenModel({this.seconds = 5});
 
   final int seconds;

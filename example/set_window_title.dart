@@ -1,4 +1,4 @@
-// Run: fvm dart run example/set_window_title.dart
+// Run: dart run example/set_window_title.dart
 // Demonstrates View.windowTitle. Press any key to see it; q to quit.
 
 import 'package:dart_tui/dart_tui.dart';
@@ -7,7 +7,7 @@ Future<void> main() async {
   await Program().run(WindowTitleModel());
 }
 
-final class WindowTitleModel extends TeaModel {
+final class WindowTitleModel extends Model {
   WindowTitleModel({this.lastKey = ''});
 
   final String lastKey;

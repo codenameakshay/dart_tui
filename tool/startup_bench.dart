@@ -7,10 +7,10 @@
 /// compile) vs warm (cached kernel) times.
 ///
 /// Usage:
-///   fvm dart run tool/startup_bench.dart example/simple.dart        # JIT (source)
-///   fvm dart run tool/startup_bench.dart --dill tool/bin/simple.dill # kernel snapshot
-///   fvm dart run tool/startup_bench.dart --aot example/simple.dart   # AOT (native exe)
-///   fvm dart run tool/startup_bench.dart --all                        # all examples (JIT)
+///   dart run tool/startup_bench.dart example/simple.dart         # JIT (source)
+///   dart run tool/startup_bench.dart --dill tool/bin/simple.dill # kernel snapshot
+///   dart run tool/startup_bench.dart --aot example/simple.dart   # AOT (native exe)
+///   dart run tool/startup_bench.dart --all                       # all examples (JIT)
 ///
 /// Build kernel snapshots first with:
 ///   bash tool/build.sh --kernel example/simple.dart
@@ -48,10 +48,10 @@ Future<void> main(List<String> args) async {
 
 void _usage() {
   print('usage:');
-  print('  fvm dart run tool/startup_bench.dart example/simple.dart');
-  print('  fvm dart run tool/startup_bench.dart --dill tool/bin/simple.dill');
-  print('  fvm dart run tool/startup_bench.dart --aot example/simple.dart');
-  print('  fvm dart run tool/startup_bench.dart --all');
+  print('  dart run tool/startup_bench.dart example/simple.dart');
+  print('  dart run tool/startup_bench.dart --dill tool/bin/simple.dill');
+  print('  dart run tool/startup_bench.dart --aot example/simple.dart');
+  print('  dart run tool/startup_bench.dart --all');
 }
 
 Future<void> _benchAll({bool aot = false, bool dill = false}) async {
@@ -128,10 +128,8 @@ Future<int> _measureStartup(
   if (aot) {
     final name = path.replaceFirst('example/', '').replaceFirst('.dart', '');
     command = ['tool/bin/$name'];
-  } else if (dill) {
-    command = ['fvm', 'dart', 'run', path];
   } else {
-    command = ['fvm', 'dart', 'run', path];
+    command = [Platform.resolvedExecutable, 'run', path];
   }
 
   final sw = Stopwatch()..start();

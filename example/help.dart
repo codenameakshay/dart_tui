@@ -38,7 +38,7 @@ Future<void> main() async {
   await Program().run(HelpExampleModel());
 }
 
-final class HelpExampleModel extends TeaModel {
+final class HelpExampleModel extends Model {
   HelpExampleModel({
     this.showFullHelp = false,
     this.width = 80,

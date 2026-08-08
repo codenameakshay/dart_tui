@@ -6,7 +6,7 @@ KeyPressMsg _r(String t) => KeyPressMsg(TeaKey(code: KeyCode.rune, text: t));
 KeyPressMsg _ctrl(String t) => KeyPressMsg(
     TeaKey(code: KeyCode.rune, text: t, modifiers: const {KeyMod.ctrl}));
 
-T _u<T>(TeaModel m, KeyMsg k) => m.update(k).$1 as T;
+T _u<T>(Model m, KeyMsg k) => m.update(k).$1 as T;
 
 void main() {
   group('TextAreaModel', () {
@@ -127,8 +127,8 @@ void main() {
       var m = ViewportModel(
           content: 'abcdef', width: 3, height: 2, softWrap: false);
       m = _u(m, _k(KeyCode.right));
-      expect(m.xOffset, 1);
-      expect(m.view().content, 'bcdef');
+      expect(m.xOffset, 3);
+      expect(m.view().content, 'def');
       m = _u(m, _k(KeyCode.left));
       expect(m.xOffset, 0);
     });

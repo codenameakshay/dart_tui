@@ -5,7 +5,7 @@ Future<void> main() async {
   await Program().run(FocusBlurModel());
 }
 
-final class FocusBlurModel extends TeaModel {
+final class FocusBlurModel extends Model {
   FocusBlurModel({this.focused = true});
   final bool focused;
 

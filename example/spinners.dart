@@ -1,5 +1,5 @@
 // Show all spinner frame styles simultaneously.
-// Run: fvm dart run example/spinners.dart
+// Run: dart run example/spinners.dart
 
 import 'package:dart_tui/dart_tui.dart';
 
@@ -25,14 +25,14 @@ const _bounceFrames = ['.  ', '.. ', '...'];
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(
-      altScreen: true,
-      tickInterval: Duration(milliseconds: 120),
-    ),
+    options: [
+      withAltScreen(),
+      withTickInterval(const Duration(milliseconds: 120)),
+    ],
   ).run(SpinnersModel());
 }
 
-final class SpinnersModel extends TeaModel {
+final class SpinnersModel extends Model {
   SpinnersModel({List<SpinnerModel>? spinners})
       : spinners = spinners ??
             [

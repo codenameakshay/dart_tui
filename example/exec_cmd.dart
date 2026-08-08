@@ -10,11 +10,11 @@ final class _EditedMsg extends Msg {
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   ).run(ExecCmdModel());
 }
 
-final class ExecCmdModel extends TeaModel {
+final class ExecCmdModel extends Model {
   ExecCmdModel({this.content = '', this.editing = false, this.exitCode});
   final String content;
   final bool editing;

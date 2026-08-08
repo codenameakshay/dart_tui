@@ -1,15 +1,15 @@
 // ListModel runtime mutation API: add (a) and delete (d) items live.
-//   fvm dart run example/list_mutation.dart
+//   dart run example/list_mutation.dart
 
 import 'package:dart_tui/dart_tui.dart';
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   ).run(MutationDemo());
 }
 
-final class MutationDemo extends TeaModel {
+final class MutationDemo extends Model {
   MutationDemo({ListModel? list, this.counter = 3})
       : list = list ??
             ListModel(

@@ -6,6 +6,6 @@ Set Height 400
 Set Theme "Dracula"
 Set PlaybackSpeed 1.0
 
-Type "fvm dart run tool/bin/package_manager.dill"
+Type "dart run tool/bin/package_manager.dill"
 Enter
 Sleep 10s

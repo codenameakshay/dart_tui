@@ -1,18 +1,18 @@
 // StopwatchModel elapsed time demo.
-// Run: fvm dart run example/stopwatch.dart
+// Run: dart run example/stopwatch.dart
 
 import 'package:dart_tui/dart_tui.dart';
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(
-      altScreen: true,
-      tickInterval: Duration(milliseconds: 10),
-    ),
+    options: [
+      withAltScreen(),
+      withTickInterval(const Duration(milliseconds: 10)),
+    ],
   ).run(StopwatchApp());
 }
 
-final class StopwatchApp extends TeaModel {
+final class StopwatchApp extends Model {
   StopwatchApp({StopwatchModel? stopwatch})
       : stopwatch = stopwatch ?? StopwatchModel();
 

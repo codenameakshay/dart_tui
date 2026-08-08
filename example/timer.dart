@@ -1,18 +1,18 @@
 // 1-minute countdown TimerModel demo.
-// Run: fvm dart run example/timer.dart
+// Run: dart run example/timer.dart
 
 import 'package:dart_tui/dart_tui.dart';
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(
-      altScreen: true,
-      tickInterval: Duration(milliseconds: 100),
-    ),
+    options: [
+      withAltScreen(),
+      withTickInterval(const Duration(milliseconds: 100)),
+    ],
   ).run(TimerApp());
 }
 
-final class TimerApp extends TeaModel {
+final class TimerApp extends Model {
   TimerApp({TimerModel? timer})
       : timer = timer ?? TimerModel(duration: const Duration(minutes: 1));
 

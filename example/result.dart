@@ -1,4 +1,4 @@
-// Run: fvm dart run example/result.dart
+// Run: dart run example/result.dart
 // OutcomeModel: select an item and the chosen value is returned to the caller.
 
 import 'package:dart_tui/dart_tui.dart';

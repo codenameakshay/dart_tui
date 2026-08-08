@@ -1,21 +1,21 @@
 // Composable views: TimerModel (5s countdown) + SpinnerModel side by side.
 // Tab switches focus between them.
-// Run: fvm dart run example/composable_views.dart
+// Run: dart run example/composable_views.dart
 
 import 'package:dart_tui/dart_tui.dart';
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(
-      altScreen: true,
-      tickInterval: Duration(milliseconds: 100),
-    ),
+    options: [
+      withAltScreen(),
+      withTickInterval(const Duration(milliseconds: 100)),
+    ],
   ).run(_ComposableModel());
 }
 
 enum _Focus { timer, spinner }
 
-final class _ComposableModel extends TeaModel {
+final class _ComposableModel extends Model {
   _ComposableModel({
     TimerModel? timer,
     SpinnerModel? spinner,
@@ -82,9 +82,9 @@ final class _ComposableModel extends TeaModel {
     final spinnerActive = focus == _Focus.spinner;
 
     final timerLabel =
-        timerActive ? '${TuiStyle.bold}[Timer]${TuiStyle.reset}' : ' Timer ';
+        timerActive ? const Style(isBold: true).render('[Timer]') : ' Timer ';
     final spinnerLabel = spinnerActive
-        ? '${TuiStyle.bold}[Spinner]${TuiStyle.reset}'
+        ? const Style(isBold: true).render('[Spinner]')
         : ' Spinner ';
 
     final timerContent = '$timerLabel\n${timer.view().content}';

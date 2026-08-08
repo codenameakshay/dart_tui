@@ -2,7 +2,12 @@ import 'dart:io';
 
 import 'package:characters/characters.dart';
 
+import 'ansi_state.dart';
 import 'bubbles/style.dart' show getWidth;
+import 'grapheme_width.dart';
+import 'terminal_control.dart';
+import 'terminal_mode_state.dart';
+import 'terminal_view_state.dart';
 import 'view.dart';
 
 abstract interface class TeaRenderer {
@@ -10,6 +15,7 @@ abstract interface class TeaRenderer {
   void clearScreen();
   void insertAbove(String line);
   void setSyncUpdates(bool enabled);
+  void setUnicodeCore(bool enabled);
   void release({bool reset = false});
   void restore(View view);
   void close();
@@ -34,6 +40,8 @@ final class NilRenderer implements TeaRenderer {
   @override
   void setSyncUpdates(bool enabled) {}
   @override
+  void setUnicodeCore(bool enabled) {}
+  @override
   void release({bool reset = false}) {}
   @override
   void render(View view) {}
@@ -47,6 +55,53 @@ final class NilRenderer implements TeaRenderer {
   void scroll(int n, {bool up = true}) {}
 }
 
+final class _CursorRendererState {
+  CursorShape? _shape;
+  bool? _blink;
+  int? _color;
+
+  void apply(IOSink output, Cursor? cursor) {
+    if (cursor == null) {
+      reset(output);
+      return;
+    }
+
+    if (cursor.shape != _shape || cursor.blink != _blink) {
+      final style = switch (cursor.shape) {
+        CursorShape.block => cursor.blink ? 1 : 2,
+        CursorShape.underline => cursor.blink ? 3 : 4,
+        CursorShape.bar => cursor.blink ? 5 : 6,
+      };
+      output.write('\x1b[$style q');
+      _shape = cursor.shape;
+      _blink = cursor.blink;
+    }
+
+    if (cursor.color != _color) {
+      if (cursor.color == null) {
+        output.write('\x1b]112\x07');
+      } else {
+        final hex =
+            (cursor.color! & 0xffffff).toRadixString(16).padLeft(6, '0');
+        output.write('\x1b]12;#$hex\x07');
+      }
+      _color = cursor.color;
+    }
+
+    final row = cursor.y.clamp(0, 0x7ffffffe) + 1;
+    final column = cursor.x.clamp(0, 0x7ffffffe) + 1;
+    output.write('\x1b[$row;${column}H');
+  }
+
+  void reset(IOSink output) {
+    if (_shape != null) output.write('\x1b[0 q');
+    if (_color != null) output.write('\x1b]112\x07');
+    _shape = null;
+    _blink = null;
+    _color = null;
+  }
+}
+
 final class AnsiRenderer implements TeaRenderer {
   AnsiRenderer({
     required IOSink output,
@@ -57,35 +112,39 @@ final class AnsiRenderer implements TeaRenderer {
     bool defaultReportFocus = false,
   })  : _output = output,
         _logSink = logSink,
-        _defaultAltScreen = defaultAltScreen,
-        _defaultHideCursor = defaultHideCursor,
-        _defaultMouseMode = defaultMouseMode,
-        _defaultReportFocus = defaultReportFocus;
+        _modes = TerminalModeState(
+          defaultAltScreen: defaultAltScreen,
+          defaultHideCursor: defaultHideCursor,
+          defaultMouseMode: defaultMouseMode,
+          defaultReportFocus: defaultReportFocus,
+        );
 
   final IOSink _output;
   final IOSink? _logSink;
-  final bool _defaultAltScreen;
-  final bool _defaultHideCursor;
-  final MouseMode _defaultMouseMode;
-  final bool _defaultReportFocus;
-
-  bool _altScreenEnabled = false;
-  bool _cursorHidden = false;
-  bool _focusReportingEnabled = false;
-  bool _bracketedPasteEnabled = false;
-  MouseMode _mouseMode = MouseMode.none;
+  final TerminalModeState _modes;
   List<String> _lastLines = const <String>[];
   String _lastContent = '';
   bool _hasRenderedFrame = false;
   bool _syncUpdates = false;
+  bool _unicodeCoreEnabled = false;
+  final _cursorState = _CursorRendererState();
+  final _terminalViewState = TerminalViewState();
 
   @override
   void render(View view) {
-    _applyModes(view);
+    final wantsAlt = _modes.effectiveAltScreen(view);
+    _terminalViewState.beforeScreenChange(_output, wantsAlt);
+    if (_modes.apply(_output, view)) {
+      _lastLines = const <String>[];
+      _lastContent = '';
+      _hasRenderedFrame = false;
+    }
+    _terminalViewState.apply(_output, view, altScreen: wantsAlt);
     if (view.windowTitle.isNotEmpty) {
-      _output.write('\x1b]0;${view.windowTitle}\x07');
+      _output.write(windowTitleSequence(view.windowTitle));
     }
     if (_hasRenderedFrame && view.content == _lastContent) {
+      _cursorState.apply(_output, view.cursor);
       return;
     }
     final nextLines = view.content.split('\n');
@@ -94,11 +153,13 @@ final class AnsiRenderer implements TeaRenderer {
     final maxRows = nextLines.length > _lastLines.length
         ? nextLines.length
         : _lastLines.length;
+    final firstFrame = !_hasRenderedFrame;
     for (var row = 0; row < maxRows; row++) {
       final next = row < nextLines.length ? nextLines[row] : '';
       final prev = row < _lastLines.length ? _lastLines[row] : '';
-      if (next == prev) continue;
+      if (!firstFrame && next == prev) continue;
       _output.write('\x1b[${row + 1};1H');
+      if (firstFrame) _output.write('\x1b[K');
       _output.write(next);
       // Only erase to end of line when the new line is *narrower* than the old
       // one — the sole case where stale cells from the previous frame remain
@@ -106,19 +167,29 @@ final class AnsiRenderer implements TeaRenderer {
       // EL on the pending-wrap last column of a full-width line and wipes the
       // just-painted cell, which loses the right edge and flickers it on every
       // redraw. Widths are compared visibly (SGR codes ignored, wide chars = 2).
-      if (getWidth(next) < getWidth(prev)) _output.write('\x1b[K');
+      if (!firstFrame && getWidth(next) < getWidth(prev)) {
+        _output.write('\x1b[K');
+      }
     }
     if (_syncUpdates) _output.write('\x1b[?2026l');
 
     _lastLines = nextLines;
     _lastContent = view.content;
     _hasRenderedFrame = true;
+    _cursorState.apply(_output, view.cursor);
     _logSink?.writeln('--- frame (diff) ---\n${view.content}');
   }
 
   @override
   void setSyncUpdates(bool enabled) {
     _syncUpdates = enabled;
+  }
+
+  @override
+  void setUnicodeCore(bool enabled) {
+    if (enabled == _unicodeCoreEnabled) return;
+    _output.write(enabled ? '\x1b[?2027h' : '\x1b[?2027l');
+    _unicodeCoreEnabled = enabled;
   }
 
   @override
@@ -131,7 +202,7 @@ final class AnsiRenderer implements TeaRenderer {
 
   @override
   void insertAbove(String line) {
-    if (!_altScreenEnabled) {
+    if (!_modes.altScreenEnabled) {
       _output.writeln(line);
       return;
     }
@@ -151,16 +222,10 @@ final class AnsiRenderer implements TeaRenderer {
 
   @override
   void release({bool reset = false}) {
-    _output.write('\x1b[?25h');
-    _output.write('\x1b[?1049l');
-    _output.write('\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l');
-    _output.write('\x1b[?1004l');
-    _output.write('\x1b[?2004l');
-    _cursorHidden = false;
-    _altScreenEnabled = false;
-    _focusReportingEnabled = false;
-    _bracketedPasteEnabled = false;
-    _mouseMode = MouseMode.none;
+    setUnicodeCore(false);
+    _terminalViewState.reset(_output);
+    _cursorState.reset(_output);
+    _modes.reset(_output);
     _lastLines = const <String>[];
     _lastContent = '';
     _hasRenderedFrame = false;
@@ -181,20 +246,17 @@ final class AnsiRenderer implements TeaRenderer {
 
   @override
   void setAltScreen(bool enabled) {
-    if (enabled == _altScreenEnabled) return;
-    _output.write(enabled ? '\x1b[?1049h' : '\x1b[?1049l');
-    _altScreenEnabled = enabled;
+    _terminalViewState.beforeScreenChange(_output, enabled);
+    if (!_modes.setAltScreen(_output, enabled)) return;
+    _terminalViewState.restoreKeyboard(_output, enabled);
     _lastLines = const <String>[];
     _lastContent = '';
     _hasRenderedFrame = false;
   }
 
   @override
-  void setCursorVisibility(bool visible) {
-    if (visible == !_cursorHidden) return;
-    _output.write(visible ? '\x1b[?25h' : '\x1b[?25l');
-    _cursorHidden = !visible;
-  }
+  void setCursorVisibility(bool visible) =>
+      _modes.setCursorVisibility(_output, visible);
 
   @override
   void scroll(int n, {bool up = true}) {
@@ -205,70 +267,35 @@ final class AnsiRenderer implements TeaRenderer {
     _lastContent = '';
     _hasRenderedFrame = false;
   }
-
-  void _applyModes(View v) {
-    final wantsAlt = v.altScreen || _defaultAltScreen;
-    if (wantsAlt != _altScreenEnabled) {
-      _output.write(wantsAlt ? '\x1b[?1049h' : '\x1b[?1049l');
-      _altScreenEnabled = wantsAlt;
-    }
-
-    final wantsHiddenCursor = v.cursor == null && _defaultHideCursor;
-    if (wantsHiddenCursor != _cursorHidden) {
-      _output.write(wantsHiddenCursor ? '\x1b[?25l' : '\x1b[?25h');
-      _cursorHidden = wantsHiddenCursor;
-    }
-
-    final wantsFocus = v.reportFocus || _defaultReportFocus;
-    if (wantsFocus != _focusReportingEnabled) {
-      _output.write(wantsFocus ? '\x1b[?1004h' : '\x1b[?1004l');
-      _focusReportingEnabled = wantsFocus;
-    }
-
-    final wantsBracketedPaste = !v.disableBracketedPasteMode;
-    if (wantsBracketedPaste != _bracketedPasteEnabled) {
-      _output.write(wantsBracketedPaste ? '\x1b[?2004h' : '\x1b[?2004l');
-      _bracketedPasteEnabled = wantsBracketedPaste;
-    }
-
-    // Effective mouse mode is the higher of the per-frame view mode and the
-    // startup default (so withMouseCellMotion() stays on even when the View
-    // returns MouseMode.none).
-    final effectiveMouseMode = v.mouseMode.index >= _defaultMouseMode.index
-        ? v.mouseMode
-        : _defaultMouseMode;
-    if (effectiveMouseMode != _mouseMode) {
-      _output.write('\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l');
-      switch (effectiveMouseMode) {
-        case MouseMode.none:
-          break;
-        case MouseMode.cellMotion:
-          _output.write('\x1b[?1002h\x1b[?1006h');
-          break;
-        case MouseMode.allMotion:
-          _output.write('\x1b[?1003h\x1b[?1006h');
-          break;
-      }
-      _mouseMode = effectiveMouseMode;
-    }
-  }
 }
 
 // ─── Cell-level diff renderer ──────────────────────────────────────────────
 
-/// A single terminal cell: one grapheme cluster plus the active SGR state.
+/// A single terminal cell with its active rendering state.
 final class _Cell {
-  const _Cell(this.char, this.attrs);
+  const _Cell(this.char, this.attrs, [this.hyperlink = ''])
+      : isContinuation = false;
+
+  const _Cell.continuation(this.attrs, [this.hyperlink = ''])
+      : char = '',
+        isContinuation = true;
+
   final String char; // one grapheme cluster (may be multi-byte)
   final String
       attrs; // the CSI SGR sequence(s) active at this cell, e.g. '\x1b[1;32m'
+  final String hyperlink; // active OSC 8 opening sequence
+  final bool isContinuation;
 
   @override
   bool operator ==(Object other) =>
-      other is _Cell && other.char == char && other.attrs == attrs;
+      other is _Cell &&
+      other.char == char &&
+      other.attrs == attrs &&
+      other.hyperlink == hyperlink &&
+      other.isContinuation == isContinuation;
 
   @override
-  int get hashCode => Object.hash(char, attrs);
+  int get hashCode => Object.hash(char, attrs, hyperlink, isContinuation);
 }
 
 /// Renderer that diffs at the individual cell level, emitting precise
@@ -288,40 +315,49 @@ final class CellRenderer implements TeaRenderer {
     bool defaultReportFocus = false,
   })  : _output = output,
         _logSink = logSink,
-        _defaultAltScreen = defaultAltScreen,
-        _defaultHideCursor = defaultHideCursor,
-        _defaultMouseMode = defaultMouseMode,
-        _defaultReportFocus = defaultReportFocus;
+        _modes = TerminalModeState(
+          defaultAltScreen: defaultAltScreen,
+          defaultHideCursor: defaultHideCursor,
+          defaultMouseMode: defaultMouseMode,
+          defaultReportFocus: defaultReportFocus,
+        );
 
   final IOSink _output;
   final IOSink? _logSink;
-  final bool _defaultAltScreen;
-  final bool _defaultHideCursor;
-  final MouseMode _defaultMouseMode;
-  final bool _defaultReportFocus;
-
-  bool _altScreenEnabled = false;
-  bool _cursorHidden = false;
-  bool _focusReportingEnabled = false;
-  bool _bracketedPasteEnabled = false;
-  MouseMode _mouseMode = MouseMode.none;
+  final TerminalModeState _modes;
+  bool _unicodeCoreEnabled = false;
 
   List<List<_Cell>>? _lastGrid;
   String? _lastContent;
+  final _cursorState = _CursorRendererState();
+  final _terminalViewState = TerminalViewState();
 
   @override
   void render(View view) {
-    _applyModes(view);
+    final wantsAlt = _modes.effectiveAltScreen(view);
+    _terminalViewState.beforeScreenChange(_output, wantsAlt);
+    if (_modes.apply(_output, view)) {
+      _lastGrid = null;
+      _lastContent = null;
+    }
+    _terminalViewState.apply(_output, view, altScreen: wantsAlt);
     if (view.windowTitle.isNotEmpty) {
-      _output.write('\x1b]0;${view.windowTitle}\x07');
+      _output.write(windowTitleSequence(view.windowTitle));
     }
     if (_lastGrid != null && _lastContent == view.content) {
+      _cursorState.apply(_output, view.cursor);
       return; // identical frame — skip rebuild + diff walk
     }
     final nextGrid = _buildGrid(view.content);
+    if (_lastGrid == null) {
+      for (var row = 0; row < nextGrid.length; row++) {
+        _output.write('\x1b[${row + 1};1H\x1b[K');
+      }
+    }
     _diffAndEmit(nextGrid);
     _lastGrid = nextGrid;
     _lastContent = view.content;
+    _cursorState.apply(_output, view.cursor);
     _logSink?.writeln('--- cell frame ---\n${view.content}');
   }
 
@@ -334,7 +370,7 @@ final class CellRenderer implements TeaRenderer {
 
   @override
   void insertAbove(String line) {
-    if (!_altScreenEnabled) {
+    if (!_modes.altScreenEnabled) {
       _output.writeln(line);
       return;
     }
@@ -353,16 +389,10 @@ final class CellRenderer implements TeaRenderer {
 
   @override
   void release({bool reset = false}) {
-    _output.write('\x1b[?25h');
-    _output.write('\x1b[?1049l');
-    _output.write('\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l');
-    _output.write('\x1b[?1004l');
-    _output.write('\x1b[?2004l');
-    _cursorHidden = false;
-    _altScreenEnabled = false;
-    _focusReportingEnabled = false;
-    _bracketedPasteEnabled = false;
-    _mouseMode = MouseMode.none;
+    setUnicodeCore(false);
+    _terminalViewState.reset(_output);
+    _cursorState.reset(_output);
+    _modes.reset(_output);
     _lastGrid = null;
     _lastContent = null;
     if (reset) clearScreen();
@@ -378,20 +408,24 @@ final class CellRenderer implements TeaRenderer {
   void setSyncUpdates(bool enabled) {} // cell renderer handles its own sync
 
   @override
+  void setUnicodeCore(bool enabled) {
+    if (enabled == _unicodeCoreEnabled) return;
+    _output.write(enabled ? '\x1b[?2027h' : '\x1b[?2027l');
+    _unicodeCoreEnabled = enabled;
+  }
+
+  @override
   void setAltScreen(bool enabled) {
-    if (enabled == _altScreenEnabled) return;
-    _output.write(enabled ? '\x1b[?1049h' : '\x1b[?1049l');
-    _altScreenEnabled = enabled;
+    _terminalViewState.beforeScreenChange(_output, enabled);
+    if (!_modes.setAltScreen(_output, enabled)) return;
+    _terminalViewState.restoreKeyboard(_output, enabled);
     _lastGrid = null;
     _lastContent = null;
   }
 
   @override
-  void setCursorVisibility(bool visible) {
-    if (visible == !_cursorHidden) return;
-    _output.write(visible ? '\x1b[?25h' : '\x1b[?25l');
-    _cursorHidden = !visible;
-  }
+  void setCursorVisibility(bool visible) =>
+      _modes.setCursorVisibility(_output, visible);
 
   @override
   void scroll(int n, {bool up = true}) {
@@ -405,36 +439,34 @@ final class CellRenderer implements TeaRenderer {
 
   /// Parse [content] into a 2-D grid of [_Cell]s.
   /// Rows are separated by '\n'. Within each row, we walk grapheme clusters
-  /// while tracking the active SGR state.
+  /// while tracking the active SGR and OSC 8 state.
   List<List<_Cell>> _buildGrid(String content) {
     final lines = content.split('\n');
     final grid = <List<_Cell>>[];
     for (final line in lines) {
       final cells = <_Cell>[];
-      var activeAttrs = '';
+      final state = AnsiStateTracker();
       var i = 0;
-      // Walk the line character-by-character looking for escape sequences
-      // vs printable grapheme clusters.
-      //
-      // Strategy: iterate over the raw string bytes; when we find \x1b, consume
-      // the whole escape sequence and update activeAttrs. Otherwise the next
-      // grapheme cluster is a visible cell.
       final raw = line; // raw string with ANSI codes
       while (i < raw.length) {
         if (raw[i] == '\x1b') {
           // Consume the escape sequence
           final seq = _consumeEscape(raw, i);
-          if (seq.isSgr) activeAttrs = seq.raw;
+          state.accept(seq.raw);
           i += seq.length;
         } else {
-          // Consume one grapheme cluster
-          // (For ASCII this is just raw[i]; for multi-codepoint clusters we
-          // need the characters iterator. We use a simple approach: iterate
-          // the Characters of the remaining string and take the first one.)
-          final remaining = raw.substring(i);
-          final cluster = remaining.characters.first;
-          cells.add(_Cell(cluster, activeAttrs));
-          i += cluster.length;
+          final nextEscape = raw.indexOf('\x1b', i);
+          final plainEnd = nextEscape < 0 ? raw.length : nextEscape;
+          final plainText = raw.substring(i, plainEnd);
+          for (final cluster in plainText.characters) {
+            final attrs = state.sgrOpenSequence;
+            final hyperlink = state.hyperlinkOpenSequence;
+            cells.add(_Cell(cluster, attrs, hyperlink));
+            for (var column = 1; column < graphemeWidth(cluster); column++) {
+              cells.add(_Cell.continuation(attrs, hyperlink));
+            }
+          }
+          i = plainEnd;
         }
       }
       grid.add(cells);
@@ -450,6 +482,7 @@ final class CellRenderer implements TeaRenderer {
     var lastRow = -1;
     var lastCol = -1;
     var lastAttrs = '';
+    var lastHyperlink = '';
 
     for (var row = 0; row < rows; row++) {
       final nextRow = row < next.length ? next[row] : const <_Cell>[];
@@ -466,11 +499,25 @@ final class CellRenderer implements TeaRenderer {
 
         if (nextCell == prevCell) continue;
 
+        // A continuation cell is occupied by the wide grapheme emitted from
+        // the preceding terminal column. It participates in equality so that
+        // stale content is cleared when a wide glyph disappears, but it must
+        // never be written independently.
+        if (nextCell.isContinuation) continue;
+
         // Move cursor if needed
         if (lastRow != row || lastCol != col) {
           _output.write('\x1b[${row + 1};${col + 1}H');
           lastRow = row;
           lastCol = col;
+        }
+
+        if (nextCell.hyperlink != lastHyperlink) {
+          if (lastHyperlink.isNotEmpty) _output.write('\x1b]8;;\x1b\\');
+          if (nextCell.hyperlink.isNotEmpty) {
+            _output.write(nextCell.hyperlink);
+          }
+          lastHyperlink = nextCell.hyperlink;
         }
 
         // Apply attrs if changed
@@ -484,7 +531,7 @@ final class CellRenderer implements TeaRenderer {
         }
 
         _output.write(nextCell.char);
-        lastCol++;
+        lastCol += graphemeWidth(nextCell.char);
       }
     }
 
@@ -492,54 +539,8 @@ final class CellRenderer implements TeaRenderer {
     if (lastAttrs.isNotEmpty) {
       _output.write('\x1b[0m');
     }
-  }
-
-  // ── Terminal mode application (mirrors AnsiRenderer._applyModes) ───────────
-
-  void _applyModes(View v) {
-    final wantsAlt = v.altScreen || _defaultAltScreen;
-    if (wantsAlt != _altScreenEnabled) {
-      _output.write(wantsAlt ? '\x1b[?1049h' : '\x1b[?1049l');
-      _altScreenEnabled = wantsAlt;
-    }
-
-    final wantsHiddenCursor = v.cursor == null && _defaultHideCursor;
-    if (wantsHiddenCursor != _cursorHidden) {
-      _output.write(wantsHiddenCursor ? '\x1b[?25l' : '\x1b[?25h');
-      _cursorHidden = wantsHiddenCursor;
-    }
-
-    final wantsFocus = v.reportFocus || _defaultReportFocus;
-    if (wantsFocus != _focusReportingEnabled) {
-      _output.write(wantsFocus ? '\x1b[?1004h' : '\x1b[?1004l');
-      _focusReportingEnabled = wantsFocus;
-    }
-
-    final wantsBracketedPaste = !v.disableBracketedPasteMode;
-    if (wantsBracketedPaste != _bracketedPasteEnabled) {
-      _output.write(wantsBracketedPaste ? '\x1b[?2004h' : '\x1b[?2004l');
-      _bracketedPasteEnabled = wantsBracketedPaste;
-    }
-
-    // Effective mouse mode is the higher of the per-frame view mode and the
-    // startup default (so withMouseCellMotion() stays on even when the View
-    // returns MouseMode.none).
-    final effectiveMouseMode = v.mouseMode.index >= _defaultMouseMode.index
-        ? v.mouseMode
-        : _defaultMouseMode;
-    if (effectiveMouseMode != _mouseMode) {
-      _output.write('\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l');
-      switch (effectiveMouseMode) {
-        case MouseMode.none:
-          break;
-        case MouseMode.cellMotion:
-          _output.write('\x1b[?1002h\x1b[?1006h');
-          break;
-        case MouseMode.allMotion:
-          _output.write('\x1b[?1003h\x1b[?1006h');
-          break;
-      }
-      _mouseMode = effectiveMouseMode;
+    if (lastHyperlink.isNotEmpty) {
+      _output.write('\x1b]8;;\x1b\\');
     }
   }
 }
@@ -547,18 +548,17 @@ final class CellRenderer implements TeaRenderer {
 // ── Escape sequence parser helper ─────────────────────────────────────────────
 
 final class _EscSeq {
-  const _EscSeq({required this.raw, required this.length, required this.isSgr});
+  const _EscSeq({required this.raw, required this.length});
   final String raw;
   final int length;
-  final bool isSgr;
 }
 
 /// Consume one escape sequence starting at [start] in [s].
-/// Returns the raw sequence, its length, and whether it's an SGR sequence.
+/// Returns the raw sequence and its length.
 _EscSeq _consumeEscape(String s, int start) {
   // Expect s[start] == '\x1b'
   if (start + 1 >= s.length) {
-    return const _EscSeq(raw: '\x1b', length: 1, isSgr: false);
+    return const _EscSeq(raw: '\x1b', length: 1);
   }
 
   final next = s[start + 1];
@@ -570,21 +570,26 @@ _EscSeq _consumeEscape(String s, int start) {
     }
     if (i < s.length) i++; // include the final byte
     final raw = s.substring(start, i);
-    // SGR sequences end with 'm'
-    final isSgr = i > 0 && s[i - 1] == 'm';
-    return _EscSeq(raw: raw, length: i - start, isSgr: isSgr);
-  } else if (next == ']') {
-    // OSC sequence: \x1b] ... BEL or ST
+    return _EscSeq(raw: raw, length: i - start);
+  } else if (next == ']' || next == 'P') {
+    // OSC strings end with BEL or ST; DCS strings end with ST. Consume the
+    // complete two-byte ST so its trailing backslash cannot become content.
+    final isOsc = next == ']';
     var i = start + 2;
-    while (i < s.length &&
-        s[i] != '\x07' &&
-        !(s[i] == '\x1b' && i + 1 < s.length && s[i + 1] == '\\')) {
+    while (i < s.length) {
+      if (isOsc && s[i] == '\x07') {
+        i++;
+        break;
+      }
+      if (s[i] == '\x1b' && i + 1 < s.length && s[i + 1] == '\\') {
+        i += 2;
+        break;
+      }
       i++;
     }
-    if (i < s.length) i++; // include BEL
-    return _EscSeq(raw: s.substring(start, i), length: i - start, isSgr: false);
+    return _EscSeq(raw: s.substring(start, i), length: i - start);
   } else {
     // Single-char escape (e.g. \x1b7, \x1b8)
-    return _EscSeq(raw: s.substring(start, start + 2), length: 2, isSgr: false);
+    return _EscSeq(raw: s.substring(start, start + 2), length: 2);
   }
 }

@@ -13,7 +13,7 @@ void main() {
     final form = Form([
       Group([Field.confirm(key: 'ok', title: 'OK?', initial: true)]),
     ]);
-    final values = await form.run(programOptions: _opts([_enter]));
+    final values = await form.run(options: _opts([_enter]));
     expect(values, isNotNull);
     expect(values!.get<bool>('ok'), true);
   }, timeout: _timeout);
@@ -22,7 +22,7 @@ void main() {
     final form = Form([
       Group([Field.input(key: 'name', title: 'Name')]),
     ]);
-    expect(await form.run(programOptions: _opts([_ctrlC])), isNull);
+    expect(await form.run(options: _opts([_ctrlC])), isNull);
   }, timeout: _timeout);
 
   test('outcome is null until submitted; values reflect fields', () {

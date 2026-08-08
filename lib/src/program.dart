@@ -3,13 +3,12 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:meta/meta.dart';
-
 import 'cmd.dart';
 import 'input_decoder.dart';
 import 'model.dart';
 import 'msg.dart';
 import 'renderer.dart';
+import 'terminal_control.dart';
 import 'view.dart';
 import 'windows_terminal.dart';
 
@@ -19,22 +18,6 @@ Stream<List<int>>? _stdinBroadcastCache;
 
 Stream<List<int>> _stdinBroadcast() {
   return _stdinBroadcastCache ??= stdin.asBroadcastStream();
-}
-
-/// Compatibility options while migrating toward option-function API.
-@immutable
-class ProgramOptions {
-  const ProgramOptions({
-    this.altScreen = false,
-    this.hideCursor = true,
-    this.tickInterval,
-    this.logFile,
-  });
-
-  final bool altScreen;
-  final bool hideCursor;
-  final Duration? tickInterval;
-  final File? logFile;
 }
 
 ProgramOption withContext(Future<void> Function() cancellation) {
@@ -89,6 +72,9 @@ ProgramOption withHideCursor([bool hide = true]) => (p) => p._hideCursor = hide;
 ProgramOption withTickInterval(Duration interval) =>
     (p) => p._tickInterval = interval;
 
+/// Append renderer output to [file] while the program is running.
+ProgramOption withLogFile(File file) => (p) => p._logFile = file;
+
 /// Enable cell-motion mouse tracking at startup (button events + drag).
 ProgramOption withMouseCellMotion() =>
     (p) => p._defaultMouseMode = MouseMode.cellMotion;
@@ -101,16 +87,11 @@ ProgramOption withMouseAllMotion() =>
 ProgramOption withReportFocus() => (p) => p._defaultReportFocus = true;
 
 final class Program {
-  Program({
-    ProgramOptions options = const ProgramOptions(),
-    List<ProgramOption> programOptions = const [],
-  }) : _compatOptions = options {
-    for (final opt in programOptions) {
+  Program({List<ProgramOption> options = const []}) {
+    for (final opt in options) {
       opt(this);
     }
   }
-
-  final ProgramOptions _compatOptions;
 
   IOSink _output = stdout;
   Stream<List<int>>? _input;
@@ -127,22 +108,25 @@ final class Program {
   bool _disableSignalHandler = false;
   bool _useCellRenderer = false;
 
-  // New first-class ProgramOption fields (override compat ProgramOptions when set).
-  bool? _altScreen;
-  bool? _hideCursor;
+  bool _altScreen = false;
+  bool _hideCursor = true;
   Duration? _tickInterval;
   MouseMode _defaultMouseMode = MouseMode.none;
   bool _defaultReportFocus = false;
 
+  File? _logFile;
   IOSink? _logSink;
+  Future<void>? _logClose;
   Model? _runningModel;
   final _msgs = StreamController<Msg>.broadcast(sync: true);
   bool _running = false;
   bool _killed = false;
   Completer<void>? _finished;
+  Completer<void>? _activityWake;
   Timer? _tickTimer;
   Timer? _loneEscTimer;
   StreamSubscription<List<int>>? _inputSub;
+  bool _unicodeCoreSupported = false;
   StreamSubscription<ProcessSignal>? _sigSub;
   TeaRenderer? _renderer;
 
@@ -203,6 +187,7 @@ final class Program {
     _setRawMode(true);
     final m = _runningModel;
     if (m != null) {
+      if (_unicodeCoreSupported) _renderer?.setUnicodeCore(true);
       _renderer?.restore(m.view());
     }
   }
@@ -222,7 +207,9 @@ final class Program {
     _running = true;
     _killed = false;
     _finished = Completer<void>();
+    _activityWake = null;
     _runningModel = initial;
+    _logClose = null;
 
     // Opt-in startup phase timer: set DART_TUI_BENCH=1 to enable.
     final benchEnabled = Platform.environment['DART_TUI_BENCH'] == '1';
@@ -235,12 +222,11 @@ final class Program {
     bench('start');
 
     final queue = Queue<Msg>();
-    Completer<void>? wake;
 
     void enqueue(Msg msg) {
       queue.add(msg);
-      wake?.complete();
-      wake = null;
+      _activityWake?.complete();
+      _activityWake = null;
     }
 
     // [send] pushes to [_msgs]; bridge it into the same queue as stdin/ticks.
@@ -256,8 +242,8 @@ final class Program {
 
     Future<void> waitForActivity() async {
       while (_running && queue.isEmpty) {
-        wake = Completer<void>();
-        await wake!.future;
+        _activityWake = Completer<void>();
+        await _activityWake!.future;
       }
     }
 
@@ -278,6 +264,7 @@ final class Program {
     final minFrameMicros = _fps > 0 ? (1000000 / _fps).round() : 0;
     final frameClock = Stopwatch()..start();
     var lastRenderMicros = -1;
+    View? lastRenderedView;
     Future<void> render(View v) async {
       final nowMicros = frameClock.elapsedMicroseconds;
       if (lastRenderMicros >= 0 && minFrameMicros > 0) {
@@ -289,6 +276,7 @@ final class Program {
         }
       }
       _renderer?.render(v);
+      lastRenderedView = v;
       lastRenderMicros = frameClock.elapsedMicroseconds;
     }
 
@@ -322,13 +310,10 @@ final class Program {
         case SuspendMsg():
           await releaseTerminal(resetRenderer: true);
           if (!Platform.isWindows) {
-            final contCompleter = Completer<void>();
-            final contSub = ProcessSignal.sigcont.watch().listen((_) {
-              if (!contCompleter.isCompleted) contCompleter.complete();
-            });
             Process.killPid(pid, ProcessSignal.sigstop);
-            await contCompleter.future;
-            await contSub.cancel();
+            // SIGSTOP cannot be caught or ignored. Execution continues here
+            // only after an external SIGCONT resumes the process.
+            await Future<void>.delayed(Duration.zero);
           }
           await restoreTerminal();
           enqueue(ResumeMsg());
@@ -389,7 +374,7 @@ final class Program {
           _renderer?.setCursorVisibility(true);
           return false;
         case SetWindowTitleMsg():
-          _output.write('\x1b]0;${msg.title}\x07');
+          _output.write(windowTitleSequence(msg.title));
           return false;
         case ClearScrollAreaMsg():
           _output.write('\x1b[2J\x1b[H');
@@ -449,6 +434,26 @@ final class Program {
           (msg.value == 1 || msg.value == 2)) {
         _renderer?.setSyncUpdates(true);
       }
+      if (msg is ModeReportMsg &&
+          msg.mode == 2027 &&
+          (msg.value == 1 || msg.value == 2 || msg.value == 3)) {
+        _unicodeCoreSupported = true;
+        _renderer?.setUnicodeCore(true);
+      }
+      if (msg is MouseMsg) {
+        final onMouse = lastRenderedView?.onMouse;
+        if (onMouse != null) {
+          try {
+            unawaited(runCmd(onMouse(msg)));
+          } catch (e, st) {
+            if (!_disableCatchPanics) {
+              stderr.writeln('Caught mouse handler exception: $e');
+              stderr.writeln(st);
+            }
+            enqueue(InterruptMsg());
+          }
+        }
+      }
       final (nextModel, cmd) = model.update(msg);
       _runningModel = nextModel;
       // Fire cmd asynchronously so its result message is queued and processed
@@ -458,26 +463,23 @@ final class Program {
     }
 
     try {
-      _logSink = _compatOptions.logFile?.openWrite(mode: FileMode.append);
-      // New ProgramOption values override the compat ProgramOptions struct.
-      final effectiveAltScreen = _altScreen ?? _compatOptions.altScreen;
-      final effectiveHideCursor = _hideCursor ?? _compatOptions.hideCursor;
+      _logSink = _logFile?.openWrite(mode: FileMode.append);
       _renderer = _disableRenderer
           ? NilRenderer()
           : _useCellRenderer
               ? CellRenderer(
                   output: _output,
                   logSink: _logSink,
-                  defaultAltScreen: effectiveAltScreen,
-                  defaultHideCursor: effectiveHideCursor,
+                  defaultAltScreen: _altScreen,
+                  defaultHideCursor: _hideCursor,
                   defaultMouseMode: _defaultMouseMode,
                   defaultReportFocus: _defaultReportFocus,
                 )
               : AnsiRenderer(
                   output: _output,
                   logSink: _logSink,
-                  defaultAltScreen: effectiveAltScreen,
-                  defaultHideCursor: effectiveHideCursor,
+                  defaultAltScreen: _altScreen,
+                  defaultHideCursor: _hideCursor,
                   defaultMouseMode: _defaultMouseMode,
                   defaultReportFocus: _defaultReportFocus,
                 );
@@ -521,11 +523,9 @@ final class Program {
       }
       bench('input_ready');
 
-      final effectiveTickInterval =
-          _tickInterval ?? _compatOptions.tickInterval;
-      if (effectiveTickInterval != null) {
+      if (_tickInterval != null) {
         _tickTimer?.cancel();
-        _tickTimer = Timer.periodic(effectiveTickInterval, (_) {
+        _tickTimer = Timer.periodic(_tickInterval!, (_) {
           enqueue(TickMsg(DateTime.now()));
         });
       }
@@ -541,7 +541,8 @@ final class Program {
       // Send capability queries AFTER the first frame so the first visible
       // output reaches the terminal without being delayed by query bytes.
       if (!_disableInput) {
-        _output.write('\x1b[?2026\$y');
+        _output.write('\x1b[?2026\$p');
+        _output.write('\x1b[?2027\$p');
         // OSC 11: auto-detect terminal background color.
         // The response arrives as BackgroundColorMsg in the event loop.
         _output.write('\x1b]11;?\x07');
@@ -591,6 +592,7 @@ final class Program {
       _inputSub = null;
       await inputSub?.cancel();
       _shutdown();
+      await _logClose;
       if (!_disableRenderer) {
         // Move to a fresh line so the shell prompt appears cleanly after exit,
         // then flush so all ANSI reset sequences (show cursor, exit alt-screen)
@@ -606,6 +608,11 @@ final class Program {
   void _shutdown() {
     if (!_running && (_finished?.isCompleted ?? true)) return;
     _running = false;
+    final activityWake = _activityWake;
+    _activityWake = null;
+    if (activityWake != null && !activityWake.isCompleted) {
+      activityWake.complete();
+    }
     _tickTimer?.cancel();
     _tickTimer = null;
     _loneEscTimer?.cancel();
@@ -619,9 +626,11 @@ final class Program {
     if (!_disableRenderer) {
       _setRawMode(false);
     }
-    unawaited(_logSink?.flush());
-    unawaited(_logSink?.close());
+    final logSink = _logSink;
     _logSink = null;
+    if (logSink != null) {
+      _logClose = logSink.close();
+    }
     _finished?.complete();
   }
 }

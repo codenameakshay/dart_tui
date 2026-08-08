@@ -6,6 +6,6 @@ Set Height 700
 Set Theme "Dracula"
 Set PlaybackSpeed 1.0
 
-Type "fvm dart run tool/bin/border_style.dill"
+Type "dart run tool/bin/border_style.dill"
 Enter
 Sleep 3s

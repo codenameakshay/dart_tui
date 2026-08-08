@@ -12,7 +12,7 @@ import 'package:test/test.dart';
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /// Minimal model that quits immediately from init.
-final class _ImmediateQuit extends TeaModel {
+final class _ImmediateQuit extends Model {
   @override
   Cmd? init() => () => quit();
 
@@ -34,7 +34,7 @@ void main() {
       final sink = IOSink(controller.sink);
 
       await Program(
-        programOptions: [
+        options: [
           withInput(null),
           withOutput(sink),
           withAltScreen(),
@@ -59,7 +59,7 @@ void main() {
       final sink = IOSink(controller.sink);
 
       await Program(
-        programOptions: [
+        options: [
           withInput(null),
           withOutput(sink),
           withReportFocus(),
@@ -84,7 +84,7 @@ void main() {
       final sink = IOSink(controller.sink);
 
       await Program(
-        programOptions: [
+        options: [
           withInput(null),
           withOutput(sink),
           withMouseCellMotion(),
@@ -110,7 +110,7 @@ void main() {
       final sink = IOSink(controller.sink);
 
       await Program(
-        programOptions: [
+        options: [
           withInput(null),
           withOutput(sink),
           withMouseAllMotion(),
@@ -132,7 +132,7 @@ void main() {
     test('program exits cleanly with tick interval enabled', () async {
       // If the tick mechanism crashes, the future will throw.
       await Program(
-        programOptions: [
+        options: [
           withInput(null),
           withTickInterval(const Duration(milliseconds: 5)),
         ],
@@ -148,7 +148,7 @@ void main() {
       final sink = IOSink(controller.sink);
 
       await Program(
-        programOptions: [
+        options: [
           withInput(null),
           withOutput(sink),
           withHideCursor(false),
@@ -178,7 +178,7 @@ void main() {
       );
 
       await Program(
-        programOptions: [
+        options: [
           withInput(null),
           withWindowSize(120, 40),
         ],
@@ -188,11 +188,25 @@ void main() {
       expect(receivedHeight, 40);
     });
   });
+
+  group('withLogFile()', () {
+    test('writes rendered output to the selected file', () async {
+      final directory = await Directory.systemTemp.createTemp('dart_tui_log_');
+      addTearDown(() => directory.delete(recursive: true));
+      final logFile = File('${directory.path}/program.log');
+
+      await Program(
+        options: [withInput(null), withLogFile(logFile)],
+      ).run(_ImmediateQuit());
+
+      expect(await logFile.readAsString(), isNotEmpty);
+    });
+  });
 }
 
 // ── Aux models ────────────────────────────────────────────────────────────────
 
-final class _WindowSizeCapture extends TeaModel {
+final class _WindowSizeCapture extends Model {
   _WindowSizeCapture({required this.onSize});
   final void Function(int w, int h) onSize;
   bool _received = false;

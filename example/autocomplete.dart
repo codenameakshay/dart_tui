@@ -1,4 +1,4 @@
-// Run: fvm dart run example/autocomplete.dart
+// Run: dart run example/autocomplete.dart
 // Text input with color name autocomplete. Tab to accept suggestion, ctrl+c to quit.
 
 import 'package:dart_tui/dart_tui.dart';
@@ -24,7 +24,7 @@ Future<void> main() async {
   await Program().run(AutocompleteModel());
 }
 
-final class AutocompleteModel extends TeaModel {
+final class AutocompleteModel extends Model {
   AutocompleteModel({TextInputModel? input})
       : input = input ??
             TextInputModel(

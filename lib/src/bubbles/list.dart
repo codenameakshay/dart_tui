@@ -38,6 +38,12 @@ final class FullListStyles {
     this.noResults = const Style(),
   });
 
+  factory FullListStyles.forDarkBackground(bool isDark) =>
+      isDark ? dark : light;
+
+  factory FullListStyles.forBackground(int rgb) =>
+      FullListStyles.forDarkBackground(isDarkRgb(rgb));
+
   /// Applied to the list header/title.
   final Style title;
 
@@ -65,8 +71,7 @@ final class FullListStyles {
   /// Applied when no items match the filter.
   final Style noResults;
 
-  /// Beautiful defaults using the Catppuccin Mocha palette.
-  static const FullListStyles defaults = FullListStyles(
+  static const FullListStyles dark = FullListStyles(
     title: Style(
       foregroundRgb: RgbColor(205, 214, 244),
       isBold: true,
@@ -103,6 +108,25 @@ final class FullListStyles {
       isDim: true,
     ),
   );
+
+  static const FullListStyles light = FullListStyles(
+    title: Style(foregroundRgb: RgbColor(76, 79, 105), isBold: true),
+    selectedTitle: Style(
+      foregroundRgb: RgbColor(239, 241, 245),
+      backgroundRgb: RgbColor(136, 57, 239),
+      isBold: true,
+    ),
+    normalTitle: Style(foregroundRgb: RgbColor(76, 79, 105)),
+    description: Style(foregroundRgb: RgbColor(108, 111, 133)),
+    cursor: Style(foregroundRgb: RgbColor(136, 57, 239), isBold: true),
+    filterPrompt: Style(foregroundRgb: RgbColor(30, 102, 245), isBold: true),
+    filterInput: Style(foregroundRgb: RgbColor(76, 79, 105)),
+    statusBar: Style(foregroundRgb: RgbColor(108, 111, 133)),
+    noResults: Style(foregroundRgb: RgbColor(108, 111, 133)),
+  );
+
+  /// Defaults remain optimized for dark terminal backgrounds.
+  static const FullListStyles defaults = dark;
 }
 
 /// A scrollable list with keyboard navigation and incremental text filtering.
@@ -118,7 +142,7 @@ final class FullListStyles {
 ///
 /// Typical embedding:
 /// ```dart
-/// (TeaModel, Cmd?) update(Msg msg) {
+/// (Model, Cmd?) update(Msg msg) {
 ///   final (nextList, cmd) = listModel.update(msg);
 ///   listModel = nextList as ListModel;
 ///   if (msg is KeyMsg && msg.key == 'enter') {
@@ -127,7 +151,7 @@ final class FullListStyles {
 ///   return (this.copyWith(list: listModel), cmd);
 /// }
 /// ```
-final class ListModel extends TeaModel {
+final class ListModel extends Model {
   ListModel({
     required this.items,
     this.cursor = 0,
@@ -206,7 +230,7 @@ final class ListModel extends TeaModel {
   // ── Update ─────────────────────────────────────────────────────────────────
 
   @override
-  (TeaModel, Cmd?) update(Msg msg) {
+  (Model, Cmd?) update(Msg msg) {
     // Mouse scroll wheel navigation
     if (msg is MouseClickMsg) {
       final fi = filteredItems;
@@ -295,7 +319,7 @@ final class ListModel extends TeaModel {
     }
   }
 
-  (TeaModel, Cmd?) _updateFilterMode(KeyMsg msg, List<ListItem> fi) {
+  (Model, Cmd?) _updateFilterMode(KeyMsg msg, List<ListItem> fi) {
     switch (msg.key) {
       case 'esc':
         return (_copy(filterMode: false, filter: '', cursor: 0), null);
