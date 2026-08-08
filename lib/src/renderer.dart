@@ -258,17 +258,26 @@ final class AnsiRenderer implements TeaRenderer {
 
 /// A single terminal cell: one grapheme cluster plus the active SGR state.
 final class _Cell {
-  const _Cell(this.char, this.attrs);
+  const _Cell(this.char, this.attrs) : isContinuation = false;
+
+  const _Cell.continuation(this.attrs)
+      : char = '',
+        isContinuation = true;
+
   final String char; // one grapheme cluster (may be multi-byte)
   final String
       attrs; // the CSI SGR sequence(s) active at this cell, e.g. '\x1b[1;32m'
+  final bool isContinuation;
 
   @override
   bool operator ==(Object other) =>
-      other is _Cell && other.char == char && other.attrs == attrs;
+      other is _Cell &&
+      other.char == char &&
+      other.attrs == attrs &&
+      other.isContinuation == isContinuation;
 
   @override
-  int get hashCode => Object.hash(char, attrs);
+  int get hashCode => Object.hash(char, attrs, isContinuation);
 }
 
 /// Renderer that diffs at the individual cell level, emitting precise
@@ -434,6 +443,9 @@ final class CellRenderer implements TeaRenderer {
           final remaining = raw.substring(i);
           final cluster = remaining.characters.first;
           cells.add(_Cell(cluster, activeAttrs));
+          for (var column = 1; column < getWidth(cluster); column++) {
+            cells.add(_Cell.continuation(activeAttrs));
+          }
           i += cluster.length;
         }
       }
@@ -466,6 +478,12 @@ final class CellRenderer implements TeaRenderer {
 
         if (nextCell == prevCell) continue;
 
+        // A continuation cell is occupied by the wide grapheme emitted from
+        // the preceding terminal column. It participates in equality so that
+        // stale content is cleared when a wide glyph disappears, but it must
+        // never be written independently.
+        if (nextCell.isContinuation) continue;
+
         // Move cursor if needed
         if (lastRow != row || lastCol != col) {
           _output.write('\x1b[${row + 1};${col + 1}H');
@@ -484,7 +502,7 @@ final class CellRenderer implements TeaRenderer {
         }
 
         _output.write(nextCell.char);
-        lastCol++;
+        lastCol += getWidth(nextCell.char);
       }
     }
 

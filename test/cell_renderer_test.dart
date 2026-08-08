@@ -45,6 +45,15 @@ void main() {
       expect(cursorMoves, equals(1));
     });
 
+    test('positions changes after wide graphemes by terminal column', () {
+      renderer.render(newView('你a'));
+      buf.clear();
+
+      renderer.render(newView('你b'));
+
+      expect(buf.toString(), equals('\x1b[1;3Hb'));
+    });
+
     test('unchanged frame emits no diff output', () {
       renderer.render(newView('hello'));
       buf.clear();
