@@ -37,6 +37,19 @@ class _StringSink implements IOSink {
 }
 
 void main() {
+  test('AnsiRenderer clears unknown initial row content before writing', () {
+    final buf = StringBuffer();
+    final renderer = AnsiRenderer(
+      output: _StringSink(buf),
+      defaultAltScreen: false,
+      defaultHideCursor: false,
+    );
+
+    renderer.render(newView('short'));
+
+    expect(buf.toString(), contains('\x1b[1;1H\x1b[Kshort'));
+  });
+
   test('AnsiRenderer strips controls from window titles', () {
     final buf = StringBuffer();
     final renderer = AnsiRenderer(
@@ -278,7 +291,7 @@ void main() {
     renderer.render(View(content: 'same', altScreen: true));
 
     expect(buf.toString(), contains('\x1b[?1049h'));
-    expect(buf.toString(), contains('\x1b[1;1Hsame'));
+    expect(buf.toString(), contains('\x1b[1;1H\x1b[Ksame'));
   });
 
   group('insertAbove in alt-screen mode', () {

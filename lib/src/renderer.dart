@@ -153,11 +153,13 @@ final class AnsiRenderer implements TeaRenderer {
     final maxRows = nextLines.length > _lastLines.length
         ? nextLines.length
         : _lastLines.length;
+    final firstFrame = !_hasRenderedFrame;
     for (var row = 0; row < maxRows; row++) {
       final next = row < nextLines.length ? nextLines[row] : '';
       final prev = row < _lastLines.length ? _lastLines[row] : '';
-      if (next == prev) continue;
+      if (!firstFrame && next == prev) continue;
       _output.write('\x1b[${row + 1};1H');
+      if (firstFrame) _output.write('\x1b[K');
       _output.write(next);
       // Only erase to end of line when the new line is *narrower* than the old
       // one — the sole case where stale cells from the previous frame remain
@@ -165,7 +167,9 @@ final class AnsiRenderer implements TeaRenderer {
       // EL on the pending-wrap last column of a full-width line and wipes the
       // just-painted cell, which loses the right edge and flickers it on every
       // redraw. Widths are compared visibly (SGR codes ignored, wide chars = 2).
-      if (getWidth(next) < getWidth(prev)) _output.write('\x1b[K');
+      if (!firstFrame && getWidth(next) < getWidth(prev)) {
+        _output.write('\x1b[K');
+      }
     }
     if (_syncUpdates) _output.write('\x1b[?2026l');
 
@@ -345,6 +349,11 @@ final class CellRenderer implements TeaRenderer {
       return; // identical frame — skip rebuild + diff walk
     }
     final nextGrid = _buildGrid(view.content);
+    if (_lastGrid == null) {
+      for (var row = 0; row < nextGrid.length; row++) {
+        _output.write('\x1b[${row + 1};1H\x1b[K');
+      }
+    }
     _diffAndEmit(nextGrid);
     _lastGrid = nextGrid;
     _lastContent = view.content;

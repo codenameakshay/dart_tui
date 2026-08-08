@@ -16,7 +16,7 @@ export const guides: DocEntry[] = [
       {
         type: "code",
         lang: "yaml",
-        code: `dependencies:\n  dart_tui: ^1.4.0`,
+        code: `dependencies:\n  dart_tui: ^2.0.0`,
       },
       { type: "prose", md: "Then fetch it:" },
       { type: "code", lang: "bash", code: `dart pub get` },

@@ -1,16 +1,76 @@
 # Changelog
 
-## Unreleased
+## 2.0.0 - 2026-08-08
+
+This major release hardens the terminal runtime, ports the selected Bubble Tea
+capabilities through P9, and removes the temporary compatibility APIs so the
+package has one clear model, styling, and program-configuration path.
 
 ### Breaking changes
 
-- Removed the `TeaModel` alias; models now implement `Model` directly.
-- Removed the `LegacyKeyMsg` alias; use `KeyPressMsg` or `KeyMsg`.
-- Removed the raw ANSI `TuiStyle` helpers; use the composable `Style` API.
-- Removed `ProgramOptions` and the parallel `programOptions` /
-  `programSettings` parameters. `Program`, forms, prompts, and gum helpers now
-  accept one `List<ProgramOption>` named `options`. File logging is configured
-  with `withLogFile(File(...))`.
+- **Models:** removed the `TeaModel` alias. Extend or implement `Model`
+  directly.
+- **Keys:** removed the `LegacyKeyMsg` alias. Use `KeyPressMsg` for press
+  events or the shared `KeyMsg` base type.
+- **Styles:** removed the raw ANSI `TuiStyle` helpers. Use immutable `Style`
+  values such as `const Style(isBold: true).render(text)`.
+- **Program configuration:** removed `ProgramOptions` and the parallel
+  `programOptions` / `programSettings` parameters. `Program`, forms, prompts,
+  and gum helpers now accept one `List<ProgramOption>` named `options`. Use
+  `withAltScreen()`, `withTickInterval(...)`, `withHideCursor(...)`, and
+  `withLogFile(File(...))` for the former struct fields.
+
+### Bubble Tea parity
+
+- Added declarative terminal colors, native progress reporting, keyboard
+  options, and view-level mouse callbacks.
+- Added Kitty progressive-keyboard negotiation and modern key press, repeat,
+  and release events.
+- Added Unicode Core negotiation plus shared grapheme-aware terminal width
+  handling across input, styling, and rendering.
+- Expanded the viewport with gutters, per-line styles, search highlights,
+  filling, and horizontal navigation.
+- Added dynamically sized, visually wrapped textarea behavior.
+- Added multi-stop, scaled, and callback-driven progress colors.
+- Added rich underline styles, OSC 8 hyperlinks, and ANSI-state-safe layout
+  operations.
+- Added explicit dark/light component style factories and immutable
+  suggestion, cursor, and viewport introspection APIs.
+
+### Runtime correctness and security
+
+- Made cell diffs width-aware for CJK, emoji, and other double-width
+  graphemes, while reducing cell parsing from quadratic to linear work.
+- Made declarative cursor position, shape, blink, and color reach the terminal.
+- Correctly consume OSC, DCS, APC, PM, and SOS control strings without leaking
+  payload bytes into rendered cells.
+- Made `Program.kill()` wake idle programs and restore terminal state.
+- Corrected Unicode capability-report semantics and sanitized window-title OSC
+  payloads.
+- Preserved cumulative SGR and OSC 8 hyperlink state in `CellRenderer`, made
+  multi-grapheme input edits atomic, and restored viewport line styles around
+  highlighted spans.
+
+### Release quality and tooling
+
+- Added real-PTY tests for kill, external cancellation, resize,
+  suspend/resume, and terminal restoration.
+- Centralized alternate-screen, cursor, focus, paste, and mouse transitions in
+  one terminal-mode state machine shared by both renderers.
+- Aligned local and CI analysis on one clean repository-wide boundary.
+- Made plain Dart the default across Make targets, examples, VHS tapes, and
+  website source mirrors; FVM remains an optional override.
+- Refreshed `meta`, `lints`, and `test` constraints to their current resolvable
+  releases.
+- Moved README previews to the hosted documentation assets and excluded local
+  GIF binaries from the pub archive.
+
+### Documentation and examples
+
+- Upgraded the documentation site to patched Next.js 16.3.0 with dedicated
+  audit, typecheck, and production-build CI.
+- Refreshed the component gallery, guides, API snippets, and all 60
+  tape-backed example previews for the 2.0 API.
 
 ## 1.4.0
 

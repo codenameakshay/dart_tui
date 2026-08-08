@@ -40,12 +40,19 @@ Build rich, interactive CLI applications with a clean **Model–Update–View** 
 ```yaml
 # pubspec.yaml
 dependencies:
-  dart_tui: ^1.4.0
+  dart_tui: ^2.0.0
 ```
 
 ```bash
 dart pub get
 ```
+
+> **Migrating from 1.x?** Version 2.0 removes the `TeaModel`, `LegacyKeyMsg`,
+> `TuiStyle`, and `ProgramOptions` compatibility APIs. Use `Model`,
+> `KeyPressMsg`/`KeyMsg`, immutable `Style`, and a single
+> `Program(options: <ProgramOption>[...])` configuration path. See the
+> [2.0.0 changelog](CHANGELOG.md#200---2026-08-08) for the complete migration
+> notes.
 
 ---
 

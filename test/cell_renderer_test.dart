@@ -32,6 +32,12 @@ void main() {
       expect(output, contains('b'));
     });
 
+    test('clears unknown initial row content before writing', () {
+      renderer.render(newView('short'));
+
+      expect(buf.toString(), contains('\x1b[1;1H\x1b[K'));
+    });
+
     test('strips controls from window titles', () {
       renderer.render(View(
         content: 'value',
