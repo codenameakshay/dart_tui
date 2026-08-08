@@ -25,7 +25,7 @@ help:
 	@echo ""
 	@echo "  Development"
 	@echo "    make test                    Run all unit tests"
-	@echo "    make analyze                 Run dart analyze on lib/"
+	@echo "    make analyze                 Run dart analyze across the repository"
 	@echo "    make format                  Run formatting"
 	@echo "    make run EXAMPLE=foo         Run example/foo.dart (JIT source)"
 	@echo "    make run-fast EXAMPLE=foo    Run tool/bin/foo.dill (kernel snapshot)"
@@ -52,7 +52,7 @@ test:
 	$(DART) test
 
 analyze:
-	$(DART) analyze lib/
+	$(DART) analyze
 
 # Measure lib/ line coverage and fail below the floor (default 90%).
 # Usage: make coverage [FLOOR=90]
