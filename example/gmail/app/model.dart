@@ -16,7 +16,7 @@ enum FocusPane { list, viewport, search }
 
 const int pageSize = 50;
 
-final class AppModel extends TeaModel {
+final class AppModel extends Model {
   AppModel({
     GmailSource? source,
     this.width = 120,

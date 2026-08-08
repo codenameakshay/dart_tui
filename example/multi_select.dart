@@ -6,11 +6,11 @@ import 'package:dart_tui/dart_tui.dart';
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   ).run(_MultiSelectDemoModel());
 }
 
-final class _MultiSelectDemoModel extends TeaModel {
+final class _MultiSelectDemoModel extends Model {
   _MultiSelectDemoModel({MultiSelectModel? multi, this.confirmed = false})
       : multi = multi ??
             MultiSelectModel(

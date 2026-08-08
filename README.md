@@ -30,7 +30,7 @@ Build rich, interactive CLI applications with a clean **Model–Update–View** 
 - **Cell-level diff renderer** — only changed cells are written; zero flicker
 - **Synchronized updates** (`CSI ?2026`) for terminals that support them
 - **Auto background detection** — OSC 11 query fires at startup; your model receives `BackgroundColorMsg`
-- **Fluent `ProgramOption` functions** — `withAltScreen()`, `withHideCursor()`, `withTickInterval()`, `withMouseCellMotion()`, `withMouseAllMotion()`, `withReportFocus()`, `withWindowSize()`
+- **Fluent `ProgramOption` functions** — `withAltScreen()`, `withHideCursor()`, `withTickInterval()`, `withMouseCellMotion()`, `withMouseAllMotion()`, `withReportFocus()`, `withWindowSize()`, `withLogFile()`
 - **Fast startup** — kernel snapshots cut warm-JIT from ~1 s to ~500 ms; AOT compiles to native
 
 ---
@@ -56,11 +56,11 @@ import 'package:dart_tui/dart_tui.dart';
 
 void main() async {
   await Program(
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   ).run(CounterModel());
 }
 
-final class CounterModel extends TeaModel {
+final class CounterModel extends Model {
   CounterModel({this.count = 0});
   final int count;
 
@@ -152,13 +152,7 @@ Cmd scrollDown([int n = 1])// scroll viewport down n lines
 
 ```dart
 Program(
-  options: const ProgramOptions(
-    altScreen: true,
-    hideCursor: true,
-    tickInterval: Duration(milliseconds: 100),
-    logFile: File('debug.log'),
-  ),
-  programOptions: [
+  options: [
     withFps(60),              // default 60, max 120
     withCellRenderer(),       // cell-level diff (less flicker on older terminals)
     withAltScreen(),          // enter alternate screen buffer
@@ -168,6 +162,7 @@ Program(
     withMouseAllMotion(),     // enable all-motion mouse tracking
     withReportFocus(),        // enable focus/blur reporting (FocusMsg / BlurMsg)
     withWindowSize(120, 40),  // inject a fixed window size (useful in tests)
+    withLogFile(File('debug.log')), // append renderer output to a file
     withFilter((model, msg) { // intercept / transform messages
       if (msg is QuitMsg) return null; // suppress
       return msg;
@@ -575,7 +570,7 @@ var (pos, vel) = (0.0, 0.0);
 
 ### One-shot helpers
 
-Quick, self-contained flows built on `Program` — no model to write. Each returns a `Future` and accepts a `programOptions` list so it can be scripted/tested headlessly.
+Quick, self-contained flows built on `Program` — no model to write. Each returns a `Future` and accepts an `options` list so it can be scripted/tested headlessly.
 
 ```dart
 // prompts
@@ -617,7 +612,7 @@ await log.close();
 
 ### Forms
 
-A composable, huh-style form: typed fields grouped into (optionally conditional) wizard pages, per-field validation with inline errors, and dynamic fields whose visibility/options depend on other fields' values. Key-based and immutable — a `Form` is a `TeaModel` you can embed, or run one-shot with `form.run()`.
+A composable, huh-style form: typed fields grouped into (optionally conditional) wizard pages, per-field validation with inline errors, and dynamic fields whose visibility/options depend on other fields' values. Key-based and immutable — a `Form` is a `Model` you can embed, or run one-shot with `form.run()`.
 
 ```dart
 final form = Form([
@@ -741,11 +736,11 @@ make clean                    # remove tool/bin/ build artifacts
 
 ```bash
 make new-example NAME=my_feature
-# → creates example/my_feature.dart with a minimal TeaModel scaffold
+# → creates example/my_feature.dart with a minimal Model scaffold
 make run EXAMPLE=my_feature
 ```
 
-The generated file has everything wired up: `Program`, `TeaModel`, key handling, and a styled view. Add your state and logic from there.
+The generated file has everything wired up: `Program`, `Model`, key handling, and a styled view. Add your state and logic from there.
 
 ### Fast startup with kernel snapshots
 

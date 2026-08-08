@@ -3,7 +3,7 @@ import 'package:dart_tui/dart_tui.dart';
 
 Future<void> main() async {
   await Program(
-    programOptions: [
+    options: [
       withFilter((model, msg) {
         // Intercept quit signals when there are unsaved changes
         if (msg is QuitMsg || msg is InterruptMsg) {
@@ -20,7 +20,7 @@ Future<void> main() async {
 
 final class _ConfirmQuitMsg extends Msg {}
 
-final class PreventQuitModel extends TeaModel {
+final class PreventQuitModel extends Model {
   PreventQuitModel({
     TextAreaModel? textarea,
     this.confirming = false,

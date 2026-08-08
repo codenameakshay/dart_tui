@@ -17,7 +17,7 @@ final class _DirLoadedMsg extends Msg {
 ///
 /// On [init], loads the entries of [currentDir]. Navigation keys change the
 /// directory or set [selected] to the chosen file path.
-final class FilePickerModel extends TeaModel {
+final class FilePickerModel extends Model {
   FilePickerModel({
     required this.currentDir,
     this.entries = const [],

@@ -19,7 +19,7 @@ Future<void> main() async {
 
 final class _InstallMsg extends Msg {}
 
-final class PackageManagerModel extends TeaModel {
+final class PackageManagerModel extends Model {
   PackageManagerModel({
     this.currentIndex = 0,
     this.done = false,

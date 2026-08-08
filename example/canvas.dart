@@ -9,11 +9,11 @@ import 'package:dart_tui/dart_tui.dart';
 void main() async {
   final model = CanvasShowcaseModel();
   await Program(
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   ).run(model);
 }
 
-final class CanvasShowcaseModel extends TeaModel {
+final class CanvasShowcaseModel extends Model {
   CanvasShowcaseModel({this.tick = 0});
   final int tick;
 
@@ -21,7 +21,7 @@ final class CanvasShowcaseModel extends TeaModel {
   Cmd? init() => every(const Duration(milliseconds: 80), TickMsg.new);
 
   @override
-  (TeaModel, Cmd?) update(Msg msg) {
+  (Model, Cmd?) update(Msg msg) {
     if (msg is TickMsg) return (CanvasShowcaseModel(tick: tick + 1), null);
     if (msg is KeyMsg) {
       switch (msg.key) {

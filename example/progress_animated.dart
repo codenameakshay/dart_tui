@@ -5,13 +5,13 @@ import 'package:dart_tui/dart_tui.dart';
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   ).run(ProgressAnimatedModel());
 }
 
 final class _TickMsg extends Msg {}
 
-final class ProgressAnimatedModel extends TeaModel {
+final class ProgressAnimatedModel extends Model {
   ProgressAnimatedModel({this.fraction = 0.0, this.done = false});
 
   final double fraction;

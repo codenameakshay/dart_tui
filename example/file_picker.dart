@@ -4,11 +4,11 @@ import 'package:dart_tui/dart_tui.dart';
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   ).run(FilePickerExampleModel());
 }
 
-final class FilePickerExampleModel extends TeaModel {
+final class FilePickerExampleModel extends Model {
   FilePickerExampleModel({FilePickerModel? picker, this.selected})
       : picker = picker ??
             FilePickerModel(

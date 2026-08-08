@@ -5,11 +5,11 @@ import 'package:dart_tui/dart_tui.dart';
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   ).run(ProgressBarModel());
 }
 
-final class ProgressBarModel extends TeaModel {
+final class ProgressBarModel extends Model {
   ProgressBarModel({this.fraction = 0.5});
 
   final double fraction;

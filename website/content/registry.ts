@@ -57,7 +57,7 @@ export const CATEGORY_META: Record<
     title: "Components",
     label: "Components",
     blurb:
-      "Drop-in, stateful widgets — spinners, tables, trees, inputs and more. Each is a TeaModel you embed in your own update/view loop.",
+      "Drop-in, stateful widgets — spinners, tables, trees, inputs and more. Each is a Model you embed in your own update/view loop.",
   },
   blocks: {
     title: "Blocks",

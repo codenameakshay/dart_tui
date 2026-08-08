@@ -35,7 +35,7 @@ class _StringSink implements IOSink {
 }
 
 /// Runs [msgs] in order through a real Program + AnsiRenderer, then quits.
-final class _DriverModel extends TeaModel {
+final class _DriverModel extends Model {
   _DriverModel(this.msgs);
   final List<Msg> msgs;
 
@@ -55,7 +55,7 @@ final class _DriverModel extends TeaModel {
 void main() {
   test('SetWindowTitleMsg strips OSC control characters', () async {
     final sink = _StringSink();
-    await Program(programOptions: [
+    await Program(options: [
       withOutput(sink),
       withInput(null),
     ]).run(_DriverModel([
@@ -69,7 +69,7 @@ void main() {
 
   test('kill wakes a program waiting without queued messages', () async {
     final ready = Completer<void>();
-    final program = Program(programOptions: [
+    final program = Program(options: [
       withInput(null),
       withoutRenderer(),
     ]);
@@ -86,7 +86,7 @@ void main() {
       () async {
     final ready = Completer<void>();
     final handled = Completer<Mouse>();
-    final program = Program(programOptions: [
+    final program = Program(options: [
       withOutput(_StringSink()),
       withInput(null),
     ]);
@@ -136,7 +136,7 @@ void main() {
       PrintLineMsg('above'),
     ];
 
-    await Program(programOptions: [
+    await Program(options: [
       withOutput(sink),
       withInput(null),
     ]).run(_DriverModel(controls)).timeout(const Duration(seconds: 5));
@@ -153,7 +153,7 @@ void main() {
       () async {
     final sink = _StringSink();
 
-    await Program(programOptions: [
+    await Program(options: [
       withOutput(sink),
       withInput(null),
     ]).run(_DriverModel([
@@ -169,7 +169,7 @@ void main() {
     final sink = _StringSink();
     // A model whose init execs `true` (exit 0), then quits on the callback.
     final model = _ExecModel();
-    await Program(programOptions: [
+    await Program(options: [
       withOutput(sink),
       withInput(null),
     ]).run(model).timeout(const Duration(seconds: 10));
@@ -177,7 +177,7 @@ void main() {
   }, timeout: const Timeout(Duration(seconds: 15)));
 }
 
-final class _IdleModel extends TeaModel {
+final class _IdleModel extends Model {
   _IdleModel(this.ready);
 
   final Completer<void> ready;
@@ -198,7 +198,7 @@ final class _MouseHandledMsg extends Msg {
   final Mouse mouse;
 }
 
-final class _MouseCallbackModel extends TeaModel {
+final class _MouseCallbackModel extends Model {
   _MouseCallbackModel(this.ready, this.handled);
 
   final Completer<void> ready;
@@ -222,7 +222,7 @@ final class _MouseCallbackModel extends TeaModel {
       );
 }
 
-final class _ExecModel extends TeaModel {
+final class _ExecModel extends Model {
   int? exitCode;
 
   @override

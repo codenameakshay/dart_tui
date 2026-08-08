@@ -45,7 +45,7 @@ final class TextAreaStyles {
 }
 
 /// Multi-line text editor bubble with grapheme-safe visual-row navigation.
-final class TextAreaModel extends TeaModel {
+final class TextAreaModel extends Model {
   TextAreaModel({
     this.value = '',
     this.cursorRow = 0,

@@ -5,10 +5,10 @@ import 'package:dart_tui/dart_tui.dart';
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(
-      altScreen: true,
-      tickInterval: Duration(milliseconds: 100),
-    ),
+    options: [
+      withAltScreen(),
+      withTickInterval(const Duration(milliseconds: 100)),
+    ],
   ).run(RealtimeModel());
 }
 
@@ -17,7 +17,7 @@ final class _DoneMsg extends Msg {
   final String result;
 }
 
-final class RealtimeModel extends TeaModel {
+final class RealtimeModel extends Model {
   RealtimeModel({
     this.result,
     SpinnerModel? spinner,

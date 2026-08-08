@@ -149,14 +149,4 @@ void main() {
       expect(stripAnsi(gradientBackground('hi', colors)), 'hi');
     });
   });
-
-  group('TuiStyle escape helpers', () {
-    test('static SGR builders', () {
-      expect(TuiStyle.fg256(5), '\x1b[38;5;5m');
-      expect(TuiStyle.bg256(5), '\x1b[48;5;5m');
-      expect(TuiStyle.fgRgb(1, 2, 3), '\x1b[38;2;1;2;3m');
-      expect(TuiStyle.bgRgb(1, 2, 3), '\x1b[48;2;1;2;3m');
-      expect(TuiStyle.wrap('x', open: TuiStyle.bold), contains('x'));
-    });
-  });
 }

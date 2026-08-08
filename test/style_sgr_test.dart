@@ -2,6 +2,8 @@
 import 'package:dart_tui/dart_tui.dart';
 import 'package:test/test.dart';
 
+const _sgrReset = '\x1b[0m';
+
 void main() {
   group('rich underline styles', () {
     const expected = {
@@ -76,7 +78,7 @@ void main() {
       final out = const Style().reverse().render('text');
       expect(out, contains('\x1b[7m'));
       expect(out, contains('text'));
-      expect(out, endsWith(TuiStyle.reset));
+      expect(out, endsWith(_sgrReset));
     });
 
     test('reverse(false) does not emit \\x1b[7m', () {
@@ -176,7 +178,7 @@ void main() {
       final out = const Style(isUnderline: true).render('hello world');
       // Standard: single open sequence, single close
       expect(out, startsWith('\x1b[4m'));
-      expect(out, endsWith(TuiStyle.reset));
+      expect(out, endsWith(_sgrReset));
     });
   });
 

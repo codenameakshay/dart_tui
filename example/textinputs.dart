@@ -7,7 +7,7 @@ Future<void> main() async {
   await Program().run(TextInputsModel());
 }
 
-final class TextInputsModel extends TeaModel {
+final class TextInputsModel extends Model {
   TextInputsModel({
     TextInputModel? name,
     TextInputModel? email,

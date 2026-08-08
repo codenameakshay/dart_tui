@@ -7,7 +7,7 @@ Future<void> main() async {
   await Program().run(AltScreenToggleModel());
 }
 
-final class AltScreenToggleModel extends TeaModel {
+final class AltScreenToggleModel extends Model {
   AltScreenToggleModel({this.altScreen = false});
 
   final bool altScreen;

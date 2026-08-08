@@ -3,8 +3,6 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:meta/meta.dart';
-
 import 'cmd.dart';
 import 'input_decoder.dart';
 import 'model.dart';
@@ -20,22 +18,6 @@ Stream<List<int>>? _stdinBroadcastCache;
 
 Stream<List<int>> _stdinBroadcast() {
   return _stdinBroadcastCache ??= stdin.asBroadcastStream();
-}
-
-/// Compatibility options while migrating toward option-function API.
-@immutable
-class ProgramOptions {
-  const ProgramOptions({
-    this.altScreen = false,
-    this.hideCursor = true,
-    this.tickInterval,
-    this.logFile,
-  });
-
-  final bool altScreen;
-  final bool hideCursor;
-  final Duration? tickInterval;
-  final File? logFile;
 }
 
 ProgramOption withContext(Future<void> Function() cancellation) {
@@ -90,6 +72,9 @@ ProgramOption withHideCursor([bool hide = true]) => (p) => p._hideCursor = hide;
 ProgramOption withTickInterval(Duration interval) =>
     (p) => p._tickInterval = interval;
 
+/// Append renderer output to [file] while the program is running.
+ProgramOption withLogFile(File file) => (p) => p._logFile = file;
+
 /// Enable cell-motion mouse tracking at startup (button events + drag).
 ProgramOption withMouseCellMotion() =>
     (p) => p._defaultMouseMode = MouseMode.cellMotion;
@@ -102,16 +87,11 @@ ProgramOption withMouseAllMotion() =>
 ProgramOption withReportFocus() => (p) => p._defaultReportFocus = true;
 
 final class Program {
-  Program({
-    ProgramOptions options = const ProgramOptions(),
-    List<ProgramOption> programOptions = const [],
-  }) : _compatOptions = options {
-    for (final opt in programOptions) {
+  Program({List<ProgramOption> options = const []}) {
+    for (final opt in options) {
       opt(this);
     }
   }
-
-  final ProgramOptions _compatOptions;
 
   IOSink _output = stdout;
   Stream<List<int>>? _input;
@@ -128,14 +108,15 @@ final class Program {
   bool _disableSignalHandler = false;
   bool _useCellRenderer = false;
 
-  // New first-class ProgramOption fields (override compat ProgramOptions when set).
-  bool? _altScreen;
-  bool? _hideCursor;
+  bool _altScreen = false;
+  bool _hideCursor = true;
   Duration? _tickInterval;
   MouseMode _defaultMouseMode = MouseMode.none;
   bool _defaultReportFocus = false;
 
+  File? _logFile;
   IOSink? _logSink;
+  Future<void>? _logClose;
   Model? _runningModel;
   final _msgs = StreamController<Msg>.broadcast(sync: true);
   bool _running = false;
@@ -228,6 +209,7 @@ final class Program {
     _finished = Completer<void>();
     _activityWake = null;
     _runningModel = initial;
+    _logClose = null;
 
     // Opt-in startup phase timer: set DART_TUI_BENCH=1 to enable.
     final benchEnabled = Platform.environment['DART_TUI_BENCH'] == '1';
@@ -481,26 +463,23 @@ final class Program {
     }
 
     try {
-      _logSink = _compatOptions.logFile?.openWrite(mode: FileMode.append);
-      // New ProgramOption values override the compat ProgramOptions struct.
-      final effectiveAltScreen = _altScreen ?? _compatOptions.altScreen;
-      final effectiveHideCursor = _hideCursor ?? _compatOptions.hideCursor;
+      _logSink = _logFile?.openWrite(mode: FileMode.append);
       _renderer = _disableRenderer
           ? NilRenderer()
           : _useCellRenderer
               ? CellRenderer(
                   output: _output,
                   logSink: _logSink,
-                  defaultAltScreen: effectiveAltScreen,
-                  defaultHideCursor: effectiveHideCursor,
+                  defaultAltScreen: _altScreen,
+                  defaultHideCursor: _hideCursor,
                   defaultMouseMode: _defaultMouseMode,
                   defaultReportFocus: _defaultReportFocus,
                 )
               : AnsiRenderer(
                   output: _output,
                   logSink: _logSink,
-                  defaultAltScreen: effectiveAltScreen,
-                  defaultHideCursor: effectiveHideCursor,
+                  defaultAltScreen: _altScreen,
+                  defaultHideCursor: _hideCursor,
                   defaultMouseMode: _defaultMouseMode,
                   defaultReportFocus: _defaultReportFocus,
                 );
@@ -544,11 +523,9 @@ final class Program {
       }
       bench('input_ready');
 
-      final effectiveTickInterval =
-          _tickInterval ?? _compatOptions.tickInterval;
-      if (effectiveTickInterval != null) {
+      if (_tickInterval != null) {
         _tickTimer?.cancel();
-        _tickTimer = Timer.periodic(effectiveTickInterval, (_) {
+        _tickTimer = Timer.periodic(_tickInterval!, (_) {
           enqueue(TickMsg(DateTime.now()));
         });
       }
@@ -615,6 +592,7 @@ final class Program {
       _inputSub = null;
       await inputSub?.cancel();
       _shutdown();
+      await _logClose;
       if (!_disableRenderer) {
         // Move to a fresh line so the shell prompt appears cleanly after exit,
         // then flush so all ANSI reset sequences (show cursor, exit alt-screen)
@@ -648,9 +626,11 @@ final class Program {
     if (!_disableRenderer) {
       _setRawMode(false);
     }
-    unawaited(_logSink?.flush());
-    unawaited(_logSink?.close());
+    final logSink = _logSink;
     _logSink = null;
+    if (logSink != null) {
+      _logClose = logSink.close();
+    }
     _finished?.complete();
   }
 }

@@ -4,7 +4,7 @@ import '../msg.dart';
 import '../view.dart';
 
 /// Elapsed-time stopwatch bubble. Driven by [TickMsg].
-final class StopwatchModel extends TeaModel {
+final class StopwatchModel extends Model {
   StopwatchModel({
     this.elapsed = Duration.zero,
     this.running = false,

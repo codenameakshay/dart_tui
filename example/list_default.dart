@@ -20,7 +20,7 @@ Future<void> main() async {
   await Program().run(ListDefaultModel());
 }
 
-final class ListDefaultModel extends TeaModel {
+final class ListDefaultModel extends Model {
   ListDefaultModel({
     SelectListModel? list,
     this.chosen = '',

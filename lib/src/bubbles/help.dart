@@ -62,7 +62,7 @@ final class HelpStyles {
   static const HelpStyles defaults = dark;
 }
 
-final class HelpModel extends TeaModel {
+final class HelpModel extends Model {
   HelpModel({
     required this.entries,
     this.title = 'Help',
@@ -94,7 +94,7 @@ final class HelpModel extends TeaModel {
   final HelpStyles styles;
 
   @override
-  (TeaModel, Cmd?) update(Msg msg) => (this, null);
+  (Model, Cmd?) update(Msg msg) => (this, null);
 
   @override
   View view() {

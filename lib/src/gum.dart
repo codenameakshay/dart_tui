@@ -10,28 +10,26 @@ import 'program.dart';
 import 'view.dart';
 
 /// One-shot convenience helpers inspired by [gum](https://github.com/charmbracelet/gum),
-/// built on [Program]. Each accepts a [programOptions] list so it can be driven
+/// built on [Program]. Each accepts an [options] list so it can be driven
 /// headlessly in tests (e.g. `withInput`, `withoutRenderer`).
 
-/// Interactive fuzzy filter over [options]. Type to narrow, `Enter` to pick the
+/// Interactive fuzzy filter over [choices]. Type to narrow, `Enter` to pick the
 /// highlighted entry, `Esc`/`Ctrl+C` to cancel. Returns the chosen string, or
-/// `null` if cancelled or [options] is empty.
+/// `null` if cancelled or [choices] is empty.
 Future<String?> filter(
-  List<String> options, {
-  ProgramOptions programSettings = const ProgramOptions(),
-  List<ProgramOption> programOptions = const [],
+  List<String> choices, {
+  List<ProgramOption> options = const [],
   String title = '',
 }) async {
-  if (options.isEmpty) return null;
+  if (choices.isEmpty) return null;
   final model = _FilterModel(
     ListModel(
-      items: options.map((o) => ListItem(title: o)).toList(),
+      items: choices.map((o) => ListItem(title: o)).toList(),
       title: title,
       filterMode: true,
     ),
   );
-  return Program(options: programSettings, programOptions: programOptions)
-      .runForResult(model);
+  return Program(options: options).runForResult(model);
 }
 
 /// Render an animated spinner labelled [label] while awaiting [task], returning
@@ -40,14 +38,12 @@ Future<String?> filter(
 Future<T> spin<T>(
   Future<T> task, {
   String label = 'Loading…',
-  ProgramOptions programSettings = const ProgramOptions(),
-  List<ProgramOption> programOptions = const [],
+  List<ProgramOption> options = const [],
 }) async {
   final program = Program(
-    options: programSettings,
-    programOptions: [
+    options: [
       withTickInterval(const Duration(milliseconds: 80)),
-      ...programOptions,
+      ...options,
     ],
   );
   final run = program.run(_SpinModel(SpinnerModel(), label));
@@ -79,19 +75,17 @@ Future<void> pager(
   String content, {
   int width = 80,
   int height = 20,
-  ProgramOptions programSettings = const ProgramOptions(),
-  List<ProgramOption> programOptions = const [],
+  List<ProgramOption> options = const [],
 }) async {
   final model = _PagerModel(
     ViewportModel(content: content, width: width, height: height),
   );
-  await Program(options: programSettings, programOptions: programOptions)
-      .run(model);
+  await Program(options: options).run(model);
 }
 
 // ── Models ───────────────────────────────────────────────────────────────────
 
-final class _FilterModel extends TeaModel implements OutcomeModel<String> {
+final class _FilterModel extends Model implements OutcomeModel<String> {
   _FilterModel(this.list, {this.result, this.done = false});
 
   final ListModel list;
@@ -102,7 +96,7 @@ final class _FilterModel extends TeaModel implements OutcomeModel<String> {
   String? get outcome => result;
 
   @override
-  (TeaModel, Cmd?) update(Msg msg) {
+  (Model, Cmd?) update(Msg msg) {
     if (msg is KeyMsg) {
       switch (msg.key) {
         case 'enter':
@@ -127,7 +121,7 @@ final class _FilterModel extends TeaModel implements OutcomeModel<String> {
   View view() => list.view();
 }
 
-final class _SpinModel extends TeaModel {
+final class _SpinModel extends Model {
   _SpinModel(this.spinner, this.label);
 
   final SpinnerModel spinner;
@@ -145,7 +139,7 @@ final class _SpinModel extends TeaModel {
   View view() => newView('${spinner.view().content} $label');
 }
 
-final class _PagerModel extends TeaModel {
+final class _PagerModel extends Model {
   _PagerModel(this.vp);
 
   final ViewportModel vp;

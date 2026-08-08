@@ -26,7 +26,7 @@ Future<void> main() async {
   await Program().run(TableExampleModel());
 }
 
-final class TableExampleModel extends TeaModel {
+final class TableExampleModel extends Model {
   TableExampleModel({TableModel? table})
       : table = table ??
             TableModel(

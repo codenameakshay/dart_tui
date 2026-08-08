@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Breaking changes
+
+- Removed the `TeaModel` alias; models now implement `Model` directly.
+- Removed the `LegacyKeyMsg` alias; use `KeyPressMsg` or `KeyMsg`.
+- Removed the raw ANSI `TuiStyle` helpers; use the composable `Style` API.
+- Removed `ProgramOptions` and the parallel `programOptions` /
+  `programSettings` parameters. `Program`, forms, prompts, and gum helpers now
+  accept one `List<ProgramOption>` named `options`. File logging is configured
+  with `withLogFile(File(...))`.
+
 ## 1.4.0
 
 ### Forms (huh-style)

@@ -47,7 +47,7 @@ final class ViewportHighlight {
 }
 
 /// Scrollable content pane with soft wrapping, gutters, and search highlights.
-final class ViewportModel extends TeaModel {
+final class ViewportModel extends Model {
   ViewportModel({
     this.content = '',
     this.width = 80,

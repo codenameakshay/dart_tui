@@ -72,11 +72,11 @@ const quickStart = `import 'package:dart_tui/dart_tui.dart';
 
 void main() async {
   await Program(
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   ).run(CounterModel());
 }
 
-final class CounterModel extends TeaModel {
+final class CounterModel extends Model {
   CounterModel({this.count = 0});
   final int count;
 
@@ -211,7 +211,7 @@ export default function HomePage() {
                 A whole app in one file
               </h2>
               <p className="mt-4 text-lg leading-relaxed text-muted-foreground">
-                Extend <code className="font-mono text-mauve">TeaModel</code>,
+                Extend <code className="font-mono text-mauve">Model</code>,
                 implement <code className="font-mono text-mauve">update</code>{" "}
                 and <code className="font-mono text-mauve">view</code>, and
                 hand it to a <code className="font-mono text-mauve">Program</code>.

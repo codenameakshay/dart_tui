@@ -6,7 +6,7 @@ import 'dart:async';
 import 'package:dart_tui/dart_tui.dart';
 
 Future<void> main() async {
-  final program = Program(options: const ProgramOptions(altScreen: true));
+  final program = Program(options: [withAltScreen()]);
   var count = 0;
   final t = Timer.periodic(const Duration(milliseconds: 500), (_) {
     count++;
@@ -21,7 +21,7 @@ final class _CountMsg extends Msg {
   final int n;
 }
 
-final class _CounterModel extends TeaModel {
+final class _CounterModel extends Model {
   _CounterModel({this.count = 0});
 
   final int count;

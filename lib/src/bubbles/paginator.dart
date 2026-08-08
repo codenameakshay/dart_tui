@@ -3,7 +3,7 @@ import '../model.dart';
 import '../msg.dart';
 import '../view.dart';
 
-final class PaginatorModel extends TeaModel {
+final class PaginatorModel extends Model {
   PaginatorModel({
     required this.page,
     required this.totalPages,
@@ -17,7 +17,7 @@ final class PaginatorModel extends TeaModel {
   int get safePage => page.clamp(0, totalPages - 1);
 
   @override
-  (TeaModel, Cmd?) update(Msg msg) {
+  (Model, Cmd?) update(Msg msg) {
     if (msg is! KeyMsg) return (this, null);
     switch (msg.key) {
       case 'left':

@@ -6,14 +6,14 @@ import 'package:dart_tui/dart_tui.dart';
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(
-      altScreen: true,
-      tickInterval: Duration(milliseconds: 500),
-    ),
+    options: [
+      withAltScreen(),
+      withTickInterval(const Duration(milliseconds: 500)),
+    ],
   ).run(_CursorModelDemoModel());
 }
 
-final class _CursorModelDemoModel extends TeaModel {
+final class _CursorModelDemoModel extends Model {
   _CursorModelDemoModel({
     CursorModel? block,
     CursorModel? underline,

@@ -142,7 +142,7 @@ final class FullListStyles {
 ///
 /// Typical embedding:
 /// ```dart
-/// (TeaModel, Cmd?) update(Msg msg) {
+/// (Model, Cmd?) update(Msg msg) {
 ///   final (nextList, cmd) = listModel.update(msg);
 ///   listModel = nextList as ListModel;
 ///   if (msg is KeyMsg && msg.key == 'enter') {
@@ -151,7 +151,7 @@ final class FullListStyles {
 ///   return (this.copyWith(list: listModel), cmd);
 /// }
 /// ```
-final class ListModel extends TeaModel {
+final class ListModel extends Model {
   ListModel({
     required this.items,
     this.cursor = 0,
@@ -230,7 +230,7 @@ final class ListModel extends TeaModel {
   // ── Update ─────────────────────────────────────────────────────────────────
 
   @override
-  (TeaModel, Cmd?) update(Msg msg) {
+  (Model, Cmd?) update(Msg msg) {
     // Mouse scroll wheel navigation
     if (msg is MouseClickMsg) {
       final fi = filteredItems;
@@ -319,7 +319,7 @@ final class ListModel extends TeaModel {
     }
   }
 
-  (TeaModel, Cmd?) _updateFilterMode(KeyMsg msg, List<ListItem> fi) {
+  (Model, Cmd?) _updateFilterMode(KeyMsg msg, List<ListItem> fi) {
     switch (msg.key) {
       case 'esc':
         return (_copy(filterMode: false, filter: '', cursor: 0), null);

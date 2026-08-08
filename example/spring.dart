@@ -10,14 +10,14 @@ const _width = 44;
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(
-      altScreen: true,
-      tickInterval: Duration(milliseconds: 16), // ~60fps
-    ),
+    options: [
+      withAltScreen(),
+      withTickInterval(const Duration(milliseconds: 16)),
+    ],
   ).run(SpringDemo());
 }
 
-final class SpringDemo extends TeaModel {
+final class SpringDemo extends Model {
   SpringDemo({Spring? spring, this.target = 0, this.pos = 0, this.vel = 0})
       : spring = spring ?? Spring(fps: 60, frequency: 4, damping: 0.5);
 

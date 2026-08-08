@@ -450,9 +450,6 @@ final class KeyReleaseMsg extends KeyMsg {
   String toString() => key;
 }
 
-/// Legacy alias retained for compatibility.
-typedef LegacyKeyMsg = KeyPressMsg;
-
 enum MouseButton {
   none,
   left,

@@ -16,9 +16,6 @@ abstract class Model {
   View view();
 }
 
-/// Backwards-compatible alias for previous API name.
-typedef TeaModel = Model;
-
 /// Optional model mixin used by prompt-style flows that return a value.
 abstract class OutcomeModel<T> implements Model {
   /// When non-null, [Program] stops the loop and returns this value.

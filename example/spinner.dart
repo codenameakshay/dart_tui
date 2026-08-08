@@ -5,14 +5,14 @@ import 'package:dart_tui/dart_tui.dart';
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(
-      altScreen: true,
-      tickInterval: Duration(milliseconds: 100),
-    ),
+    options: [
+      withAltScreen(),
+      withTickInterval(const Duration(milliseconds: 100)),
+    ],
   ).run(SpinnerDemoModel());
 }
 
-final class SpinnerDemoModel extends TeaModel {
+final class SpinnerDemoModel extends Model {
   SpinnerDemoModel({SpinnerModel? spinner})
       : spinner = spinner ??
             SpinnerModel(

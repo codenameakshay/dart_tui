@@ -114,7 +114,7 @@ final class MultiSelectStyles {
 ///   handleSelections(multi.selected);
 /// }
 /// ```
-final class MultiSelectModel extends TeaModel {
+final class MultiSelectModel extends Model {
   MultiSelectModel({
     required this.items,
     this.cursor = 0,
@@ -149,7 +149,7 @@ final class MultiSelectModel extends TeaModel {
   List<String> get selectedValues => selected.map((i) => i._value).toList();
 
   @override
-  (TeaModel, Cmd?) update(Msg msg) {
+  (Model, Cmd?) update(Msg msg) {
     if (msg is! KeyMsg) return (this, null);
     final cur = _safeCursor;
 

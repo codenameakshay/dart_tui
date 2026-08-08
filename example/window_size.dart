@@ -7,7 +7,7 @@ Future<void> main() async {
   await Program().run(WindowSizeModel());
 }
 
-final class WindowSizeModel extends TeaModel {
+final class WindowSizeModel extends Model {
   WindowSizeModel({this.width = 0, this.height = 0});
 
   final int width;

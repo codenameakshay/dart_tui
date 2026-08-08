@@ -5,6 +5,8 @@ import '../grapheme_width.dart';
 import '../msg.dart';
 import '../terminal_control.dart';
 
+const _sgrReset = '\x1b[0m';
+
 /// Horizontal text alignment.
 enum Align { left, center, right }
 
@@ -773,7 +775,7 @@ final class Style {
     final sgrOpen = open.toString();
     final sgrClose = open.isEmpty
         ? ''
-        : '${underlineColor == null ? '' : '\x1b[59m'}${TuiStyle.reset}';
+        : '${underlineColor == null ? '' : '\x1b[59m'}$_sgrReset';
     final close = '$sgrClose${linkOpen.isEmpty ? '' : linkClose}';
     final reOpen = '$linkOpen$sgrOpen';
     final balancedValue = value.replaceAll('\n', '$close\n$reOpen');
@@ -1512,21 +1514,6 @@ final class AdaptiveColor {
   const AdaptiveColor({required this.light, required this.dark});
   final RgbColor light;
   final RgbColor dark;
-}
-
-/// Minimal compatibility ANSI helpers.
-abstract final class TuiStyle {
-  static const reset = '\x1b[0m';
-  static const bold = '\x1b[1m';
-  static const dim = '\x1b[2m';
-
-  static String fg256(int n) => '\x1b[38;5;${n}m';
-  static String bg256(int n) => '\x1b[48;5;${n}m';
-  static String fgRgb(int r, int g, int b) => '\x1b[38;2;$r;$g;${b}m';
-  static String bgRgb(int r, int g, int b) => '\x1b[48;2;$r;$g;${b}m';
-
-  static String wrap(String s, {String open = '', String close = reset}) =>
-      '$open$s$close';
 }
 
 // ── Gradient text functions ────────────────────────────────────────────────────

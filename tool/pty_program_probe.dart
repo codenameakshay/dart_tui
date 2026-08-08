@@ -26,7 +26,7 @@ Future<void> main(List<String> arguments) async {
       withContext(
           () => Future<void>.delayed(const Duration(milliseconds: 250))),
   ];
-  program = Program(programOptions: options);
+  program = Program(options: options);
 
   Timer? killTimer;
   if (scenario == 'kill') {

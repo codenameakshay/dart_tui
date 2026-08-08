@@ -14,7 +14,7 @@ Future<void> main() async {
   await Program().run(PipeModel());
 }
 
-final class PipeModel extends TeaModel {
+final class PipeModel extends Model {
   PipeModel({TextInputModel? input, this.submitted = false})
       : input = input ??
             TextInputModel(

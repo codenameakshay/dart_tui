@@ -27,8 +27,7 @@ Future<void> main() async {
     ], title: 'Deploy', hidden: (v) => v.get<bool>('deploy') != true),
   ]);
 
-  final values =
-      await form.run(programSettings: const ProgramOptions(altScreen: true));
+  final values = await form.run(options: [withAltScreen()]);
 
   if (values == null) {
     stdout.writeln('Cancelled.');

@@ -43,7 +43,7 @@ final class ProgressStyles {
 }
 
 /// Simple determinate progress bar (0.0–1.0).
-final class ProgressModel extends TeaModel {
+final class ProgressModel extends Model {
   ProgressModel({
     required this.fraction,
     this.width = 40,
@@ -65,7 +65,7 @@ final class ProgressModel extends TeaModel {
   final ProgressColorBuilder? colorBuilder;
 
   @override
-  (TeaModel, Cmd?) update(Msg msg) => (this, null);
+  (Model, Cmd?) update(Msg msg) => (this, null);
 
   @override
   View view() {

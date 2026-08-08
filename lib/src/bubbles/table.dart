@@ -65,7 +65,7 @@ final class TableStyles {
 }
 
 /// Tabular data viewer with keyboard navigation.
-final class TableModel extends TeaModel {
+final class TableModel extends Model {
   TableModel({
     required this.columns,
     required this.rows,

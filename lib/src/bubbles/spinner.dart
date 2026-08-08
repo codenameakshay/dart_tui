@@ -31,7 +31,7 @@ final class SpinnerStyles {
 }
 
 /// Indeterminate spinner driven by [TickMsg].
-final class SpinnerModel extends TeaModel {
+final class SpinnerModel extends Model {
   SpinnerModel({
     this.frames = const ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'],
     this.index = 0,
@@ -47,7 +47,7 @@ final class SpinnerModel extends TeaModel {
   final SpinnerStyles styles;
 
   @override
-  (TeaModel, Cmd?) update(Msg msg) {
+  (Model, Cmd?) update(Msg msg) {
     if (msg is TickMsg && frames.isNotEmpty) {
       return (
         SpinnerModel(

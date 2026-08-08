@@ -23,7 +23,7 @@ Future<void> main() async {
   await Program().run(PaginatorExampleModel());
 }
 
-final class PaginatorExampleModel extends TeaModel {
+final class PaginatorExampleModel extends Model {
   PaginatorExampleModel({PaginatorModel? paginator})
       : paginator = paginator ??
             PaginatorModel(

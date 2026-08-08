@@ -18,7 +18,7 @@ final class Group {
 }
 
 /// An immutable, key-based, huh-style form.
-final class Form extends TeaModel implements OutcomeModel<FormValues> {
+final class Form extends Model implements OutcomeModel<FormValues> {
   Form(this.groups, {this.styles = FormStyles.defaults})
       : groupIndex = 0,
         fieldIndex = 0,
@@ -107,13 +107,8 @@ final class Form extends TeaModel implements OutcomeModel<FormValues> {
 
   /// Run the form as a one-shot program; returns the values, or `null` if
   /// cancelled. Safe to call from a script.
-  Future<FormValues?> run({
-    ProgramOptions programSettings = const ProgramOptions(),
-    List<ProgramOption> programOptions = const [],
-  }) async {
-    final result =
-        await Program(options: programSettings, programOptions: programOptions)
-            .run(_FormRunner(this));
+  Future<FormValues?> run({List<ProgramOption> options = const []}) async {
+    final result = await Program(options: options).run(_FormRunner(this));
     final f = (result as _FormRunner).form;
     return f.submitted ? f.values : null;
   }
@@ -291,7 +286,7 @@ final class Form extends TeaModel implements OutcomeModel<FormValues> {
 
 /// Wraps a [Form] so `run()` quits on submit or cancel without the `Form`
 /// itself issuing a quit — keeping it safely embeddable in a larger model.
-final class _FormRunner extends TeaModel {
+final class _FormRunner extends Model {
   _FormRunner(this.form);
   final Form form;
 

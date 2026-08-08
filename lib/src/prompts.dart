@@ -9,40 +9,33 @@ import 'view.dart';
 /// Single-choice list; returns the selected string, or `null` if cancelled.
 Future<String?> promptSelect(
   List<String> choices, {
-  ProgramOptions options = const ProgramOptions(),
-  List<ProgramOption> programOptions = const [],
+  List<ProgramOption> options = const [],
   String title = 'Choose one',
 }) async {
   if (choices.isEmpty) return null;
   final model = _SelectPromptModel(choices: choices, title: title);
-  return Program(options: options, programOptions: programOptions)
-      .runForResult(model);
+  return Program(options: options).runForResult(model);
 }
 
 /// Yes / no; returns `null` on cancel.
 Future<bool?> promptConfirm(
   String question, {
-  ProgramOptions options = const ProgramOptions(),
-  List<ProgramOption> programOptions = const [],
+  List<ProgramOption> options = const [],
 }) async {
   final model = _ConfirmPromptModel(question: question);
-  return Program(options: options, programOptions: programOptions)
-      .runForResult(model);
+  return Program(options: options).runForResult(model);
 }
 
 /// Single-line text; returns `null` on cancel.
 Future<String?> promptInput(
   String label, {
-  ProgramOptions options = const ProgramOptions(),
-  List<ProgramOption> programOptions = const [],
+  List<ProgramOption> options = const [],
 }) async {
   final model = _InputPromptModel(label: label);
-  return Program(options: options, programOptions: programOptions)
-      .runForResult(model);
+  return Program(options: options).runForResult(model);
 }
 
-final class _SelectPromptModel extends TeaModel
-    implements OutcomeModel<String> {
+final class _SelectPromptModel extends Model implements OutcomeModel<String> {
   _SelectPromptModel({
     required this.choices,
     required this.title,
@@ -65,7 +58,7 @@ final class _SelectPromptModel extends TeaModel
   int get _c => cursor.clamp(0, choices.length - 1);
 
   @override
-  (TeaModel, Cmd?) update(Msg msg) {
+  (Model, Cmd?) update(Msg msg) {
     if (msg is WindowSizeMsg || msg is TickMsg) return (this, null);
     if (msg is! KeyMsg) return (this, null);
     switch (msg.key) {
@@ -139,7 +132,7 @@ final class _SelectPromptModel extends TeaModel
   }
 }
 
-final class _ConfirmPromptModel extends TeaModel implements OutcomeModel<bool> {
+final class _ConfirmPromptModel extends Model implements OutcomeModel<bool> {
   _ConfirmPromptModel({
     required this.question,
     this.result,
@@ -156,7 +149,7 @@ final class _ConfirmPromptModel extends TeaModel implements OutcomeModel<bool> {
   bool get quit => finished;
 
   @override
-  (TeaModel, Cmd?) update(Msg msg) {
+  (Model, Cmd?) update(Msg msg) {
     if (msg is WindowSizeMsg || msg is TickMsg) return (this, null);
     if (msg is! KeyMsg) return (this, null);
     switch (msg.key) {
@@ -195,7 +188,7 @@ final class _ConfirmPromptModel extends TeaModel implements OutcomeModel<bool> {
       newView('$question [y/N]\nY or Enter = yes, N = no, Esc = cancel');
 }
 
-final class _InputPromptModel extends TeaModel implements OutcomeModel<String> {
+final class _InputPromptModel extends Model implements OutcomeModel<String> {
   _InputPromptModel({
     required this.label,
     this.value = '',
@@ -214,7 +207,7 @@ final class _InputPromptModel extends TeaModel implements OutcomeModel<String> {
   bool get quit => finished;
 
   @override
-  (TeaModel, Cmd?) update(Msg msg) {
+  (Model, Cmd?) update(Msg msg) {
     if (msg is WindowSizeMsg || msg is TickMsg) return (this, null);
     if (msg is! KeyMsg) return (this, null);
     switch (msg.key) {

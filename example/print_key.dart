@@ -5,11 +5,11 @@ import 'package:dart_tui/dart_tui.dart';
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   ).run(PrintKeyModel());
 }
 
-final class PrintKeyModel extends TeaModel {
+final class PrintKeyModel extends Model {
   PrintKeyModel({this.log = const []});
 
   final List<String> log;

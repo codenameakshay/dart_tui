@@ -125,13 +125,13 @@ new-example:
 		"" \
 		"void main() async {" \
 		"  await Program(" \
-		"    options: const ProgramOptions(altScreen: true)," \
+		"    options: [withAltScreen()]," \
 		"  ).run(_Model());" \
 		"}" \
 		"" \
-		"final class _Model extends TeaModel {" \
+		"final class _Model extends Model {" \
 		"  @override" \
-		"  (TeaModel, Cmd?) update(Msg msg) {" \
+		"  (Model, Cmd?) update(Msg msg) {" \
 		"    if (msg is KeyMsg && (msg.key == 'q' || msg.key == 'ctrl+c')) {" \
 		"      return (this, () => quit());" \
 		"    }" \

@@ -5,7 +5,7 @@ import 'package:dart_tui/dart_tui.dart';
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   ).run(
     ShoppingModel(
       choices: ['Buy carrots', 'Buy celery', 'Buy kohlrabi'],
@@ -13,7 +13,7 @@ Future<void> main() async {
   );
 }
 
-final class ShoppingModel extends TeaModel {
+final class ShoppingModel extends Model {
   ShoppingModel({
     required this.choices,
     this.cursor = 0,
@@ -25,7 +25,7 @@ final class ShoppingModel extends TeaModel {
   final Set<int> selected;
 
   @override
-  (TeaModel, Cmd?) update(Msg msg) {
+  (Model, Cmd?) update(Msg msg) {
     if (msg is WindowSizeMsg || msg is TickMsg) {
       return (this, null);
     }

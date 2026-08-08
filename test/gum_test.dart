@@ -18,7 +18,7 @@ void main() {
     test('typing narrows and enter picks the match', () async {
       final r = await filter(
         ['apple', 'banana', 'apricot'],
-        programOptions: _opts([
+        options: _opts([
           [0x62], // 'b' → only 'banana' matches
           _enter,
         ]),
@@ -28,7 +28,7 @@ void main() {
 
     test('esc cancels', () async {
       // esc is a lone escape: the program schedules a short timer to deliver it.
-      final r = await filter(['a', 'b'], programOptions: _opts([_esc]));
+      final r = await filter(['a', 'b'], options: _opts([_esc]));
       expect(r, isNull);
     }, timeout: _timeout);
   });
@@ -37,7 +37,7 @@ void main() {
     test('returns the task result', () async {
       final r = await spin(
         Future<int>.value(42),
-        programOptions: [withoutRenderer(), withInput(null)],
+        options: [withoutRenderer(), withInput(null)],
       );
       expect(r, 42);
     }, timeout: _timeout);
@@ -46,7 +46,7 @@ void main() {
       await expectLater(
         spin<int>(
           Future<int>.error(StateError('boom')),
-          programOptions: [withoutRenderer(), withInput(null)],
+          options: [withoutRenderer(), withInput(null)],
         ),
         throwsA(isA<StateError>()),
       );
@@ -57,7 +57,7 @@ void main() {
     test('exits on q', () async {
       await pager(
         'line1\nline2\nline3',
-        programOptions: _opts([
+        options: _opts([
           [0x71], // 'q'
         ]),
       );

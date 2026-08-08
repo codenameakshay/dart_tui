@@ -7,7 +7,7 @@ Future<void> main() async {
   await Program().run(WindowTitleModel());
 }
 
-final class WindowTitleModel extends TeaModel {
+final class WindowTitleModel extends Model {
   WindowTitleModel({this.lastKey = ''});
 
   final String lastKey;

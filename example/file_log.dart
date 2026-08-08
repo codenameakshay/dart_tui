@@ -10,13 +10,13 @@ Future<void> main() async {
   const path = 'dart_tui_example.log';
   final log = FileLog(path);
   await Program(
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   ).run(LogDemo(log, path));
   await log.close();
   stdout.writeln('Key log written to $path');
 }
 
-final class LogDemo extends TeaModel {
+final class LogDemo extends Model {
   LogDemo(this.log, this.path, {this.count = 0});
 
   final FileLog log;

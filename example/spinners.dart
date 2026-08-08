@@ -25,14 +25,14 @@ const _bounceFrames = ['.  ', '.. ', '...'];
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(
-      altScreen: true,
-      tickInterval: Duration(milliseconds: 120),
-    ),
+    options: [
+      withAltScreen(),
+      withTickInterval(const Duration(milliseconds: 120)),
+    ],
   ).run(SpinnersModel());
 }
 
-final class SpinnersModel extends TeaModel {
+final class SpinnersModel extends Model {
   SpinnersModel({List<SpinnerModel>? spinners})
       : spinners = spinners ??
             [

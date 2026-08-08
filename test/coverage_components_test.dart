@@ -6,7 +6,7 @@ KeyPressMsg _r(String t) => KeyPressMsg(TeaKey(code: KeyCode.rune, text: t));
 KeyPressMsg _ctrl(String t) => KeyPressMsg(
     TeaKey(code: KeyCode.rune, text: t, modifiers: const {KeyMod.ctrl}));
 
-T _u<T>(TeaModel m, KeyMsg k) => m.update(k).$1 as T;
+T _u<T>(Model m, KeyMsg k) => m.update(k).$1 as T;
 
 void main() {
   group('TextAreaModel', () {

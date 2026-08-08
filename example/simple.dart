@@ -9,7 +9,7 @@ Future<void> main() async {
 
 final class _TickMsg extends Msg {}
 
-final class CountdownModel extends TeaModel {
+final class CountdownModel extends Model {
   CountdownModel({this.count = 5});
 
   final int count;

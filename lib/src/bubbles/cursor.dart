@@ -60,7 +60,7 @@ final class CursorStyles {
 /// // In parent view():
 /// '$text${cursor.view().content}';
 /// ```
-final class CursorModel extends TeaModel {
+final class CursorModel extends Model {
   CursorModel({
     this.mode = CursorMode.block,
     this.blink = true,
@@ -102,7 +102,7 @@ final class CursorModel extends TeaModel {
   CursorModel withBlink(bool b) => _copy(blink: b);
 
   @override
-  (TeaModel, Cmd?) update(Msg msg) {
+  (Model, Cmd?) update(Msg msg) {
     if (!focused || !blink) return (this, null);
     if (msg is TickMsg) {
       return (_copy(visible: !visible), null);

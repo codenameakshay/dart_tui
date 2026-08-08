@@ -7,7 +7,7 @@ Future<void> main() async {
   await Program().run(TextInputExampleModel());
 }
 
-final class TextInputExampleModel extends TeaModel {
+final class TextInputExampleModel extends Model {
   TextInputExampleModel({
     TextInputModel? input,
     this.submitted = false,

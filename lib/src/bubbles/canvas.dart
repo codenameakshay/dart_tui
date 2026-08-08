@@ -160,11 +160,11 @@ final class Canvas {
   }
 }
 
-/// A [Canvas]-backed [TeaModel]-compatible helper that wraps a [Canvas] in a
+/// A [Canvas]-backed [Model]-compatible helper that wraps a [Canvas] in a
 /// static (non-interactive) view. Useful for compositing views inside larger
 /// layouts.
 ///
-/// For interactive canvases, embed [Canvas] in your own [TeaModel.view()].
+/// For interactive canvases, embed [Canvas] in your own [Model.view()].
 final class CanvasView {
   CanvasView(this.canvas);
   final Canvas canvas;

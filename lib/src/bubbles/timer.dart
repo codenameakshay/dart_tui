@@ -4,7 +4,7 @@ import '../msg.dart';
 import '../view.dart';
 
 /// Countdown timer bubble. Driven by [TickMsg] (optionally filtered by [id]).
-final class TimerModel extends TeaModel {
+final class TimerModel extends Model {
   TimerModel({
     required this.duration,
     this.elapsed = Duration.zero,

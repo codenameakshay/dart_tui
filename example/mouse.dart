@@ -5,11 +5,11 @@ import 'package:dart_tui/dart_tui.dart';
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   ).run(MouseModel());
 }
 
-final class MouseModel extends TeaModel {
+final class MouseModel extends Model {
   MouseModel({this.events = const []});
 
   final List<String> events;

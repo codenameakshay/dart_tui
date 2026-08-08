@@ -58,7 +58,7 @@ final class TabsStyles {
 ///   ('Settings', 'Config here'),
 /// ])
 /// ```
-final class TabsModel extends TeaModel {
+final class TabsModel extends Model {
   TabsModel({
     required this.tabs,
     this.activeTab = 0,
@@ -72,7 +72,7 @@ final class TabsModel extends TeaModel {
   int get _safeActive => activeTab.clamp(0, tabs.length - 1);
 
   @override
-  (TeaModel, Cmd?) update(Msg msg) {
+  (Model, Cmd?) update(Msg msg) {
     if (msg is! KeyMsg) return (this, null);
     final cur = _safeActive;
     switch (msg.key) {

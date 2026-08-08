@@ -56,11 +56,11 @@ doloribus asperiores repellat. This is the final line of the long document.
 
 Future<void> main() async {
   await Program(
-    options: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   ).run(PagerModel());
 }
 
-final class PagerModel extends TeaModel {
+final class PagerModel extends Model {
   PagerModel({ViewportModel? viewport})
       : viewport = viewport ??
             ViewportModel(content: _longText, width: 80, height: 20);

@@ -7,7 +7,7 @@ Future<void> main() async {
   await Program().run(TextAreaExampleModel());
 }
 
-final class TextAreaExampleModel extends TeaModel {
+final class TextAreaExampleModel extends Model {
   TextAreaExampleModel({TextAreaModel? area})
       : area = area ??
             TextAreaModel(

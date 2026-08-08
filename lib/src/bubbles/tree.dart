@@ -111,7 +111,7 @@ final class _FlatNode {
 ///
 /// Navigation: `↑`/`k` up, `↓`/`j` down, `Enter`/`Space` toggle expand.
 /// Press `→`/`l` to expand a collapsed node, `←`/`h` to collapse.
-final class TreeModel extends TeaModel {
+final class TreeModel extends Model {
   TreeModel({
     required this.root,
     this.cursor = 0,
@@ -288,10 +288,10 @@ final class TreeModel extends TeaModel {
     );
   }
 
-  // ── TeaModel ──────────────────────────────────────────────────────────────
+  // ── Model ──────────────────────────────────────────────────────────────
 
   @override
-  (TeaModel, Cmd?) update(Msg msg) {
+  (Model, Cmd?) update(Msg msg) {
     if (msg is MouseClickMsg) {
       switch (msg.mouse.button) {
         case MouseButton.wheelUp:

@@ -12,7 +12,7 @@ Future<void> main() async {
   final choice = await filter(
     const ['Cloudflare', 'Fastly', 'Vercel', 'Netlify', 'Render'],
     title: 'Deploy target',
-    programSettings: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   );
   if (choice == null) {
     stdout.writeln('Cancelled.');
@@ -27,7 +27,7 @@ Future<void> main() async {
       () => 'deployed to $choice',
     ),
     label: 'Deploying to $choice…',
-    programSettings: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   );
   stdout.writeln('Result: $status');
 
@@ -35,7 +35,7 @@ Future<void> main() async {
   final log = List.generate(60, (i) => 'build step ${i + 1} … ok').join('\n');
   await pager(
     'Deploy log for $choice\n\n$log',
-    programSettings: const ProgramOptions(altScreen: true),
+    options: [withAltScreen()],
   );
 
   stdout.writeln('\nDone.');

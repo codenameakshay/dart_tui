@@ -24,7 +24,7 @@ Future<void> main() async {
   await Program().run(AutocompleteModel());
 }
 
-final class AutocompleteModel extends TeaModel {
+final class AutocompleteModel extends Model {
   AutocompleteModel({TextInputModel? input})
       : input = input ??
             TextInputModel(

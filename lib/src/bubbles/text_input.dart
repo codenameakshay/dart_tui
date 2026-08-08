@@ -89,7 +89,7 @@ final class InputStyles {
 }
 
 /// Single-line text field with full Bubbletea-compatible feature set.
-final class TextInputModel extends TeaModel {
+final class TextInputModel extends Model {
   TextInputModel({
     this.value = '',
     this.cursorPos = 0,
