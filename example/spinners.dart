@@ -1,5 +1,5 @@
 // Show all spinner frame styles simultaneously.
-// Run: fvm dart run example/spinners.dart
+// Run: dart run example/spinners.dart
 
 import 'package:dart_tui/dart_tui.dart';
 

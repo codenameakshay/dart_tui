@@ -1,5 +1,5 @@
 // ProgressModel with arrow-key control.
-// Run: fvm dart run example/progress_bar.dart
+// Run: dart run example/progress_bar.dart
 
 import 'package:dart_tui/dart_tui.dart';
 

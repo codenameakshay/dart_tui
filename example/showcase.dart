@@ -1,6 +1,6 @@
 // Comprehensive interactive demo of dart_tui APIs.
 // Run from package root:
-//   fvm dart run example/showcase.dart
+//   dart run example/showcase.dart
 
 import 'package:dart_tui/dart_tui.dart';
 
@@ -294,7 +294,7 @@ ${TuiStyle.bold}Prompts API${TuiStyle.reset}
   • promptInput(label)     → Future<String?>
 
 Run:
-  fvm dart run example/prompts_chain.dart
+  dart run example/prompts_chain.dart
 
 Prompts run their own Program instances, so this showcase keeps them as
 documentation to avoid nested terminal sessions.

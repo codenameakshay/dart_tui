@@ -1,4 +1,4 @@
-// Run: fvm dart run example/simple.dart
+// Run: dart run example/simple.dart
 // Shows a 5-second countdown using tick(). When it hits 0, quits automatically.
 
 import 'package:dart_tui/dart_tui.dart';

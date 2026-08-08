@@ -1,5 +1,5 @@
 // Single animated SpinnerModel.
-// Run: fvm dart run example/spinner.dart
+// Run: dart run example/spinner.dart
 
 import 'package:dart_tui/dart_tui.dart';
 

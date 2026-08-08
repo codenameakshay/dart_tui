@@ -1,5 +1,5 @@
 // SGR text attribute showcase — reverse, blink, overline, inherit.
-// Run: fvm dart run example/sgr_attrs.dart
+// Run: dart run example/sgr_attrs.dart
 
 // ignore_for_file: avoid_print
 import 'package:dart_tui/dart_tui.dart';

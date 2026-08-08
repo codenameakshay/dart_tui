@@ -13,7 +13,8 @@ EXAMPLE ?= simple
 # ── Paths ──────────────────────────────────────────────────────────────────────
 VHS      := /opt/homebrew/bin/vhs
 FFMPEG   := $(HOME)/ffmpeg-local
-DART     := fvm dart
+DART     ?= dart
+export DART
 TAPES    := $(wildcard example/tapes/*.tape)
 
 .PHONY: help test analyze format coverage run kernels run-fast bench gifs new-example clean
@@ -29,6 +30,7 @@ help:
 	@echo "    make format                  Run formatting"
 	@echo "    make run EXAMPLE=foo         Run example/foo.dart (JIT source)"
 	@echo "    make run-fast EXAMPLE=foo    Run tool/bin/foo.dill (kernel snapshot)"
+	@echo "    DART='fvm dart' make test     Optional FVM launcher override"
 	@echo ""
 	@echo "  Build"
 	@echo "    make kernels                 Compile all examples to kernel snapshots"

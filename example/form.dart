@@ -1,6 +1,6 @@
 // A huh-style form: input + select + confirm, with a dynamic wizard page that
 // only appears when "Deploy now?" is Yes.
-//   fvm dart run example/form.dart
+//   dart run example/form.dart
 
 import 'dart:io';
 

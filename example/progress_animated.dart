@@ -1,5 +1,5 @@
 // Auto-incrementing animated progress bar.
-// Run: fvm dart run example/progress_animated.dart
+// Run: dart run example/progress_animated.dart
 
 import 'package:dart_tui/dart_tui.dart';
 

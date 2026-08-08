@@ -714,14 +714,17 @@ dart run tool/bin/simple.dill
 
 ### Prerequisites
 
-- Dart SDK ≥ 3.5 (or Flutter SDK via [fvm](https://fvm.app))
+- Dart SDK ≥ 3.5
 - [VHS](https://github.com/charmbracelet/vhs) — only needed to re-record GIFs
+
+Make targets use `dart` by default. FVM users can opt in per command with
+`DART='fvm dart' make <target>`.
 
 ### Makefile targets
 
 ```bash
 make test                     # run all unit tests
-make analyze                  # dart analyze lib/
+make analyze                  # dart analyze across the repository
 make coverage                 # measure lib/ line coverage, fail below FLOOR (default 90%)
 make run EXAMPLE=simple       # run example/simple.dart (JIT)
 make kernels                  # compile all examples to .dill snapshots
@@ -755,7 +758,7 @@ bash tool/build.sh --kernel example/simple.dart
 bash tool/build.sh --kernel
 
 # Benchmark
-fvm dart run tool/startup_bench.dart --dill tool/bin/simple.dill
+dart run tool/startup_bench.dart --dill tool/bin/simple.dill
 ```
 
 Typical results:

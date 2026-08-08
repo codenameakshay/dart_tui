@@ -6,7 +6,7 @@ Set Height 360
 Set Theme "Dracula"
 Set PlaybackSpeed 1.0
 
-Type "fvm dart run tool/bin/list_mutation.dill"
+Type "dart run tool/bin/list_mutation.dill"
 Enter
 Sleep 900ms
 Type "a"

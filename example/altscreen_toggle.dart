@@ -1,4 +1,4 @@
-// Run: fvm dart run example/altscreen_toggle.dart
+// Run: dart run example/altscreen_toggle.dart
 // Toggle alt-screen on/off with spacebar. Press q to quit.
 
 import 'package:dart_tui/dart_tui.dart';

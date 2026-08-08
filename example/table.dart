@@ -1,4 +1,4 @@
-// Run: fvm dart run example/table.dart
+// Run: dart run example/table.dart
 // TableModel with city data. Arrow keys to navigate, q to quit.
 
 import 'package:dart_tui/dart_tui.dart';

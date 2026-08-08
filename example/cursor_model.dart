@@ -1,6 +1,6 @@
 // CursorModel bubble — blinking in-line cursor with three shapes.
 // Tab to cycle shape, b to toggle blink, q to quit.
-// Run: fvm dart run example/cursor_model.dart
+// Run: dart run example/cursor_model.dart
 
 import 'package:dart_tui/dart_tui.dart';
 

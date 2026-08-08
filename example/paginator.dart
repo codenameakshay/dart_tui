@@ -1,4 +1,4 @@
-// Run: fvm dart run example/paginator.dart
+// Run: dart run example/paginator.dart
 // PaginatorModel with dot indicator. Left/right to navigate, q to quit.
 
 import 'package:dart_tui/dart_tui.dart';

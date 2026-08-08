@@ -1,4 +1,4 @@
-// Run: fvm dart run example/textinputs.dart
+// Run: dart run example/textinputs.dart
 // Multi-field form: name, email, password. Tab/shift+tab moves focus. Enter submits.
 
 import 'package:dart_tui/dart_tui.dart';

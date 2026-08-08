@@ -51,7 +51,7 @@ final class PipeModel extends TeaModel {
     }
     return newView(
       'Pipe example\n\n'
-      'Run with: echo "hello" | fvm dart run example/pipe.dart\n\n'
+      'Run with: echo "hello" | dart run example/pipe.dart\n\n'
       '${input.view().content}\n\n'
       'enter: submit  •  esc: quit',
     );

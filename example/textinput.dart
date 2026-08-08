@@ -1,4 +1,4 @@
-// Run: fvm dart run example/textinput.dart
+// Run: dart run example/textinput.dart
 // Single text input with placeholder and char limit. Enter to submit, q to quit.
 
 import 'package:dart_tui/dart_tui.dart';

@@ -1,4 +1,4 @@
-// Run: fvm dart run example/package_manager.dart
+// Run: dart run example/package_manager.dart
 // Simulated package installer: spinner + progress bar, one package at a time.
 
 import 'package:dart_tui/dart_tui.dart';

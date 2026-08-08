@@ -1,4 +1,4 @@
-// Run: fvm dart run example/list_simple.dart
+// Run: dart run example/list_simple.dart
 // Simple SelectListModel with programming languages. Up/down to navigate, q to quit.
 
 import 'package:dart_tui/dart_tui.dart';

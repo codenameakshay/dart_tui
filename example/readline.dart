@@ -1,5 +1,5 @@
 // Readline / emacs editing keys in a TextInputModel.
-//   fvm dart run example/readline.dart
+//   dart run example/readline.dart
 
 import 'package:dart_tui/dart_tui.dart';
 

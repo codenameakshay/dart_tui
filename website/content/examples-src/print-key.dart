@@ -1,5 +1,5 @@
 // Show info about each key press.
-// Run: fvm dart run example/print_key.dart
+// Run: dart run example/print_key.dart
 
 import 'package:dart_tui/dart_tui.dart';
 

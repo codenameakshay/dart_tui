@@ -1,5 +1,5 @@
 // Scrollable pager using ViewportModel.
-// Run: fvm dart run example/pager.dart
+// Run: dart run example/pager.dart
 
 import 'package:dart_tui/dart_tui.dart';
 

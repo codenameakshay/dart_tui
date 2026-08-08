@@ -6,7 +6,7 @@ Set Height 420
 Set Theme "Dracula"
 Set PlaybackSpeed 1.0
 
-Type "fvm dart run tool/bin/gum.dill"
+Type "dart run tool/bin/gum.dill"
 Enter
 Sleep 1200ms
 Type "Ren"

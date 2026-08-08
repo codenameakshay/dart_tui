@@ -1,5 +1,5 @@
 // StopwatchModel elapsed time demo.
-// Run: fvm dart run example/stopwatch.dart
+// Run: dart run example/stopwatch.dart
 
 import 'package:dart_tui/dart_tui.dart';
 

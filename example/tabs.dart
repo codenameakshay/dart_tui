@@ -1,5 +1,5 @@
 // Tabbed interface — demonstrates the TabsModel bubble.
-// Run: fvm dart run example/tabs.dart
+// Run: dart run example/tabs.dart
 
 import 'package:dart_tui/dart_tui.dart';
 

@@ -15,6 +15,7 @@ set -euo pipefail
 
 OUTDIR="tool/bin"
 mkdir -p "$OUTDIR"
+read -r -a dart_cmd <<< "${DART:-dart}"
 
 compile_one() {
   local src="example/${1}.dart"
@@ -24,7 +25,7 @@ compile_one() {
     return 1
   fi
   echo -n "  compiling $1 ... "
-  fvm dart compile exe "$src" -o "$out" 2>/dev/null
+  "${dart_cmd[@]}" compile exe "$src" -o "$out" 2>/dev/null
   echo "ok  → $out"
 }
 
@@ -39,5 +40,5 @@ else
   done
   echo ""
   echo "Done. Run any example with: $OUTDIR/<name>"
-  echo "Benchmark AOT vs JIT:  fvm dart run tool/startup_bench.dart --aot example/simple.dart"
+  echo "Benchmark AOT vs JIT:  dart run tool/startup_bench.dart --aot example/simple.dart"
 fi

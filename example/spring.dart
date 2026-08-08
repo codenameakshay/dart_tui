@@ -1,6 +1,6 @@
 // Spring-eased marker: press ←/→ (or h/l) to move the target; the dot springs
 // toward it with a bouncy, under-damped motion.
-//   fvm dart run example/spring.dart
+//   dart run example/spring.dart
 
 import 'dart:math' as math;
 

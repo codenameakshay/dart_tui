@@ -1,5 +1,5 @@
 // Interactive list with fuzzy filtering — demonstrates ListModel.
-// Run: fvm dart run example/list_filter.dart
+// Run: dart run example/list_filter.dart
 
 import 'package:dart_tui/dart_tui.dart';
 

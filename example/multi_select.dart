@@ -1,6 +1,6 @@
 // Multi-select checkbox list — demonstrates MultiSelectModel.
 // Navigate with ↑↓/jk, Space/x to toggle, a to toggle all, Enter to confirm.
-// Run: fvm dart run example/multi_select.dart
+// Run: dart run example/multi_select.dart
 
 import 'package:dart_tui/dart_tui.dart';
 

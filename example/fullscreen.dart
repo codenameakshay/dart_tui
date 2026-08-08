@@ -1,4 +1,4 @@
-// Run: fvm dart run example/fullscreen.dart
+// Run: dart run example/fullscreen.dart
 // Fullscreen alt-screen countdown. Exits after 5 seconds (or press q).
 
 import 'package:dart_tui/dart_tui.dart';

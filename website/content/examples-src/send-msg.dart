@@ -1,5 +1,5 @@
 // Demonstrates Program.send() from an external timer.
-// Run: fvm dart run example/send_msg.dart
+// Run: dart run example/send_msg.dart
 
 import 'dart:async';
 

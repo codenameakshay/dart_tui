@@ -1,5 +1,5 @@
 // Demonstrate cursor shape and blink settings as text description.
-// Run: fvm dart run example/cursor_style.dart
+// Run: dart run example/cursor_style.dart
 
 import 'package:dart_tui/dart_tui.dart';
 

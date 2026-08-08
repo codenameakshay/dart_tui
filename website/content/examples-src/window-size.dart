@@ -1,4 +1,4 @@
-// Run: fvm dart run example/window_size.dart
+// Run: dart run example/window_size.dart
 // Shows terminal dimensions, updates on resize. Press q to quit.
 
 import 'package:dart_tui/dart_tui.dart';

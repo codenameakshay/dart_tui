@@ -1,5 +1,5 @@
 // ListModel runtime mutation API: add (a) and delete (d) items live.
-//   fvm dart run example/list_mutation.dart
+//   dart run example/list_mutation.dart
 
 import 'package:dart_tui/dart_tui.dart';
 

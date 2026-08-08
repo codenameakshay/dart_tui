@@ -1,5 +1,5 @@
 // Mouse event logger with allMotion mode.
-// Run: fvm dart run example/mouse.dart
+// Run: dart run example/mouse.dart
 
 import 'package:dart_tui/dart_tui.dart';
 

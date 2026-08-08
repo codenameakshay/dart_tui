@@ -1,5 +1,5 @@
 // Background async work demo using init() Cmd.
-// Run: fvm dart run example/realtime.dart
+// Run: dart run example/realtime.dart
 
 import 'package:dart_tui/dart_tui.dart';
 

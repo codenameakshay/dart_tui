@@ -1,6 +1,6 @@
 // FileLog: write diagnostics to a file while the TUI runs (print() would
 // corrupt the rendered screen). `tail -f dart_tui_example.log` in another shell.
-//   fvm dart run example/file_log.dart
+//   dart run example/file_log.dart
 
 import 'dart:io';
 

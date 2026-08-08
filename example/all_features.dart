@@ -1,6 +1,6 @@
 // One-file, detailed tour of current dart_tui APIs.
 // Run:
-//   fvm dart run example/all_features.dart
+//   dart run example/all_features.dart
 
 import 'package:dart_tui/dart_tui.dart';
 

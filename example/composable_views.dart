@@ -1,6 +1,6 @@
 // Composable views: TimerModel (5s countdown) + SpinnerModel side by side.
 // Tab switches focus between them.
-// Run: fvm dart run example/composable_views.dart
+// Run: dart run example/composable_views.dart
 
 import 'package:dart_tui/dart_tui.dart';
 

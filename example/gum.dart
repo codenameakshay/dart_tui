@@ -1,5 +1,5 @@
 // gum-style one-shot helpers: filter → spin → pager, each its own Program.
-//   fvm dart run example/gum.dart
+//   dart run example/gum.dart
 
 import 'dart:io';
 

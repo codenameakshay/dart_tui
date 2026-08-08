@@ -1,5 +1,5 @@
 // Word-wrap demonstration — shows Style.wordWrap with padding and borders.
-// Run: fvm dart run example/word_wrap.dart
+// Run: dart run example/word_wrap.dart
 
 // ignore_for_file: avoid_print
 import 'package:dart_tui/dart_tui.dart';

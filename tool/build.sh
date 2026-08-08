@@ -3,7 +3,7 @@
 #
 # KERNEL snapshot (recommended for development / CI):
 #   bash tool/build.sh --kernel [example/foo.dart]
-#   fvm dart run tool/bin/foo.dill
+#   dart run tool/bin/foo.dill
 #   → Skips parse+compile on every run. ~500ms startup on WSL, ~150ms on native Linux.
 #
 # AOT native executable (for distribution / production):
@@ -14,6 +14,7 @@
 # With no file argument, all example/*.dart files are processed.
 set -e
 mkdir -p tool/bin
+read -r -a dart_cmd <<< "${DART:-dart}"
 
 mode=""
 files=()
@@ -43,19 +44,19 @@ for src in "${files[@]}"; do
   if [ "$mode" = "kernel" ]; then
     out="tool/bin/$name.dill"
     echo "  kernel  $src → $out"
-    fvm dart compile kernel "$src" -o "$out"
+    "${dart_cmd[@]}" compile kernel "$src" -o "$out"
   else
     out="tool/bin/$name"
     echo "  aot     $src → $out"
-    fvm dart compile exe "$src" -o "$out"
+    "${dart_cmd[@]}" compile exe "$src" -o "$out"
   fi
 done
 
 echo ""
 if [ "$mode" = "kernel" ]; then
-  echo "Done. Run with:  fvm dart run tool/bin/<name>.dill"
-  echo "Benchmark:       fvm dart run tool/startup_bench.dart --dill tool/bin/<name>.dill"
+  echo "Done. Run with:  dart run tool/bin/<name>.dill"
+  echo "Benchmark:       dart run tool/startup_bench.dart --dill tool/bin/<name>.dill"
 else
   echo "Done. Run with:  tool/bin/<name>"
-  echo "Benchmark:       fvm dart run tool/startup_bench.dart --aot example/<name>.dart"
+  echo "Benchmark:       dart run tool/startup_bench.dart --aot example/<name>.dart"
 fi

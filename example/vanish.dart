@@ -1,4 +1,4 @@
-// Run: fvm dart run example/vanish.dart
+// Run: dart run example/vanish.dart
 // Single keystroke then quit. Alt-screen means no output remains.
 
 import 'package:dart_tui/dart_tui.dart';

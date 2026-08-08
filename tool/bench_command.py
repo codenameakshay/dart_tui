@@ -298,7 +298,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     if ns.command and ns.command[0] == "--":
         ns.command = ns.command[1:]
     if not ns.command:
-        parser.error("No command provided. Example: bench_command.py -- fvm dart run example/showcase.dart")
+        parser.error("No command provided. Example: bench_command.py -- dart run example/showcase.dart")
     if ns.runs <= 0:
         parser.error("--runs must be > 0")
     if ns.warmup < 0:
