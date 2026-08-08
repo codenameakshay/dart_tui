@@ -478,12 +478,6 @@ final class CellRenderer implements TeaRenderer {
       final cells = <_Cell>[];
       var activeAttrs = '';
       var i = 0;
-      // Walk the line character-by-character looking for escape sequences
-      // vs printable grapheme clusters.
-      //
-      // Strategy: iterate over the raw string bytes; when we find \x1b, consume
-      // the whole escape sequence and update activeAttrs. Otherwise the next
-      // grapheme cluster is a visible cell.
       final raw = line; // raw string with ANSI codes
       while (i < raw.length) {
         if (raw[i] == '\x1b') {
@@ -492,17 +486,16 @@ final class CellRenderer implements TeaRenderer {
           if (seq.isSgr) activeAttrs = seq.raw;
           i += seq.length;
         } else {
-          // Consume one grapheme cluster
-          // (For ASCII this is just raw[i]; for multi-codepoint clusters we
-          // need the characters iterator. We use a simple approach: iterate
-          // the Characters of the remaining string and take the first one.)
-          final remaining = raw.substring(i);
-          final cluster = remaining.characters.first;
-          cells.add(_Cell(cluster, activeAttrs));
-          for (var column = 1; column < getWidth(cluster); column++) {
-            cells.add(_Cell.continuation(activeAttrs));
+          final nextEscape = raw.indexOf('\x1b', i);
+          final plainEnd = nextEscape < 0 ? raw.length : nextEscape;
+          final plainText = raw.substring(i, plainEnd);
+          for (final cluster in plainText.characters) {
+            cells.add(_Cell(cluster, activeAttrs));
+            for (var column = 1; column < getWidth(cluster); column++) {
+              cells.add(_Cell.continuation(activeAttrs));
+            }
           }
-          i += cluster.length;
+          i = plainEnd;
         }
       }
       grid.add(cells);

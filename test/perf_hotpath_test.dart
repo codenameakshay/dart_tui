@@ -155,6 +155,26 @@ void main() {
 
 void rendererTests() {
   group('CellRenderer identical-frame guard (Task 3)', () {
+    test('large rows are parsed within a linear rendering budget', () {
+      final buf = StringBuffer();
+      final renderer = CellRenderer(
+        output: _StringSink(buf),
+        defaultAltScreen: false,
+        defaultHideCursor: false,
+      );
+      final row = 'x' * 200000;
+      final stopwatch = Stopwatch()..start();
+
+      renderer.render(View(content: row));
+
+      stopwatch.stop();
+      expect(
+        stopwatch.elapsed,
+        lessThan(const Duration(milliseconds: 500)),
+        reason: 'a row must not rescan every remaining suffix',
+      );
+    }, timeout: const Timeout(Duration(seconds: 5)));
+
     test('second identical render emits no new output', () {
       final buf = StringBuffer();
       final r = CellRenderer(
