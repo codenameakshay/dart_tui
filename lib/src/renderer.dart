@@ -132,8 +132,10 @@ final class AnsiRenderer implements TeaRenderer {
 
   @override
   void render(View view) {
+    final wantsAlt = view.altScreen || _defaultAltScreen;
+    _terminalViewState.beforeScreenChange(_output, wantsAlt);
     _applyModes(view);
-    _terminalViewState.apply(_output, view);
+    _terminalViewState.apply(_output, view, altScreen: wantsAlt);
     if (view.windowTitle.isNotEmpty) {
       _output.write(windowTitleSequence(view.windowTitle));
     }
@@ -238,8 +240,10 @@ final class AnsiRenderer implements TeaRenderer {
   @override
   void setAltScreen(bool enabled) {
     if (enabled == _altScreenEnabled) return;
+    _terminalViewState.beforeScreenChange(_output, enabled);
     _output.write(enabled ? '\x1b[?1049h' : '\x1b[?1049l');
     _altScreenEnabled = enabled;
+    _terminalViewState.restoreKeyboard(_output, enabled);
     _lastLines = const <String>[];
     _lastContent = '';
     _hasRenderedFrame = false;
@@ -378,8 +382,10 @@ final class CellRenderer implements TeaRenderer {
 
   @override
   void render(View view) {
+    final wantsAlt = view.altScreen || _defaultAltScreen;
+    _terminalViewState.beforeScreenChange(_output, wantsAlt);
     _applyModes(view);
-    _terminalViewState.apply(_output, view);
+    _terminalViewState.apply(_output, view, altScreen: wantsAlt);
     if (view.windowTitle.isNotEmpty) {
       _output.write(windowTitleSequence(view.windowTitle));
     }
@@ -452,8 +458,10 @@ final class CellRenderer implements TeaRenderer {
   @override
   void setAltScreen(bool enabled) {
     if (enabled == _altScreenEnabled) return;
+    _terminalViewState.beforeScreenChange(_output, enabled);
     _output.write(enabled ? '\x1b[?1049h' : '\x1b[?1049l');
     _altScreenEnabled = enabled;
+    _terminalViewState.restoreKeyboard(_output, enabled);
     _lastGrid = null;
     _lastContent = null;
   }

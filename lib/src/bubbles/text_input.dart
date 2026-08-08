@@ -220,11 +220,17 @@ final class TextInputModel extends TeaModel {
         if (ke.code == KeyCode.rune &&
             ke.text.isNotEmpty &&
             ke.modifiers.isEmpty) {
-          if (charLimit > 0 && chars.length >= charLimit) return (this, null);
+          final inserted = ke.text.characters.toList();
+          if (charLimit > 0 && chars.length + inserted.length > charLimit) {
+            return (this, null);
+          }
           final nextChars = List<String>.from(chars)
-            ..insert(cursorPos, ke.text);
+            ..insertAll(cursorPos, inserted);
           return (
-            copyWith(value: nextChars.join(), cursorPos: cursorPos + 1),
+            copyWith(
+              value: nextChars.join(),
+              cursorPos: cursorPos + inserted.length,
+            ),
             null
           );
         }

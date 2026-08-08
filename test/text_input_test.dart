@@ -22,6 +22,16 @@ void main() {
       expect(m.cursorPos, 2);
     });
 
+    test('inserts multi-grapheme text atomically and advances the cursor', () {
+      final m = _apply(
+        TextInputModel(value: 'ab', cursorPos: 1),
+        _rune('❤️c'),
+      );
+
+      expect(m.value, 'a❤️cb');
+      expect(m.cursorPos, 3);
+    });
+
     test('space key inserts a literal space, not "space"', () {
       final m = _apply(TextInputModel(value: 'a', cursorPos: 1), _rune(' '));
       expect(m.value, 'a ');
@@ -90,6 +100,14 @@ void main() {
     test('charLimit blocks further input', () {
       final m = TextInputModel(value: 'ab', cursorPos: 2, charLimit: 2);
       expect(_apply(m, _rune('c')).value, 'ab');
+    });
+
+    test('charLimit rejects an entire multi-grapheme text event', () {
+      final m = TextInputModel(value: 'ab', cursorPos: 2, charLimit: 3);
+      final next = _apply(m, _rune('cd'));
+
+      expect(next.value, 'ab');
+      expect(next.cursorPos, 2);
     });
 
     test('unfocused ignores typing', () {

@@ -85,7 +85,13 @@ final class Cursor {
 final class KeyboardEnhancements {
   const KeyboardEnhancements({
     this.reportEventTypes = false,
+    this.reportAlternateKeys = false,
+    this.reportAllKeysAsEscapeCodes = false,
+    this.reportAssociatedText = false,
   });
 
   final bool reportEventTypes;
+  final bool reportAlternateKeys;
+  final bool reportAllKeysAsEscapeCodes;
+  final bool reportAssociatedText;
 }

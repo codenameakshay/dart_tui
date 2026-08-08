@@ -160,9 +160,12 @@ void main() {
     });
 
     test('KeyboardEnhancementsMsg flag getters', () {
-      final m = KeyboardEnhancementsMsg(kittyReportEventTypes);
+      final m = KeyboardEnhancementsMsg(kittyAllKeyboardEnhancements);
       expect(m.supportsKeyDisambiguation, isTrue);
       expect(m.supportsEventTypes, isTrue);
+      expect(m.supportsAlternateKeys, isTrue);
+      expect(m.supportsAllKeysAsEscapeCodes, isTrue);
+      expect(m.supportsAssociatedText, isTrue);
       expect(KeyboardEnhancementsMsg(0).supportsKeyDisambiguation, isFalse);
     });
   });

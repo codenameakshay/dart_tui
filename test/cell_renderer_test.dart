@@ -130,6 +130,38 @@ void main() {
       );
     });
 
+    test('negotiates and resets keyboard enhancements', () {
+      final enhanced = View(
+        content: 'value',
+        keyboardEnhancements: const KeyboardEnhancements(
+          reportEventTypes: true,
+          reportAlternateKeys: true,
+          reportAllKeysAsEscapeCodes: true,
+          reportAssociatedText: true,
+        ),
+      );
+
+      renderer.render(enhanced);
+
+      expect(buf.toString(), contains('\x1b[>4;2m\x1b[=31;1u\x1b[?u'));
+
+      buf.clear();
+      renderer.render(enhanced);
+      expect(buf.toString(), isEmpty);
+
+      renderer.render(View(
+        content: 'value',
+        keyboardEnhancements: const KeyboardEnhancements(
+          reportAlternateKeys: true,
+        ),
+      ));
+      expect(buf.toString(), equals('\x1b[>4;2m\x1b[=5;1u\x1b[?u'));
+
+      buf.clear();
+      renderer.release();
+      expect(buf.toString(), startsWith('\x1b[>4m\x1b[=0;1u'));
+    });
+
     test('does not render ST-terminated OSC payloads or terminators', () {
       renderer.render(newView('A\x1b]0;hidden\x1b\\B'));
 

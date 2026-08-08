@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'kitty_keyboard.dart';
 import 'view.dart';
 
 /// Applies terminal-wide state declared by a [View].
@@ -10,8 +11,17 @@ final class TerminalViewState {
   int? _foregroundColor;
   int? _backgroundColor;
   (ProgressBarState, int)? _progress;
+  int? _keyboardFlags;
+  bool _keyboardApplied = false;
+  bool? _keyboardScreen;
 
-  void apply(IOSink output, View view) {
+  void beforeScreenChange(IOSink output, bool altScreen) {
+    if (_keyboardApplied && _keyboardScreen != altScreen) {
+      _resetKeyboard(output);
+    }
+  }
+
+  void apply(IOSink output, View view, {required bool altScreen}) {
     _applyColor(
       output,
       next: view.foregroundColor,
@@ -35,15 +45,27 @@ final class TerminalViewState {
       output.write(_progressSequence(nextProgress));
       _progress = nextProgress;
     }
+
+    final nextKeyboardFlags =
+        keyboardEnhancementFlags(view.keyboardEnhancements);
+    _applyKeyboard(output, nextKeyboardFlags, altScreen);
+  }
+
+  void restoreKeyboard(IOSink output, bool altScreen) {
+    final flags = _keyboardFlags;
+    if (flags != null) _applyKeyboard(output, flags, altScreen);
   }
 
   void reset(IOSink output) {
     if (_foregroundColor != null) output.write('\x1b]110\x07');
     if (_backgroundColor != null) output.write('\x1b]111\x07');
     if (_progress != null) output.write('\x1b]9;4;0\x07');
+    if (_keyboardApplied) _resetKeyboard(output);
     _foregroundColor = null;
     _backgroundColor = null;
     _progress = null;
+    _keyboardFlags = null;
+    _keyboardScreen = null;
   }
 
   static void _applyColor(
@@ -80,5 +102,24 @@ final class TerminalViewState {
       ProgressBarState.indeterminate => '\x1b]9;4;3\x07',
       ProgressBarState.warning => '\x1b]9;4;4;$value\x07',
     };
+  }
+
+  void _applyKeyboard(IOSink output, int flags, bool altScreen) {
+    if (_keyboardApplied &&
+        _keyboardFlags == flags &&
+        _keyboardScreen == altScreen) {
+      return;
+    }
+    output.write('\x1b[>4;2m');
+    output.write('\x1b[=$flags;1u');
+    output.write('\x1b[?u');
+    _keyboardFlags = flags;
+    _keyboardApplied = true;
+    _keyboardScreen = altScreen;
+  }
+
+  void _resetKeyboard(IOSink output) {
+    output.write('\x1b[>4m\x1b[=0;1u');
+    _keyboardApplied = false;
   }
 }

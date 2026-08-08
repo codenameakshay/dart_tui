@@ -168,6 +168,75 @@ void main() {
     expect(output, startsWith('\x1b]110\x07\x1b]111\x07\x1b]9;4;0\x07'));
   });
 
+  test('AnsiRenderer negotiates and resets keyboard enhancements', () {
+    final buf = StringBuffer();
+    final renderer = AnsiRenderer(
+      output: _StringSink(buf),
+      defaultAltScreen: false,
+      defaultHideCursor: false,
+    );
+    final enhanced = View(
+      content: 'value',
+      keyboardEnhancements: const KeyboardEnhancements(
+        reportEventTypes: true,
+        reportAlternateKeys: true,
+        reportAllKeysAsEscapeCodes: true,
+        reportAssociatedText: true,
+      ),
+    );
+
+    renderer.render(enhanced);
+
+    expect(buf.toString(), contains('\x1b[>4;2m\x1b[=31;1u\x1b[?u'));
+
+    buf.clear();
+    renderer.render(enhanced);
+    expect(buf.toString(), isEmpty);
+
+    renderer.render(View(
+      content: 'value',
+      keyboardEnhancements: const KeyboardEnhancements(
+        reportEventTypes: true,
+      ),
+    ));
+    expect(buf.toString(), equals('\x1b[>4;2m\x1b[=3;1u\x1b[?u'));
+
+    buf.clear();
+    renderer.release();
+    expect(buf.toString(), startsWith('\x1b[>4m\x1b[=0;1u'));
+  });
+
+  test('AnsiRenderer resets keyboard state before changing screen registry',
+      () {
+    final buf = StringBuffer();
+    final renderer = AnsiRenderer(
+      output: _StringSink(buf),
+      defaultAltScreen: false,
+      defaultHideCursor: false,
+    );
+    const keyboard = KeyboardEnhancements(reportEventTypes: true);
+    renderer.render(View(
+      content: 'value',
+      keyboardEnhancements: keyboard,
+    ));
+    buf.clear();
+
+    renderer.render(View(
+      content: 'value',
+      altScreen: true,
+      keyboardEnhancements: keyboard,
+    ));
+
+    expect(
+      buf.toString(),
+      startsWith(
+        '\x1b[>4m\x1b[=0;1u'
+        '\x1b[?1049h'
+        '\x1b[>4;2m\x1b[=3;1u\x1b[?u',
+      ),
+    );
+  });
+
   test('renderer skips identical frame content', () async {
     final chunks = <String>[];
     final controller = StreamController<List<int>>();

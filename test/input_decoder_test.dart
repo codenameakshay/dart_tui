@@ -105,6 +105,132 @@ void main() {
     });
   });
 
+  group('Kitty progressive keyboard protocol', () {
+    test('capability response exposes every progressive enhancement flag', () {
+      final msgs = TerminalInputDecoder().feed(_str('\x1b[?31u'));
+
+      expect(msgs, hasLength(1));
+      final enhancements = msgs.single as KeyboardEnhancementsMsg;
+      expect(enhancements.flags, 31);
+      expect(enhancements.supportsKeyDisambiguation, isTrue);
+      expect(enhancements.supportsEventTypes, isTrue);
+      expect(enhancements.supportsAlternateKeys, isTrue);
+      expect(enhancements.supportsAllKeysAsEscapeCodes, isTrue);
+      expect(enhancements.supportsAssociatedText, isTrue);
+    });
+
+    test('CSI-u decodes modifiers and the original Unicode code point', () {
+      final msg =
+          TerminalInputDecoder().feed(_str('\x1b[97;6u')).single as KeyPressMsg;
+
+      expect(msg.keyEvent.code, KeyCode.rune);
+      expect(msg.keyEvent.codePoint, 97);
+      expect(msg.keyEvent.modifiers, {KeyMod.shift, KeyMod.ctrl});
+      expect(msg.keyEvent.text, isEmpty);
+      expect(msg.keystroke(), 'ctrl+shift+a');
+    });
+
+    test('CSI-u distinguishes repeat and release events', () {
+      final decoder = TerminalInputDecoder();
+
+      final repeat = decoder.feed(_str('\x1b[97;2:2u')).single;
+      final release = decoder.feed(_str('\x1b[97;2:3u')).single;
+
+      expect(repeat, isA<KeyPressMsg>());
+      expect((repeat as KeyPressMsg).keyEvent.isRepeat, isTrue);
+      expect(release, isA<KeyReleaseMsg>());
+      expect((release as KeyReleaseMsg).keyEvent.isRepeat, isFalse);
+    });
+
+    test('CSI-u preserves shifted, base-layout, and associated text', () {
+      final msg = TerminalInputDecoder()
+          .feed(_str('\x1b[97:65:99;2:1;65u'))
+          .single as KeyPressMsg;
+
+      expect(msg.keyEvent.codePoint, 97);
+      expect(msg.keyEvent.shiftedCode, 65);
+      expect(msg.keyEvent.baseCode, 99);
+      expect(msg.keyEvent.associatedText, 'A');
+      expect(msg.keyEvent.text, 'A');
+    });
+
+    test('CSI-u accepts pure multi-code-point text events', () {
+      final msg = TerminalInputDecoder().feed(_str('\x1b[0;;104:105u')).single
+          as KeyPressMsg;
+
+      expect(msg.keyEvent.codePoint, 0);
+      expect(msg.keyEvent.code, KeyCode.rune);
+      expect(msg.keyEvent.associatedText, 'hi');
+      expect(msg.keyEvent.text, 'hi');
+    });
+
+    test('CSI-u maps Kitty private-use functional keys', () {
+      final msg = TerminalInputDecoder().feed(_str('\x1b[57352;1u')).single
+          as KeyPressMsg;
+
+      expect(msg.keyEvent.code, KeyCode.up);
+      expect(msg.keyEvent.codePoint, 57352);
+    });
+
+    test('legacy functional form carries Kitty repeat metadata', () {
+      final msg = TerminalInputDecoder().feed(_str('\x1b[1;4:2B')).single
+          as KeyPressMsg;
+
+      expect(msg.keyEvent.code, KeyCode.down);
+      expect(msg.keyEvent.modifiers, {KeyMod.shift, KeyMod.alt});
+      expect(msg.keyEvent.isRepeat, isTrue);
+    });
+
+    test('legacy functional form retains modified F3', () {
+      final msg = TerminalInputDecoder().feed(_str('\x1b[1;2:1R')).single
+          as KeyPressMsg;
+
+      expect(msg.keyEvent.code, KeyCode.f3);
+      expect(msg.keyEvent.modifiers, {KeyMod.shift});
+    });
+
+    test('disambiguated backtab remains shift+tab', () {
+      final msg =
+          TerminalInputDecoder().feed(_str('\x1b[Z')).single as KeyPressMsg;
+
+      expect(msg.keyEvent.code, KeyCode.tab);
+      expect(msg.keyEvent.modifiers, {KeyMod.shift});
+    });
+
+    test('modifyOtherKeys form decodes its Unicode key and modifiers', () {
+      final msg = TerminalInputDecoder().feed(_str('\x1b[27;6;97~')).single
+          as KeyPressMsg;
+
+      expect(msg.keyEvent.code, KeyCode.rune);
+      expect(msg.keyEvent.codePoint, 97);
+      expect(msg.keyEvent.modifiers, {KeyMod.shift, KeyMod.ctrl});
+    });
+
+    test('unknown private-use keys retain their numeric identity', () {
+      final msg = TerminalInputDecoder().feed(_str('\x1b[60000;1u')).single
+          as KeyPressMsg;
+
+      expect(msg.keyEvent.code, KeyCode.extended);
+      expect(msg.keyEvent.codePoint, 60000);
+      expect(msg.keystroke(), 'kitty+60000');
+    });
+
+    test('fragmented CSI-u waits for the final byte', () {
+      final decoder = TerminalInputDecoder();
+      final msgs = _feedBytewise(decoder, _str('\x1b[97;2:3u'));
+
+      expect(msgs, hasLength(1));
+      expect(msgs.single, isA<KeyReleaseMsg>());
+    });
+
+    test('malformed complete CSI-u is consumed without leaking text', () {
+      final msgs = TerminalInputDecoder().feed(_str('\x1b[97;1:9uz'));
+
+      expect(msgs, hasLength(1));
+      expect((msgs.single as KeyPressMsg).keyEvent.text, 'z');
+    });
+  });
+
   // ── Focus events ─────────────────────────────────────────────────────────
 
   group('Focus events', () {

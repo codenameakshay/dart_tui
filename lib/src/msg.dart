@@ -173,9 +173,22 @@ final class KeyboardEnhancementsMsg extends Msg {
 
   bool get supportsKeyDisambiguation => flags > 0;
   bool get supportsEventTypes => (flags & kittyReportEventTypes) != 0;
+  bool get supportsAlternateKeys => (flags & kittyReportAlternateKeys) != 0;
+  bool get supportsAllKeysAsEscapeCodes =>
+      (flags & kittyReportAllKeysAsEscapeCodes) != 0;
+  bool get supportsAssociatedText => (flags & kittyReportAssociatedText) != 0;
 }
 
+const int kittyDisambiguateEscapeCodes = 1;
 const int kittyReportEventTypes = 1 << 1;
+const int kittyReportAlternateKeys = 1 << 2;
+const int kittyReportAllKeysAsEscapeCodes = 1 << 3;
+const int kittyReportAssociatedText = 1 << 4;
+const int kittyAllKeyboardEnhancements = kittyDisambiguateEscapeCodes |
+    kittyReportEventTypes |
+    kittyReportAlternateKeys |
+    kittyReportAllKeysAsEscapeCodes |
+    kittyReportAssociatedText;
 
 /// Keyboard modifiers.
 enum KeyMod {
@@ -196,16 +209,20 @@ final class TeaKey {
     required this.code,
     this.text = '',
     this.modifiers = const <KeyMod>{},
+    this.codePoint,
     this.baseCode,
     this.shiftedCode,
+    this.associatedText = '',
     this.isRepeat = false,
   });
 
   final KeyCode code;
   final String text;
   final Set<KeyMod> modifiers;
-  final KeyCode? baseCode;
-  final KeyCode? shiftedCode;
+  final int? codePoint;
+  final int? baseCode;
+  final int? shiftedCode;
+  final String associatedText;
   final bool isRepeat;
 
   String keystroke() {
@@ -216,12 +233,12 @@ final class TeaKey {
     if (modifiers.contains(KeyMod.meta)) parts.add('meta');
     if (modifiers.contains(KeyMod.hyper)) parts.add('hyper');
     if (modifiers.contains(KeyMod.superKey)) parts.add('super');
-    parts.add(_codeName(code, text));
+    parts.add(_codeName(code, text, codePoint));
     return parts.join('+');
   }
 
   @override
-  String toString() => _codeName(code, text);
+  String toString() => _codeName(code, text, codePoint);
 }
 
 enum KeyCode {
@@ -253,14 +270,132 @@ enum KeyCode {
   f10,
   f11,
   f12,
+  f13,
+  f14,
+  f15,
+  f16,
+  f17,
+  f18,
+  f19,
+  f20,
+  f21,
+  f22,
+  f23,
+  f24,
+  f25,
+  f26,
+  f27,
+  f28,
+  f29,
+  f30,
+  f31,
+  f32,
+  f33,
+  f34,
+  f35,
+  f36,
+  f37,
+  f38,
+  f39,
+  f40,
+  f41,
+  f42,
+  f43,
+  f44,
+  f45,
+  f46,
+  f47,
+  f48,
+  f49,
+  f50,
+  f51,
+  f52,
+  f53,
+  f54,
+  f55,
+  f56,
+  f57,
+  f58,
+  f59,
+  f60,
+  f61,
+  f62,
+  f63,
+  begin,
+  capsLock,
+  scrollLock,
+  numLock,
+  printScreen,
+  pause,
+  menu,
+  keypadEnter,
+  keypadEqual,
+  keypadMultiply,
+  keypadPlus,
+  keypadSeparator,
+  keypadMinus,
+  keypadDecimal,
+  keypadDivide,
+  keypad0,
+  keypad1,
+  keypad2,
+  keypad3,
+  keypad4,
+  keypad5,
+  keypad6,
+  keypad7,
+  keypad8,
+  keypad9,
+  keypadLeft,
+  keypadRight,
+  keypadUp,
+  keypadDown,
+  keypadPageUp,
+  keypadPageDown,
+  keypadHome,
+  keypadEnd,
+  keypadInsert,
+  keypadDelete,
+  keypadBegin,
+  mediaPlay,
+  mediaPause,
+  mediaPlayPause,
+  mediaReverse,
+  mediaStop,
+  mediaFastForward,
+  mediaRewind,
+  mediaNext,
+  mediaPrevious,
+  mediaRecord,
+  volumeDown,
+  volumeUp,
+  volumeMute,
+  leftShift,
+  leftControl,
+  leftAlt,
+  leftSuper,
+  leftHyper,
+  leftMeta,
+  rightShift,
+  rightControl,
+  rightAlt,
+  rightSuper,
+  rightHyper,
+  rightMeta,
+  isoLevel3Shift,
+  isoLevel5Shift,
   rune,
   unknown,
 }
 
-String _codeName(KeyCode code, String text) {
+String _codeName(KeyCode code, String text, int? codePoint) {
   if (code == KeyCode.rune) {
     if (text == ' ') return 'space';
-    return text;
+    if (text.isNotEmpty) return text;
+    if (codePoint != null && codePoint >= 0 && codePoint <= 0x10ffff) {
+      return String.fromCharCode(codePoint);
+    }
+    return 'rune';
   }
   return switch (code) {
     KeyCode.up => 'up',
@@ -290,7 +425,9 @@ String _codeName(KeyCode code, String text) {
     KeyCode.f10 => 'f10',
     KeyCode.f11 => 'f11',
     KeyCode.f12 => 'f12',
-    _ => 'unknown',
+    KeyCode.extended => codePoint == null ? 'extended' : 'kitty+$codePoint',
+    KeyCode.unknown => 'unknown',
+    _ => code.name,
   };
 }
 
