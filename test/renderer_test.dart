@@ -37,6 +37,23 @@ class _StringSink implements IOSink {
 }
 
 void main() {
+  test('AnsiRenderer strips controls from window titles', () {
+    final buf = StringBuffer();
+    final renderer = AnsiRenderer(
+      output: _StringSink(buf),
+      defaultAltScreen: false,
+      defaultHideCursor: true,
+    );
+
+    renderer.render(View(
+      content: 'value',
+      windowTitle: 'safe\x07\x1b]2;owned\x07\x9c\x7fevil',
+    ));
+
+    expect(buf.toString(), contains('\x1b]0;safe]2;ownedevil\x07'));
+    expect(buf.toString(), isNot(contains('\x1b]2;owned')));
+  });
+
   test('AnsiRenderer applies cursor position, shape, blink, and color', () {
     final buf = StringBuffer();
     final renderer = AnsiRenderer(

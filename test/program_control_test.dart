@@ -53,6 +53,20 @@ final class _DriverModel extends TeaModel {
 }
 
 void main() {
+  test('SetWindowTitleMsg strips OSC control characters', () async {
+    final sink = _StringSink();
+    await Program(programOptions: [
+      withOutput(sink),
+      withInput(null),
+    ]).run(_DriverModel([
+      SetWindowTitleMsg('safe\x07\x1b]2;owned\x07\x9c\x7fevil'),
+    ]));
+
+    final output = sink.buf.toString();
+    expect(output, contains('\x1b]0;safe]2;ownedevil\x07'));
+    expect(output, isNot(contains('\x1b]2;owned')));
+  });
+
   test('kill wakes a program waiting without queued messages', () async {
     final ready = Completer<void>();
     final program = Program(programOptions: [

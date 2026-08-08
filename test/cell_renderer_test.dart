@@ -31,6 +31,16 @@ void main() {
       expect(output, contains('b'));
     });
 
+    test('strips controls from window titles', () {
+      renderer.render(View(
+        content: 'value',
+        windowTitle: 'safe\x07\x1b]2;owned\x07\x9c\x7fevil',
+      ));
+
+      expect(buf.toString(), contains('\x1b]0;safe]2;ownedevil\x07'));
+      expect(buf.toString(), isNot(contains('\x1b]2;owned')));
+    });
+
     test('second frame with single char change emits only that cell', () {
       renderer.render(newView('hello'));
       buf.clear();

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:characters/characters.dart';
 
 import 'bubbles/style.dart' show getWidth;
+import 'terminal_control.dart';
 import 'view.dart';
 
 abstract interface class TeaRenderer {
@@ -131,7 +132,7 @@ final class AnsiRenderer implements TeaRenderer {
   void render(View view) {
     _applyModes(view);
     if (view.windowTitle.isNotEmpty) {
-      _output.write('\x1b]0;${view.windowTitle}\x07');
+      _output.write(windowTitleSequence(view.windowTitle));
     }
     if (_hasRenderedFrame && view.content == _lastContent) {
       _cursorState.apply(_output, view.cursor);
@@ -374,7 +375,7 @@ final class CellRenderer implements TeaRenderer {
   void render(View view) {
     _applyModes(view);
     if (view.windowTitle.isNotEmpty) {
-      _output.write('\x1b]0;${view.windowTitle}\x07');
+      _output.write(windowTitleSequence(view.windowTitle));
     }
     if (_lastGrid != null && _lastContent == view.content) {
       _cursorState.apply(_output, view.cursor);

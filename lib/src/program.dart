@@ -10,6 +10,7 @@ import 'input_decoder.dart';
 import 'model.dart';
 import 'msg.dart';
 import 'renderer.dart';
+import 'terminal_control.dart';
 import 'view.dart';
 import 'windows_terminal.dart';
 
@@ -390,7 +391,7 @@ final class Program {
           _renderer?.setCursorVisibility(true);
           return false;
         case SetWindowTitleMsg():
-          _output.write('\x1b]0;${msg.title}\x07');
+          _output.write(windowTitleSequence(msg.title));
           return false;
         case ClearScrollAreaMsg():
           _output.write('\x1b[2J\x1b[H');
