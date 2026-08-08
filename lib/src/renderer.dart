@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:characters/characters.dart';
 
 import 'bubbles/style.dart' show getWidth;
+import 'grapheme_width.dart';
 import 'terminal_control.dart';
 import 'terminal_view_state.dart';
 import 'view.dart';
@@ -12,6 +13,7 @@ abstract interface class TeaRenderer {
   void clearScreen();
   void insertAbove(String line);
   void setSyncUpdates(bool enabled);
+  void setUnicodeCore(bool enabled);
   void release({bool reset = false});
   void restore(View view);
   void close();
@@ -35,6 +37,8 @@ final class NilRenderer implements TeaRenderer {
   void insertAbove(String line) {}
   @override
   void setSyncUpdates(bool enabled) {}
+  @override
+  void setUnicodeCore(bool enabled) {}
   @override
   void release({bool reset = false}) {}
   @override
@@ -127,6 +131,7 @@ final class AnsiRenderer implements TeaRenderer {
   String _lastContent = '';
   bool _hasRenderedFrame = false;
   bool _syncUpdates = false;
+  bool _unicodeCoreEnabled = false;
   final _cursorState = _CursorRendererState();
   final _terminalViewState = TerminalViewState();
 
@@ -178,6 +183,13 @@ final class AnsiRenderer implements TeaRenderer {
   }
 
   @override
+  void setUnicodeCore(bool enabled) {
+    if (enabled == _unicodeCoreEnabled) return;
+    _output.write(enabled ? '\x1b[?2027h' : '\x1b[?2027l');
+    _unicodeCoreEnabled = enabled;
+  }
+
+  @override
   void clearScreen() {
     _output.write('\x1b[H\x1b[2J');
     _lastLines = const <String>[];
@@ -207,6 +219,7 @@ final class AnsiRenderer implements TeaRenderer {
 
   @override
   void release({bool reset = false}) {
+    setUnicodeCore(false);
     _terminalViewState.reset(_output);
     _cursorState.reset(_output);
     _output.write('\x1b[?25h');
@@ -374,6 +387,7 @@ final class CellRenderer implements TeaRenderer {
   bool _focusReportingEnabled = false;
   bool _bracketedPasteEnabled = false;
   MouseMode _mouseMode = MouseMode.none;
+  bool _unicodeCoreEnabled = false;
 
   List<List<_Cell>>? _lastGrid;
   String? _lastContent;
@@ -429,6 +443,7 @@ final class CellRenderer implements TeaRenderer {
 
   @override
   void release({bool reset = false}) {
+    setUnicodeCore(false);
     _terminalViewState.reset(_output);
     _cursorState.reset(_output);
     _output.write('\x1b[?25h');
@@ -454,6 +469,13 @@ final class CellRenderer implements TeaRenderer {
 
   @override
   void setSyncUpdates(bool enabled) {} // cell renderer handles its own sync
+
+  @override
+  void setUnicodeCore(bool enabled) {
+    if (enabled == _unicodeCoreEnabled) return;
+    _output.write(enabled ? '\x1b[?2027h' : '\x1b[?2027l');
+    _unicodeCoreEnabled = enabled;
+  }
 
   @override
   void setAltScreen(bool enabled) {
@@ -506,7 +528,7 @@ final class CellRenderer implements TeaRenderer {
           final plainText = raw.substring(i, plainEnd);
           for (final cluster in plainText.characters) {
             cells.add(_Cell(cluster, activeAttrs));
-            for (var column = 1; column < getWidth(cluster); column++) {
+            for (var column = 1; column < graphemeWidth(cluster); column++) {
               cells.add(_Cell.continuation(activeAttrs));
             }
           }
@@ -566,7 +588,7 @@ final class CellRenderer implements TeaRenderer {
         }
 
         _output.write(nextCell.char);
-        lastCol += getWidth(nextCell.char);
+        lastCol += graphemeWidth(nextCell.char);
       }
     }
 

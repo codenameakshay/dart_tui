@@ -1,5 +1,6 @@
 import 'package:characters/characters.dart';
 import '../cmd.dart';
+import '../grapheme_width.dart';
 import '../model.dart';
 import '../msg.dart';
 import '../view.dart';
@@ -47,7 +48,7 @@ final class ViewportModel extends TeaModel {
       final stripped = line.contains('\x1b')
           ? line.replaceAll(RegExp(r'\x1b\[[0-9;]*m'), '')
           : line;
-      if (_estimateWidth(stripped) <= width || width <= 0) {
+      if (textWidth(stripped) <= width || width <= 0) {
         result.add(line);
       } else {
         var currentLine = StringBuffer();
@@ -55,7 +56,7 @@ final class ViewportModel extends TeaModel {
         final chars = line.characters;
 
         for (final char in chars) {
-          final charWidth = _estimateWidth(char);
+          final charWidth = graphemeWidth(char);
           if (currentLineWidth + charWidth > width) {
             result.add(currentLine.toString());
             currentLine = StringBuffer();
@@ -70,26 +71,6 @@ final class ViewportModel extends TeaModel {
       }
     }
     return result;
-  }
-
-  static int _estimateWidth(String s) {
-    var width = 0;
-    for (final char in s.characters) {
-      final code = char.runes.first;
-      if (code >= 0x1100 &&
-          (code <= 0x11ff ||
-              (code >= 0x2e80 && code <= 0x9fff) ||
-              (code >= 0xac00 && code <= 0xd7af) ||
-              (code >= 0xf900 && code <= 0xfaff) ||
-              (code >= 0xfe30 && code <= 0xfe4f) ||
-              (code >= 0xff00 && code <= 0xff60) ||
-              (code >= 0x1f300 && code <= 0x1f9ff))) {
-        width += 2;
-      } else {
-        width += 1;
-      }
-    }
-    return width;
   }
 
   int get totalLines => _wrappedLines.length;

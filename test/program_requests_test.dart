@@ -14,7 +14,10 @@ void main() {
 
     final program = Program(
       options: const ProgramOptions(altScreen: false),
-      programOptions: [withInput(null), withOutput(sink)],
+      programOptions: [
+        withInput(const Stream<List<int>>.empty()),
+        withOutput(sink),
+      ],
     );
 
     await program.run(_RequestModel());
@@ -22,6 +25,8 @@ void main() {
     final out = chunks.join();
     expect(out, contains('\x1b]10;?\x07'));
     expect(out, contains('\x1b[6n'));
+    expect(out, contains('\x1b[?2026\$p'));
+    expect(out, contains('\x1b[?2027\$p'));
 
     await sink.close();
     await controller.close();

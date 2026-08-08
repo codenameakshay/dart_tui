@@ -1,5 +1,6 @@
 import 'package:characters/characters.dart';
 
+import '../grapheme_width.dart';
 import '../msg.dart';
 
 /// Horizontal text alignment.
@@ -1088,37 +1089,14 @@ String truncateLeft(String s, int maxWidth) {
 /// Visible display width of [s] (number of printable columns after stripping ANSI).
 /// Handles double-width characters (CJK, full-width, emoji).
 int _visibleWidth(String s) {
-  final stripped = stripAnsi(s);
-  var width = 0;
-  for (final char in stripped.characters) {
-    final code = char.runes.first;
-    if (_isDoubleWidth(code)) {
-      width += 2;
-    } else {
-      width += 1;
-    }
-  }
-  return width;
-}
-
-/// Returns `true` for double-width code points (CJK, full-width, emoji).
-bool _isDoubleWidth(int code) {
-  return code >= 0x1100 &&
-      (code <= 0x11ff || // Hangul Jamo
-          (code >= 0x2e80 &&
-              code <= 0x9fff) || // CJK Radicals .. CJK Unified Ideographs
-          (code >= 0xac00 && code <= 0xd7af) || // Hangul Syllables
-          (code >= 0xf900 && code <= 0xfaff) || // CJK Compatibility Ideographs
-          (code >= 0xfe30 && code <= 0xfe4f) || // CJK Compatibility Forms
-          (code >= 0xff00 && code <= 0xff60) || // Fullwidth Forms
-          (code >= 0x1f300 && code <= 0x1f9ff)); // Emojis
+  return textWidth(stripAnsi(s));
 }
 
 /// Visible column width (1 or 2) of a single grapheme cluster [g].
 ///
 /// Callers pass raw graphemes that never contain ANSI escapes, so this skips
 /// [stripAnsi] entirely — the hot inner-loop replacement for `_visibleWidth(char)`.
-int _graphemeWidth(String g) => _isDoubleWidth(g.runes.first) ? 2 : 1;
+int _graphemeWidth(String g) => graphemeWidth(g);
 
 /// Truncate [s] to at most [maxWidth] visible columns, preserving ANSI codes.
 String _truncateVisible(String s, int maxWidth) {

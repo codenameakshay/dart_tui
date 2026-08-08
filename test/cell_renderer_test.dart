@@ -162,6 +162,15 @@ void main() {
       expect(buf.toString(), startsWith('\x1b[>4m\x1b[=0;1u'));
     });
 
+    test('treats emoji sequences as one two-column grapheme', () {
+      renderer.render(newView('A❤️B'));
+      buf.clear();
+
+      renderer.render(newView('A❤️C'));
+
+      expect(buf.toString(), contains('\x1b[1;4HC'));
+    });
+
     test('does not render ST-terminated OSC payloads or terminators', () {
       renderer.render(newView('A\x1b]0;hidden\x1b\\B'));
 

@@ -1,4 +1,5 @@
 import 'package:characters/characters.dart';
+import '../grapheme_width.dart';
 import 'style.dart';
 
 /// A single painted cell: one grapheme cluster with its accumulated ANSI
@@ -142,7 +143,7 @@ final class Canvas {
       final char = remaining.characters.first;
       i += char.length;
 
-      final charWidth = _estimateWidth(char);
+      final charWidth = graphemeWidth(char);
 
       if (col >= 0 && col < gridRow.length) {
         gridRow[col] = _Cell(
@@ -156,26 +157,6 @@ final class Canvas {
       }
       col += charWidth;
     }
-  }
-
-  static int _estimateWidth(String s) {
-    var width = 0;
-    for (final char in s.characters) {
-      final code = char.runes.first;
-      if (code >= 0x1100 &&
-          (code <= 0x11ff ||
-              (code >= 0x2e80 && code <= 0x9fff) ||
-              (code >= 0xac00 && code <= 0xd7af) ||
-              (code >= 0xf900 && code <= 0xfaff) ||
-              (code >= 0xfe30 && code <= 0xfe4f) ||
-              (code >= 0xff00 && code <= 0xff60) ||
-              (code >= 0x1f300 && code <= 0x1f9ff))) {
-        width += 2;
-      } else {
-        width += 1;
-      }
-    }
-    return width;
   }
 }
 

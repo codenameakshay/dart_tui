@@ -149,6 +149,22 @@ void main() {
     expect(out, contains('above')); // printLine
   }, timeout: const Timeout(Duration(seconds: 10)));
 
+  test('Unicode Core support enables mode 2027 and resets it at shutdown',
+      () async {
+    final sink = _StringSink();
+
+    await Program(programOptions: [
+      withOutput(sink),
+      withInput(null),
+    ]).run(_DriverModel([
+      ModeReportMsg(mode: 2027, value: 3),
+    ]));
+
+    final output = sink.buf.toString();
+    expect(output, contains('\x1b[?2027h'));
+    expect(output, contains('\x1b[?2027l'));
+  });
+
   test('ExecMsg runs a subprocess and fires onExit', () async {
     final sink = _StringSink();
     // A model whose init execs `true` (exit 0), then quits on the callback.

@@ -145,6 +145,7 @@ final class Program {
   Timer? _tickTimer;
   Timer? _loneEscTimer;
   StreamSubscription<List<int>>? _inputSub;
+  bool _unicodeCoreSupported = false;
   StreamSubscription<ProcessSignal>? _sigSub;
   TeaRenderer? _renderer;
 
@@ -205,6 +206,7 @@ final class Program {
     _setRawMode(true);
     final m = _runningModel;
     if (m != null) {
+      if (_unicodeCoreSupported) _renderer?.setUnicodeCore(true);
       _renderer?.restore(m.view());
     }
   }
@@ -453,6 +455,12 @@ final class Program {
           (msg.value == 1 || msg.value == 2)) {
         _renderer?.setSyncUpdates(true);
       }
+      if (msg is ModeReportMsg &&
+          msg.mode == 2027 &&
+          (msg.value == 1 || msg.value == 2 || msg.value == 3)) {
+        _unicodeCoreSupported = true;
+        _renderer?.setUnicodeCore(true);
+      }
       if (msg is MouseMsg) {
         final onMouse = lastRenderedView?.onMouse;
         if (onMouse != null) {
@@ -559,7 +567,8 @@ final class Program {
       // Send capability queries AFTER the first frame so the first visible
       // output reaches the terminal without being delayed by query bytes.
       if (!_disableInput) {
-        _output.write('\x1b[?2026\$y');
+        _output.write('\x1b[?2026\$p');
+        _output.write('\x1b[?2027\$p');
         // OSC 11: auto-detect terminal background color.
         // The response arrives as BackgroundColorMsg in the event loop.
         _output.write('\x1b]11;?\x07');
