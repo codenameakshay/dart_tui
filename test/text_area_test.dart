@@ -10,6 +10,47 @@ KeyPressMsg _special(KeyCode code) => KeyPressMsg(TeaKey(code: code));
 
 void main() {
   group('TextAreaModel', () {
+    test('exposes grapheme cursor and visible viewport state', () {
+      final ta = TextAreaModel(
+        value: 'first\n👨‍👩‍👧‍👦é\nthird\nfourth',
+        cursorRow: 1,
+        cursorCol: 1,
+        scrollOffset: 99,
+        maxHeight: 2,
+      );
+
+      expect((ta.cursorLine, ta.cursorColumn), (1, 1));
+      expect(ta.visibleScrollOffset, 2);
+      expect(ta.visibleHeight, 2);
+    });
+
+    test('moves immutably to line and document boundaries', () {
+      final ta = TextAreaModel(
+        value: 'first\n👨‍👩‍👧‍👦é\nlast',
+        cursorRow: 1,
+        cursorCol: 1,
+        maxHeight: 2,
+      );
+
+      expect(ta.moveToLineStart().cursorColumn, 0);
+      expect(ta.moveToLineEnd().cursorColumn, 2);
+      expect(
+        (
+          ta.moveToDocumentStart().cursorLine,
+          ta.moveToDocumentStart().cursorColumn
+        ),
+        (0, 0),
+      );
+      expect(
+        (
+          ta.moveToDocumentEnd().cursorLine,
+          ta.moveToDocumentEnd().cursorColumn
+        ),
+        (2, 4),
+      );
+      expect((ta.cursorLine, ta.cursorColumn), (1, 1));
+    });
+
     test('inserts character at cursor', () {
       final ta = TextAreaModel();
       final (next, _) = ta.update(_char('a'));

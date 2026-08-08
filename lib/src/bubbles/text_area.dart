@@ -86,6 +86,13 @@ final class TextAreaModel extends TeaModel {
   List<_TextAreaVisualRow> get _visualRows => _buildVisualRows(value, width);
   int get visualLineCount => _visualRows.length;
 
+  /// Zero-based logical line containing the cursor.
+  int get cursorLine => cursorRow.clamp(0, lines.length - 1);
+
+  /// Zero-based grapheme index within [cursorLine].
+  int get cursorColumn =>
+      cursorCol.clamp(0, lines[cursorLine].characters.length);
+
   int get visibleHeight {
     final contentHeight = visualLineCount;
     if (!dynamicHeight) {
@@ -98,11 +105,36 @@ final class TextAreaModel extends TeaModel {
     return contentHeight.clamp(minimum, maximum < minimum ? minimum : maximum);
   }
 
+  /// Top visual-row offset actually used by [view].
+  int get visibleScrollOffset {
+    final maximum = (visualLineCount - visibleHeight).clamp(0, visualLineCount);
+    return scrollOffset.clamp(0, maximum);
+  }
+
   int get cursorVisualRow => _cursorLocation.visualRow;
   int get cursorVisualColumn => _cursorLocation.cellColumn;
   double get scrollPercent {
     final maximum = (visualLineCount - visibleHeight).clamp(0, visualLineCount);
     return maximum == 0 ? 1.0 : scrollOffset.clamp(0, maximum) / maximum;
+  }
+
+  TextAreaModel moveToLineStart() =>
+      copyWith(cursorRow: cursorLine, cursorCol: 0)._normalized();
+
+  TextAreaModel moveToLineEnd() => copyWith(
+        cursorRow: cursorLine,
+        cursorCol: lines[cursorLine].characters.length,
+      )._normalized();
+
+  TextAreaModel moveToDocumentStart() =>
+      copyWith(cursorRow: 0, cursorCol: 0)._normalized();
+
+  TextAreaModel moveToDocumentEnd() {
+    final lastLine = lines.length - 1;
+    return copyWith(
+      cursorRow: lastLine,
+      cursorCol: lines[lastLine].characters.length,
+    )._normalized();
   }
 
   TextAreaModel copyWith({
@@ -339,10 +371,14 @@ final class TextAreaModel extends TeaModel {
         return (this, null);
       case 'home':
       case 'ctrl+a':
-        return (copyWith(cursorCol: 0)._normalized(), null);
+        return (moveToLineStart(), null);
       case 'end':
       case 'ctrl+e':
-        return (copyWith(cursorCol: lineChars.length)._normalized(), null);
+        return (moveToLineEnd(), null);
+      case 'ctrl+home':
+        return (moveToDocumentStart(), null);
+      case 'ctrl+end':
+        return (moveToDocumentEnd(), null);
       case 'ctrl+w':
       case 'alt+backspace':
         final start = _wordStartBefore(lineChars, col);
@@ -393,8 +429,7 @@ final class TextAreaModel extends TeaModel {
       return newView(styles.placeholder.render(placeholder));
     }
     final rows = _visualRows;
-    final maximum = (rows.length - visibleHeight).clamp(0, rows.length);
-    final start = scrollOffset.clamp(0, maximum);
+    final start = visibleScrollOffset;
     final end = (start + visibleHeight).clamp(start, rows.length);
     final rendered = <String>[
       for (final row in rows.sublist(start, end)) styles.text.render(row.text),

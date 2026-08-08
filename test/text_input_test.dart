@@ -144,6 +144,43 @@ void main() {
   });
 
   group('TextInputModel suggestions', () {
+    test('exposes ordered matches and the selected suggestion', () {
+      final m = TextInputModel(
+        value: 'AP',
+        suggestions: ['apple', 'apricot', 'banana', 'AP'],
+        suggestionIndex: 1,
+      );
+
+      expect(m.matchedSuggestions, ['apple', 'apricot']);
+      expect(() => m.matchedSuggestions.add('append'), throwsUnsupportedError);
+      expect(m.currentSuggestionIndex, 1);
+      expect(m.currentSuggestion, 'apricot');
+      expect(_apply(m, _k(KeyCode.tab)).value, 'apricot');
+    });
+
+    test('immutable suggestion selection wraps and resets after editing', () {
+      final m = TextInputModel(
+        value: 'ap',
+        suggestions: ['apple', 'apricot'],
+      );
+      final previous = m.previousSuggestion();
+      expect(previous.currentSuggestionIndex, 1);
+      expect(previous.nextSuggestion().currentSuggestionIndex, 0);
+      expect(_apply(m, _k(KeyCode.down)).currentSuggestionIndex, 1);
+      expect(_apply(m, _k(KeyCode.up)).currentSuggestionIndex, 1);
+      expect(m.currentSuggestionIndex, 0);
+
+      final edited = _apply(previous, _rune('p'));
+      expect(edited.currentSuggestionIndex, 0);
+    });
+
+    test('empty matches have no current suggestion', () {
+      final m = TextInputModel(value: 'zz', suggestions: ['apple']);
+      expect(m.matchedSuggestions, isEmpty);
+      expect(m.currentSuggestionIndex, 0);
+      expect(m.currentSuggestion, isNull);
+    });
+
     test('tab accepts the active suggestion', () {
       final m = TextInputModel(value: 'ap', suggestions: ['apple', 'apricot']);
       final next = _apply(m, _k(KeyCode.tab));
@@ -154,6 +191,24 @@ void main() {
     test('tab with no matching suggestion is a no-op', () {
       final m = TextInputModel(value: 'zz', suggestions: ['apple']);
       expect(m.update(_k(KeyCode.tab)).$1, same(m));
+    });
+  });
+
+  group('TextInputModel introspection and movement', () {
+    test('cursor column is a grapheme index, not a terminal-cell offset', () {
+      final m = TextInputModel(value: '👨‍👩‍👧‍👦é', cursorPos: 1);
+      expect(m.cursorColumn, 1);
+      expect(m.view().cursor!.x, 2);
+    });
+
+    test('moves immutably to input start and end', () {
+      final m = TextInputModel(value: '👨‍👩‍👧‍👦é', cursorPos: 1);
+      final start = m.moveToStart();
+      final end = m.moveToEnd();
+
+      expect(start.cursorColumn, 0);
+      expect(end.cursorColumn, 2);
+      expect(m.cursorColumn, 1);
     });
   });
 

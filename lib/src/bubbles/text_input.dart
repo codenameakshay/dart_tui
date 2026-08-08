@@ -99,13 +99,15 @@ final class TextInputModel extends TeaModel {
     this.charLimit = 0,
     this.focused = true,
     this.validate,
-    this.suggestions = const [],
+    List<String> suggestions = const [],
+    this.suggestionIndex = 0,
     this.styles = InputStyles.defaults,
-  });
+  })  : suggestions = List<String>.unmodifiable(suggestions),
+        assert(suggestionIndex >= 0, 'suggestionIndex must not be negative');
 
   final String value;
 
-  /// Cursor position within [value] (0 = before first char, value.length = after last).
+  /// Grapheme index within [value] (zero is before the first grapheme).
   final int cursorPos;
 
   final String placeholder;
@@ -121,9 +123,12 @@ final class TextInputModel extends TeaModel {
   /// emit [ValidationFailedMsg].
   final bool Function(String value)? validate;
 
-  /// Suggested completions. The first entry that starts with [value] is shown
-  /// dimmed after the cursor; Tab accepts it.
+  /// Suggested completions. Prefix matches retain this ordering; the selected
+  /// match is rendered dimly and accepted with Tab.
   final List<String> suggestions;
+
+  /// Requested selection within [matchedSuggestions].
+  final int suggestionIndex;
 
   final InputStyles styles;
 
@@ -137,6 +142,7 @@ final class TextInputModel extends TeaModel {
     bool? focused,
     bool Function(String)? validate,
     List<String>? suggestions,
+    int? suggestionIndex,
     InputStyles? styles,
   }) =>
       TextInputModel(
@@ -149,15 +155,47 @@ final class TextInputModel extends TeaModel {
         focused: focused ?? this.focused,
         validate: validate ?? this.validate,
         suggestions: suggestions ?? this.suggestions,
+        suggestionIndex: suggestionIndex ??
+            ((value != null || suggestions != null) ? 0 : this.suggestionIndex),
         styles: styles ?? this.styles,
       );
 
-  String? get _activeSuggestion {
-    if (suggestions.isEmpty || value.isEmpty) return null;
-    for (final s in suggestions) {
-      if (s.startsWith(value) && s != value) return s;
-    }
-    return null;
+  late final List<String> matchedSuggestions = List<String>.unmodifiable(
+    suggestions.where((suggestion) {
+      if (value.isEmpty) return false;
+      final candidate = suggestion.toLowerCase();
+      final input = value.toLowerCase();
+      return candidate.startsWith(input) && candidate != input;
+    }),
+  );
+
+  int get currentSuggestionIndex => matchedSuggestions.isEmpty
+      ? 0
+      : suggestionIndex % matchedSuggestions.length;
+
+  String? get currentSuggestion => matchedSuggestions.isEmpty
+      ? null
+      : matchedSuggestions[currentSuggestionIndex];
+
+  /// Cursor position as a grapheme index. Cell width is resolved by [view].
+  int get cursorColumn => cursorPos.clamp(0, value.characters.length);
+
+  TextInputModel moveToStart() => copyWith(cursorPos: 0);
+
+  TextInputModel moveToEnd() => copyWith(cursorPos: value.characters.length);
+
+  TextInputModel nextSuggestion() {
+    if (matchedSuggestions.isEmpty) return this;
+    return copyWith(
+      suggestionIndex: (currentSuggestionIndex + 1) % matchedSuggestions.length,
+    );
+  }
+
+  TextInputModel previousSuggestion() {
+    if (matchedSuggestions.isEmpty) return this;
+    return copyWith(
+      suggestionIndex: (currentSuggestionIndex - 1) % matchedSuggestions.length,
+    );
   }
 
   @override
@@ -187,16 +225,16 @@ final class TextInputModel extends TeaModel {
         return (copyWith(cursorPos: cursorPos + 1), null);
 
       case 'home':
-        return (copyWith(cursorPos: 0), null);
+        return (moveToStart(), null);
 
       case 'end':
-        return (copyWith(cursorPos: chars.length), null);
+        return (moveToEnd(), null);
 
       // ── Readline / emacs bindings ──────────────────────────────────────────
       case 'ctrl+a':
-        return (copyWith(cursorPos: 0), null);
+        return (moveToStart(), null);
       case 'ctrl+e':
-        return (copyWith(cursorPos: chars.length), null);
+        return (moveToEnd(), null);
       case 'ctrl+b':
         if (cursorPos == 0) return (this, null);
         return (copyWith(cursorPos: cursorPos - 1), null);
@@ -214,8 +252,16 @@ final class TextInputModel extends TeaModel {
         final next = [...chars.sublist(0, start), ...chars.sublist(cursorPos)];
         return (copyWith(value: next.join(), cursorPos: start), null);
 
+      case 'down':
+      case 'ctrl+n':
+        return (nextSuggestion(), null);
+
+      case 'up':
+      case 'ctrl+p':
+        return (previousSuggestion(), null);
+
       case 'tab':
-        final suggestion = _activeSuggestion;
+        final suggestion = currentSuggestion;
         if (suggestion != null) {
           return (
             copyWith(
@@ -278,7 +324,7 @@ final class TextInputModel extends TeaModel {
         displayValue = '';
     }
 
-    final suggestion = _activeSuggestion;
+    final suggestion = currentSuggestion;
     final suggestionSuffix = (echoMode == EchoMode.normal && suggestion != null)
         ? styles.suggestion
             .render(suggestion.characters.skip(chars.length).join())
