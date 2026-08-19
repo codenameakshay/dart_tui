@@ -290,6 +290,18 @@ void main() {
       expect((msgs[1] as PasteMsg).content, 'foo\nbar\t!');
     });
 
+    test('paste decodes multi-byte UTF-8 (no Latin-1 mojibake)', () {
+      final d = TerminalInputDecoder();
+      final msgs = d.feed(paste('Привет — “тест” 🎉'));
+      expect((msgs[1] as PasteMsg).content, 'Привет — “тест” 🎉');
+    });
+
+    test('multi-byte UTF-8 paste fed byte-by-byte decodes at the end', () {
+      final d = TerminalInputDecoder();
+      final msgs = _feedBytewise(d, paste('héllo'));
+      expect((msgs[1] as PasteMsg).content, 'héllo');
+    });
+
     test('paste fed byte-by-byte still works', () {
       final d = TerminalInputDecoder();
       final data = paste('byte');
