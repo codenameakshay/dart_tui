@@ -532,9 +532,9 @@ renderer.render(model.view())`,
     name: "Examples",
     category: "guides",
     order: 11,
-    tagline: "60+ runnable programs covering every feature.",
+    tagline: "Runnable examples covering every feature.",
     description:
-      "The package ships 60+ runnable examples — one per feature, each with a recorded GIF. Clone the repo and run any of them.",
+      "The package ships runnable examples covering each feature, each with a recorded GIF. Clone the repo and run any of them.",
     blocks: [
       { type: "heading", text: "Running an example" },
       {

@@ -207,7 +207,7 @@ make kernel EXAMPLE=showcase && dart run tool/bin/showcase.dill`,
     blocks: [
       {
         type: "prose",
-        md: "See also `example/all_features.dart` for a component-integration demo, and the [Examples](/guides/examples) guide for the full catalogue of 60+ runnable programs.",
+        md: "See also `example/all_features.dart` for a component-integration demo, and the [Examples](/guides/examples) guide for the full catalogue of runnable examples.",
       },
     ],
     related: ["canvas", "styling"],
