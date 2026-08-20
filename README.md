@@ -580,21 +580,22 @@ var (pos, vel) = (0.0, 0.0);
 Quick, self-contained flows built on `Program` — no model to write. Each returns a `Future` and accepts an `options` list so it can be scripted/tested headlessly.
 
 ```dart
-// prompts
-final choice  = await promptSelect(['apple', 'banana'], title: 'Pick one');
-final ok      = await promptConfirm('Continue?');
-final name    = await promptInput('Name');
+final choice = await promptSelect(['apple', 'banana'], title: 'Pick one');
+if (choice == null) return;
+print('Picked $choice');
+```
 
-// gum-style
-final picked  = await filter(['red', 'green', 'blue']);   // interactive fuzzy filter
-final result  = await spin(fetchData(), label: 'Loading…'); // spinner while awaiting a Future
-await pager(longText);                                       // scrollable viewer (q/Esc to exit)
+```dart
+final picked = await filter(['red', 'green', 'blue']);
+if (picked == null) return;
+print('Picked $picked');
 ```
 
 All prompts and `filter` return `null` when cancelled with `Esc` / `Ctrl+C`.
 Implicit default stdin supports one `Program` lifecycle per process, so
 multi-step interaction should stay inside one `Program` / `Form`; callers that
-own another stream can pass it with `withInput(...)`.
+own another stream can pass it with `withInput(...)`. `promptConfirm`,
+`promptInput`, `spin`, and `pager` follow the same one-helper-per-process rule.
 
 ### Readline editing keys
 
@@ -676,7 +677,6 @@ Runnable examples covering every feature:
 | `progress_animated.dart` | Auto-incrementing progress |
 | `spring.dart` | **Spring** — harmonica-style eased motion |
 | `pager.dart` | Scrollable viewport |
-| `gum.dart` | **gum helpers** — `filter` / `spin` / `pager` |
 | `file_picker.dart` | Directory browser |
 | `help.dart` | HelpModel + KeyMap |
 | `timer.dart` | Countdown timer |
