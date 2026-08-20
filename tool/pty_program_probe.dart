@@ -18,7 +18,7 @@ Future<void> main(List<String> arguments) async {
   final scenario = arguments.single;
   late final Program program;
   final options = <ProgramOption>[
-    withInput(null),
+    if (scenario != 'stdin-quit') withInput(null),
     withAltScreen(),
     withHideCursor(),
     if (scenario != 'resize') withoutSignalHandler(),
@@ -36,7 +36,7 @@ Future<void> main(List<String> arguments) async {
   killTimer?.cancel();
 }
 
-const _scenarios = {'kill', 'cancel', 'resize', 'suspend'};
+const _scenarios = {'kill', 'cancel', 'resize', 'suspend', 'stdin-quit'};
 
 final class _ProbeModel implements Model {
   const _ProbeModel(this.scenario, [this.state]);
@@ -46,6 +46,7 @@ final class _ProbeModel implements Model {
 
   @override
   Cmd? init() {
+    if (scenario == 'stdin-quit') return _delayedQuit();
     if (scenario != 'suspend') return null;
     return () async {
       await Future<void>.delayed(const Duration(milliseconds: 150));
@@ -78,6 +79,7 @@ final class _ProbeModel implements Model {
               'cancel' => 'CANCEL_READY',
               'resize' => 'RESIZE_READY',
               'suspend' => 'SUSPEND_READY',
+              'stdin-quit' => 'STDIN_QUIT_READY',
               _ => throw StateError('unsupported probe scenario: $scenario'),
             },
         altScreen: true,

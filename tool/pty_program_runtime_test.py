@@ -181,6 +181,11 @@ class ProgramRuntimePtyTest(unittest.TestCase):
         self.assertIn(b"\x1b[?1049h", bytes(probe.data)[len(released) :])
         self.assert_terminal_restored(probe.finish())
 
+    def test_quit_releases_stdin_and_exits_cleanly(self) -> None:
+        probe = self._probe("stdin-quit")
+        probe.read_until(b"STDIN_QUIT_READY")
+        self.assert_terminal_restored(probe.finish())
+
 
 if __name__ == "__main__":
     if os.name != "posix":

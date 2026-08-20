@@ -14,12 +14,6 @@ import 'windows_terminal.dart';
 
 typedef ProgramOption = void Function(Program program);
 
-Stream<List<int>>? _stdinBroadcastCache;
-
-Stream<List<int>> _stdinBroadcast() {
-  return _stdinBroadcastCache ??= stdin.asBroadcastStream();
-}
-
 ProgramOption withContext(Future<void> Function() cancellation) {
   return (p) {
     p._externalCancellation = cancellation;
@@ -499,7 +493,10 @@ final class Program {
       bench('terminal_queries');
 
       if (!_disableInput) {
-        final source = _input ?? _stdinBroadcast();
+        final source = _input ??
+            stdin.asBroadcastStream(
+              onCancel: (sub) => sub.cancel(),
+            );
         final decoder = TerminalInputDecoder();
         _inputSub = source.listen(
           (bytes) {
