@@ -15,10 +15,24 @@ import 'windows_terminal.dart';
 typedef ProgramOption = void Function(Program program);
 
 Stream<List<int>>? _stdinBroadcastCache;
+Timer? _stdinBroadcastTeardown;
 
 Stream<List<int>> _stdinBroadcast() {
+  // Default stdin reuse only supports gapless handoff within the same turn:
+  // a later restart must provide an explicit input stream.
   return _stdinBroadcastCache ??= stdin.asBroadcastStream(
-    onCancel: (sub) => sub.cancel(),
+    onListen: (_) {
+      _stdinBroadcastTeardown?.cancel();
+      _stdinBroadcastTeardown = null;
+    },
+    onCancel: (sub) {
+      _stdinBroadcastTeardown?.cancel();
+      _stdinBroadcastTeardown = Timer(Duration.zero, () {
+        _stdinBroadcastTeardown = null;
+        _stdinBroadcastCache = null;
+        unawaited(sub.cancel());
+      });
+    },
   );
 }
 
