@@ -293,10 +293,13 @@ ${const Style(isBold: true).render('Prompts API')}
   • promptInput(label)     → Future<String?>
 
 Run:
-  dart run example/prompts_chain.dart
+  promptSelect(...)
+  promptConfirm(...)
+  promptInput(...)
 
-Prompts run their own Program instances, so this showcase keeps them as
-documentation to avoid nested terminal sessions.
+These are standalone helpers. Implicit stdin is claimed by one Program
+lifecycle per process, so multi-step flows should stay inside one
+Program/Form or pass an explicit stream with withInput(...).
 ''');
   }
 

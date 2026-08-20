@@ -592,6 +592,9 @@ await pager(longText);                                       // scrollable viewe
 ```
 
 All prompts and `filter` return `null` when cancelled with `Esc` / `Ctrl+C`.
+Implicit default stdin supports one `Program` lifecycle per process, so
+multi-step interaction should stay inside one `Program` / `Form`; callers that
+own another stream can pass it with `withInput(...)`.
 
 ### Readline editing keys
 
@@ -649,7 +652,7 @@ Field types: `Field.input`, `.password`, `.text` (multiline), `.file`, `.select`
 
 ## Examples
 
-61 runnable examples covering every feature:
+Runnable examples covering every feature:
 
 | Example | What it shows |
 |---------|---------------|
@@ -697,7 +700,7 @@ Field types: `Field.input`, `.password`, `.text` (multiline), `.file`, `.select`
 | `isbn_form.dart` | Validated TextInputModel |
 | `showcase.dart` | Full-featured gallery |
 | `all_features.dart` | Component integration demo |
-| *(+ 16 more)* | `window_size`, `fullscreen`, `cursor_style`, `pipe`, `send_msg`, `realtime`, `prevent_quit`, `sequence`, `focus_blur`, `vanish`, `print_key`, `views`, `set_window_title`, `altscreen_toggle`, `prompts_chain`, `shopping_list` |
+| *(+ 15 more)* | `window_size`, `fullscreen`, `cursor_style`, `pipe`, `send_msg`, `realtime`, `prevent_quit`, `sequence`, `focus_blur`, `vanish`, `print_key`, `views`, `set_window_title`, `altscreen_toggle`, `shopping_list` |
 
 Run any example:
 

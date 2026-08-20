@@ -14,26 +14,18 @@ import 'windows_terminal.dart';
 
 typedef ProgramOption = void Function(Program program);
 
-Stream<List<int>>? _stdinBroadcastCache;
-Timer? _stdinBroadcastTeardown;
+bool _defaultStdinClaimed = false;
 
-Stream<List<int>> _stdinBroadcast() {
-  // Default stdin reuse only supports gapless handoff within the same turn:
-  // a later restart must provide an explicit input stream.
-  return _stdinBroadcastCache ??= stdin.asBroadcastStream(
-    onListen: (_) {
-      _stdinBroadcastTeardown?.cancel();
-      _stdinBroadcastTeardown = null;
-    },
-    onCancel: (sub) {
-      _stdinBroadcastTeardown?.cancel();
-      _stdinBroadcastTeardown = Timer(Duration.zero, () {
-        _stdinBroadcastTeardown = null;
-        _stdinBroadcastCache = null;
-        unawaited(sub.cancel());
-      });
-    },
-  );
+Stream<List<int>> _claimDefaultStdin() {
+  if (_defaultStdinClaimed) {
+    throw StateError(
+      'Implicit stdin supports one Program lifecycle per process. '
+      'Reuse one Program/Form for multi-step interaction or pass '
+      'withInput(...) to provide an explicit stream.',
+    );
+  }
+  _defaultStdinClaimed = true;
+  return stdin;
 }
 
 ProgramOption withContext(Future<void> Function() cancellation) {
@@ -515,7 +507,7 @@ final class Program {
       bench('terminal_queries');
 
       if (!_disableInput) {
-        final source = _input ?? _stdinBroadcast();
+        final source = _input ?? _claimDefaultStdin();
         final decoder = TerminalInputDecoder();
         _inputSub = source.listen(
           (bytes) {

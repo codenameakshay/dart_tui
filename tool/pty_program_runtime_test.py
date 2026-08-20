@@ -186,6 +186,11 @@ class ProgramRuntimePtyTest(unittest.TestCase):
         probe.read_until(b"STDIN_QUIT_READY")
         self.assert_terminal_restored(probe.finish())
 
+    def test_second_implicit_stdin_program_fails_with_clear_error(self) -> None:
+        probe = self._probe("stdin-default-reuse")
+        output = probe.finish()
+        self.assertIn(b"STDIN_DEFAULT_REUSE_BLOCKED", output)
+
 
 if __name__ == "__main__":
     if os.name != "posix":

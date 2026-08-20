@@ -71,8 +71,7 @@ final regions = values?.get<List<String>>('regions');`,
     featured: true,
     tagline: "One-shot promptSelect / promptConfirm / promptInput.",
     description:
-      "Self-contained, one-shot flows built on `Program` — no model to write. Each returns a `Future` and accepts a `options` list so it can be scripted or tested headlessly. All return `null` when cancelled with `Esc`/`Ctrl+C`.",
-    gif: "prompts_chain.gif",
+      "Self-contained, one-shot flows built on `Program` — no model to write. Each returns a `Future` and accepts an `options` list so it can be scripted or tested headlessly. All return `null` when cancelled with `Esc`/`Ctrl+C`. Implicit default stdin supports one `Program` lifecycle per process; keep multi-step interaction inside one `Program`/`Form`, or pass an explicit stream with `withInput(...)`.",
     snippets: [
       {
         label: "Usage",

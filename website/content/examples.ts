@@ -171,15 +171,4 @@ export const examples: DocEntry[] = [
     gif: "vanish.gif",
     related: ["fullscreen", "altscreen-toggle"],
   },
-  {
-    slug: "prompts-chain",
-    name: "Chained prompts",
-    category: "examples",
-    order: 16,
-    tagline: "Run promptSelect → promptConfirm → promptInput in sequence.",
-    description:
-      "Chains the one-shot prompts — `promptSelect`, then `promptConfirm`, then `promptInput` — each running its own `Program`, to build a quick scripted questionnaire without writing a model.",
-    gif: "prompts_chain.gif",
-    related: ["prompts", "forms"],
-  },
 ];

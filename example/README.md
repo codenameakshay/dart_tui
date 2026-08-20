@@ -578,18 +578,6 @@ dart run example/shopping_list.dart
 
 ---
 
-### prompts\_chain
-
-Chains `promptSelect` → `promptConfirm` → `promptInput` in sequence, each running its own `Program`. Shows how the prompt helpers compose together.
-
-![prompts_chain](https://dart-tui.vercel.app/gifs/prompts_chain.gif)
-
-```bash
-dart run example/prompts_chain.dart
-```
-
----
-
 ### gum
 
 gum-style one-shot helpers chained together: `filter()` (fuzzy picker) → `spin()` (spinner while awaiting a `Future`) → `pager()` (scrollable viewer). Type to filter, Enter to pick, `q` to leave the pager.

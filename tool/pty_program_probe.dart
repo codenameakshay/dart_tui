@@ -18,7 +18,8 @@ Future<void> main(List<String> arguments) async {
   final scenario = arguments.single;
   late final Program program;
   final options = <ProgramOption>[
-    if (scenario != 'stdin-quit') withInput(null),
+    if (scenario != 'stdin-quit' && scenario != 'stdin-default-reuse')
+      withInput(null),
     withAltScreen(),
     withHideCursor(),
     if (scenario != 'resize') withoutSignalHandler(),
@@ -32,11 +33,40 @@ Future<void> main(List<String> arguments) async {
   if (scenario == 'kill') {
     killTimer = Timer(const Duration(milliseconds: 250), program.kill);
   }
+  if (scenario == 'stdin-default-reuse') {
+    await _runDefaultStdinReuseProbe();
+    return;
+  }
   await program.run(_ProbeModel(scenario));
   killTimer?.cancel();
 }
 
-const _scenarios = {'kill', 'cancel', 'resize', 'suspend', 'stdin-quit'};
+const _scenarios = {
+  'kill',
+  'cancel',
+  'resize',
+  'suspend',
+  'stdin-default-reuse',
+  'stdin-quit',
+};
+
+Future<void> _runDefaultStdinReuseProbe() async {
+  await Program(
+    options: [withAltScreen(), withHideCursor(), withoutSignalHandler()],
+  ).run(const _ProbeModel('stdin-default-reuse-first'));
+  try {
+    await Program(
+      options: [withAltScreen(), withHideCursor(), withoutSignalHandler()],
+    ).run(const _ProbeModel('stdin-default-reuse-second'));
+    throw StateError('second implicit stdin program unexpectedly ran');
+  } on StateError catch (error) {
+    final message = error.message.toString();
+    if (!message.contains('Implicit stdin supports one Program lifecycle')) {
+      rethrow;
+    }
+    stdout.writeln('STDIN_DEFAULT_REUSE_BLOCKED');
+  }
+}
 
 final class _ProbeModel implements Model {
   const _ProbeModel(this.scenario, [this.state]);
@@ -46,6 +76,7 @@ final class _ProbeModel implements Model {
 
   @override
   Cmd? init() {
+    if (scenario == 'stdin-default-reuse-first') return _delayedQuit();
     if (scenario == 'stdin-quit') return _delayedQuit();
     if (scenario != 'suspend') return null;
     return () async {
@@ -79,6 +110,8 @@ final class _ProbeModel implements Model {
               'cancel' => 'CANCEL_READY',
               'resize' => 'RESIZE_READY',
               'suspend' => 'SUSPEND_READY',
+              'stdin-default-reuse-first' => 'STDIN_DEFAULT_REUSE_FIRST',
+              'stdin-default-reuse-second' => 'STDIN_DEFAULT_REUSE_SECOND',
               'stdin-quit' => 'STDIN_QUIT_READY',
               _ => throw StateError('unsupported probe scenario: $scenario'),
             },
