@@ -151,24 +151,39 @@ class ProgramRuntimePtyTest(unittest.TestCase):
         self.assertIn(b"\x1b[?1049l", output)
         self.assertIn(b"\x1b[?2004l", output)
 
+    def assert_cooked_mode(self, probe: _Probe) -> None:
+        lflag = termios.tcgetattr(probe.master)[3]
+        self.assertTrue(
+            lflag & termios.ECHO,
+            f"ECHO still off after exit; lflag={lflag}",
+        )
+        self.assertTrue(
+            lflag & termios.ICANON,
+            f"ICANON still off after exit; lflag={lflag}",
+        )
+
     def test_kill_wakes_an_idle_program_and_restores_terminal(self) -> None:
         probe = self._probe("kill")
         probe.read_until(b"KILL_READY")
         output = probe.finish()
         self.assert_terminal_restored(output)
+        self.assert_cooked_mode(probe)
 
     def test_external_cancellation_interrupts_and_restores_terminal(self) -> None:
         probe = self._probe("cancel")
         probe.read_until(b"CANCEL_READY")
         output = probe.finish()
         self.assert_terminal_restored(output)
+        self.assert_cooked_mode(probe)
 
     def test_sigwinch_delivers_the_new_pty_size(self) -> None:
         probe = self._probe("resize")
         probe.read_until(b"RESIZE_READY")
         probe.resize(37, 101)
         probe.read_until(b"RESIZED:101x37")
-        self.assert_terminal_restored(probe.finish())
+        output = probe.finish()
+        self.assert_terminal_restored(output)
+        self.assert_cooked_mode(probe)
 
     def test_suspend_releases_then_restores_terminal_on_resume(self) -> None:
         probe = self._probe("suspend")
@@ -179,17 +194,22 @@ class ProgramRuntimePtyTest(unittest.TestCase):
         probe.continue_process()
         probe.read_until(b"RESUMED")
         self.assertIn(b"\x1b[?1049h", bytes(probe.data)[len(released) :])
-        self.assert_terminal_restored(probe.finish())
+        output = probe.finish()
+        self.assert_terminal_restored(output)
+        self.assert_cooked_mode(probe)
 
     def test_quit_releases_stdin_and_exits_cleanly(self) -> None:
         probe = self._probe("stdin-quit")
         probe.read_until(b"STDIN_QUIT_READY")
-        self.assert_terminal_restored(probe.finish())
+        output = probe.finish()
+        self.assert_terminal_restored(output)
+        self.assert_cooked_mode(probe)
 
     def test_second_implicit_stdin_program_fails_with_clear_error(self) -> None:
         probe = self._probe("stdin-default-reuse")
         output = probe.finish()
         self.assertIn(b"STDIN_DEFAULT_REUSE_BLOCKED", output)
+        self.assert_cooked_mode(probe)
 
 
 if __name__ == "__main__":

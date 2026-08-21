@@ -134,6 +134,7 @@ final class Program {
   Timer? _tickTimer;
   Timer? _loneEscTimer;
   StreamSubscription<List<int>>? _inputSub;
+  Future<void>? _inputCancel;
   bool _unicodeCoreSupported = false;
   StreamSubscription<ProcessSignal>? _sigSub;
   TeaRenderer? _renderer;
@@ -216,6 +217,7 @@ final class Program {
     _killed = false;
     _finished = Completer<void>();
     _activityWake = null;
+    _inputCancel = null;
     _runningModel = initial;
     _logClose = null;
 
@@ -592,14 +594,11 @@ final class Program {
       }
     } finally {
       await externalMsgSub.cancel();
-      // Await stdin subscription cancellation explicitly so stdin is fully
-      // released before _shutdown() marks the program done. Without this,
-      // the Dart event loop keeps running after main() returns (waiting for
-      // the unawaited cancel future), leaving the terminal hanging until Ctrl-C.
-      final inputSub = _inputSub;
-      _inputSub = null;
-      await inputSub?.cancel();
       _shutdown();
+      // Await stdin cancellation so the process can actually exit (issue #15),
+      // but only after cooked mode has been restored. Cancelling first closes
+      // the stdin fd; later echoMode/lineMode writes fail with EBADF.
+      await _inputCancel;
       await _logClose;
       if (!_disableRenderer) {
         // Move to a fresh line so the shell prompt appears cleanly after exit,
@@ -625,15 +624,16 @@ final class Program {
     _tickTimer = null;
     _loneEscTimer?.cancel();
     _loneEscTimer = null;
-    unawaited(_inputSub?.cancel());
-    _inputSub = null;
-    unawaited(_sigSub?.cancel());
-    _sigSub = null;
-    _renderer?.close();
-    _renderer = null;
     if (!_disableRenderer) {
       _setRawMode(false);
     }
+    _renderer?.close();
+    _renderer = null;
+    final inputSub = _inputSub;
+    _inputSub = null;
+    _inputCancel ??= inputSub?.cancel();
+    unawaited(_sigSub?.cancel());
+    _sigSub = null;
     final logSink = _logSink;
     _logSink = null;
     if (logSink != null) {
