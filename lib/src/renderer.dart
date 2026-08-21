@@ -372,10 +372,8 @@ final class CellRenderer implements TeaRenderer {
       }
     }
     final previousRows = _lastGrid?.length ?? 0;
-    _lastBottomRow = (nextGrid.length > previousRows
-            ? nextGrid.length
-            : previousRows) -
-        1;
+    _lastBottomRow =
+        (nextGrid.length > previousRows ? nextGrid.length : previousRows) - 1;
     _diffAndEmit(nextGrid);
     _lastGrid = nextGrid;
     _lastContent = view.content;
