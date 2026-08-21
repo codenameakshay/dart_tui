@@ -91,6 +91,18 @@ void main() {
       );
       expect(state.altScreenEnabled, isFalse);
     });
+
+    test('reset omits alt-screen exit when alt screen was never enabled (#18)',
+        () {
+      final sink = _StringSink(buffer);
+      state.apply(sink, newView('value'));
+      buffer.clear();
+
+      state.reset(sink);
+
+      expect(buffer.toString(), isNot(contains('\x1b[?1049l')));
+      expect(state.altScreenEnabled, isFalse);
+    });
   });
 }
 

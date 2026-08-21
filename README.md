@@ -31,6 +31,7 @@ Build rich, interactive CLI applications with a clean **Model–Update–View** 
 - **Synchronized updates** (`CSI ?2026`) for terminals that support them
 - **Auto background detection** — OSC 11 query fires at startup; your model receives `BackgroundColorMsg`
 - **Fluent `ProgramOption` functions** — `withAltScreen()`, `withHideCursor()`, `withTickInterval()`, `withMouseCellMotion()`, `withMouseAllMotion()`, `withReportFocus()`, `withWindowSize()`, `withLogFile()`
+- **Scrollback preservation** — outside the alternate screen, programs scroll existing output into history instead of clearing it; the shell prompt reappears below the final view on exit (opt out with `withoutInitialScroll()`)
 - **Fast startup** — kernel snapshots cut warm-JIT from ~1 s to ~500 ms; AOT compiles to native
 
 ---
@@ -164,6 +165,7 @@ Program(
     withCellRenderer(),       // cell-level diff (less flicker on older terminals)
     withAltScreen(),          // enter alternate screen buffer
     withHideCursor(),         // hide terminal cursor (pass false to keep visible)
+    withoutInitialScroll(),   // opt out of scrollback preservation (on by default)
     withTickInterval(const Duration(milliseconds: 100)), // global tick rate
     withMouseCellMotion(),    // enable button-event mouse tracking
     withMouseAllMotion(),     // enable all-motion mouse tracking

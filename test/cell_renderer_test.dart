@@ -178,6 +178,15 @@ void main() {
       expect(buf.toString(), contains('\x1b[1;4HC'));
     });
 
+    test('release parks the cursor below the last painted row (#18)', () {
+      renderer.render(newView('a\nb\nc'));
+      buf.clear();
+
+      renderer.release();
+
+      expect(buf.toString(), endsWith('\x1b[4;1H'));
+    });
+
     test('does not render ST-terminated OSC payloads or terminators', () {
       renderer.render(newView('A\x1b]0;hidden\x1b\\B'));
 
