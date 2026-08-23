@@ -125,6 +125,7 @@ final class AnsiRenderer implements TeaRenderer {
   List<String> _lastLines = const <String>[];
   String _lastContent = '';
   bool _hasRenderedFrame = false;
+  int _lastBottomRow = -1;
   bool _syncUpdates = false;
   bool _unicodeCoreEnabled = false;
   final _cursorState = _CursorRendererState();
@@ -176,6 +177,7 @@ final class AnsiRenderer implements TeaRenderer {
     _lastLines = nextLines;
     _lastContent = view.content;
     _hasRenderedFrame = true;
+    _lastBottomRow = maxRows - 1;
     _cursorState.apply(_output, view.cursor);
     _logSink?.writeln('--- frame (diff) ---\n${view.content}');
   }
@@ -198,6 +200,7 @@ final class AnsiRenderer implements TeaRenderer {
     _lastLines = const <String>[];
     _lastContent = '';
     _hasRenderedFrame = false;
+    _lastBottomRow = -1;
   }
 
   @override
@@ -225,10 +228,23 @@ final class AnsiRenderer implements TeaRenderer {
     setUnicodeCore(false);
     _terminalViewState.reset(_output);
     _cursorState.reset(_output);
+    // Leave the cursor just below the last painted row so the shell prompt
+    // reappears below the program's output instead of overwriting it (#18).
+    // Skipped in the alternate screen (the buffer is discarded anyway) and
+    // on suspend/exec paths, which clear the screen right after.
+    final parkCursor = !reset &&
+        !_modes.altScreenEnabled &&
+        _hasRenderedFrame &&
+        _lastBottomRow >= 0;
+    final bottomRow = _lastBottomRow;
     _modes.reset(_output);
+    if (parkCursor) {
+      _output.write('\x1b[${bottomRow + 2};1H');
+    }
     _lastLines = const <String>[];
     _lastContent = '';
     _hasRenderedFrame = false;
+    _lastBottomRow = -1;
     if (reset) {
       clearScreen();
     }
@@ -329,6 +345,7 @@ final class CellRenderer implements TeaRenderer {
 
   List<List<_Cell>>? _lastGrid;
   String? _lastContent;
+  int _lastBottomRow = -1;
   final _cursorState = _CursorRendererState();
   final _terminalViewState = TerminalViewState();
 
@@ -354,6 +371,9 @@ final class CellRenderer implements TeaRenderer {
         _output.write('\x1b[${row + 1};1H\x1b[K');
       }
     }
+    final previousRows = _lastGrid?.length ?? 0;
+    _lastBottomRow =
+        (nextGrid.length > previousRows ? nextGrid.length : previousRows) - 1;
     _diffAndEmit(nextGrid);
     _lastGrid = nextGrid;
     _lastContent = view.content;
@@ -366,6 +386,7 @@ final class CellRenderer implements TeaRenderer {
     _output.write('\x1b[H\x1b[2J');
     _lastGrid = null;
     _lastContent = null;
+    _lastBottomRow = -1;
   }
 
   @override
@@ -392,9 +413,17 @@ final class CellRenderer implements TeaRenderer {
     setUnicodeCore(false);
     _terminalViewState.reset(_output);
     _cursorState.reset(_output);
+    // See AnsiRenderer.release — park the cursor below the last painted row.
+    final parkCursor =
+        !reset && !_modes.altScreenEnabled && _lastBottomRow >= 0;
+    final bottomRow = _lastBottomRow;
     _modes.reset(_output);
+    if (parkCursor) {
+      _output.write('\x1b[${bottomRow + 2};1H');
+    }
     _lastGrid = null;
     _lastContent = null;
+    _lastBottomRow = -1;
     if (reset) clearScreen();
   }
 

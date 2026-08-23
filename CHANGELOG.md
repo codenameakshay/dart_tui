@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Scrollback preservation outside the alternate screen (#18):** when
+  running without `withAltScreen()`, the program now scrolls the visible
+  screen into the scrollback buffer before painting its first frame instead
+  of overwriting the shell session, and on exit leaves the cursor just below
+  the final view so the prompt reappears cleanly. Opt out with
+  `withoutInitialScroll()`.
+
+### Fixed
+
+- `TerminalModeState.reset()` no longer emits an alt-screen exit (`CSI
+  ?1049l`) when the alternate screen was never enabled.
+- `clearScrollArea()` no longer clears the screen twice.
+
 ## 2.0.0 - 2026-08-08
 
 This major release hardens the terminal runtime, ports the selected Bubble Tea

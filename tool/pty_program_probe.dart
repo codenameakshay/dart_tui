@@ -18,11 +18,17 @@ Future<void> main(List<String> arguments) async {
   final scenario = arguments.single;
   late final Program program;
   final options = <ProgramOption>[
-    if (scenario != 'stdin-quit' && scenario != 'stdin-default-reuse')
+    if (scenario != 'stdin-quit' &&
+        scenario != 'stdin-default-reuse' &&
+        scenario != 'normal-screen-stdin-quit' &&
+        scenario != 'view-alt-screen-stdin-quit')
       withInput(null),
-    withAltScreen(),
+    if (scenario != 'normal-screen-stdin-quit' &&
+        scenario != 'view-alt-screen-stdin-quit')
+      withAltScreen(),
     withHideCursor(),
     if (scenario != 'resize') withoutSignalHandler(),
+    if (scenario == 'normal-screen-stdin-quit') withWindowSize(80, 5),
     if (scenario == 'cancel')
       withContext(
           () => Future<void>.delayed(const Duration(milliseconds: 250))),
@@ -48,6 +54,8 @@ const _scenarios = {
   'suspend',
   'stdin-default-reuse',
   'stdin-quit',
+  'normal-screen-stdin-quit',
+  'view-alt-screen-stdin-quit',
 };
 
 Future<void> _runDefaultStdinReuseProbe() async {
@@ -99,6 +107,19 @@ final class _ProbeModel implements Model {
     if (scenario == 'suspend' && msg is ResumeMsg) {
       return (_ProbeModel(scenario, 'RESUMED'), _delayedQuit());
     }
+    if (scenario == 'normal-screen-stdin-quit' &&
+        msg is KeyMsg &&
+        msg.key == 'q') {
+      return (_ProbeModel(scenario, 'NORMAL_SCREEN_EXITING'), () => QuitMsg());
+    }
+    if (scenario == 'view-alt-screen-stdin-quit' &&
+        msg is KeyMsg &&
+        msg.key == 'q') {
+      return (
+        _ProbeModel(scenario, 'VIEW_ALT_SCREEN_EXITING'),
+        () => QuitMsg()
+      );
+    }
     return (this, null);
   }
 
@@ -113,9 +134,12 @@ final class _ProbeModel implements Model {
               'stdin-default-reuse-first' => 'STDIN_DEFAULT_REUSE_FIRST',
               'stdin-default-reuse-second' => 'STDIN_DEFAULT_REUSE_SECOND',
               'stdin-quit' => 'STDIN_QUIT_READY',
+              'normal-screen-stdin-quit' =>
+                'NORMAL_SCREEN_READY\nline two\nline three',
+              'view-alt-screen-stdin-quit' => 'VIEW_ALT_SCREEN_READY',
               _ => throw StateError('unsupported probe scenario: $scenario'),
             },
-        altScreen: true,
+        altScreen: scenario != 'normal-screen-stdin-quit',
       );
 }
 

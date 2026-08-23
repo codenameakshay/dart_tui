@@ -72,6 +72,18 @@ ProgramOption withWindowSize(int width, int height) {
 /// Enter the alternate screen buffer at startup.
 ProgramOption withAltScreen() => (p) => p._altScreen = true;
 
+/// Scroll the visible screen into the scrollback buffer before painting the
+/// first frame when running outside the alternate screen (#18).
+///
+/// Enabled by default on interactive terminals: existing shell output is
+/// pushed into scrollback instead of being overwritten, and on exit the shell
+/// prompt reappears directly below the final view.
+ProgramOption withInitialScroll([bool enabled = true]) =>
+    (p) => p._initialScroll = enabled;
+
+/// Disable the initial history-preserving scroll (see [withInitialScroll]).
+ProgramOption withoutInitialScroll() => (p) => p._initialScroll = false;
+
 /// Hide the terminal cursor at startup (default behaviour).
 /// Pass `false` to keep the cursor visible.
 ProgramOption withHideCursor([bool hide = true]) => (p) => p._hideCursor = hide;
@@ -118,6 +130,7 @@ final class Program {
 
   bool _altScreen = false;
   bool _hideCursor = true;
+  bool _initialScroll = true;
   Duration? _tickInterval;
   MouseMode _defaultMouseMode = MouseMode.none;
   bool _defaultReportFocus = false;
@@ -387,7 +400,6 @@ final class Program {
           _output.write(windowTitleSequence(msg.title));
           return false;
         case ClearScrollAreaMsg():
-          _output.write('\x1b[2J\x1b[H');
           _renderer?.clearScreen();
           return true;
         case ScrollMsg():
@@ -539,13 +551,30 @@ final class Program {
           enqueue(TickMsg(DateTime.now()));
         });
       }
-
       final initCmd = _runningModel!.init();
       bench('init_cmd_created');
+      final initialView = _runningModel!.view();
+
+      // #18: outside the alternate screen, scroll the current screen contents
+      // into the scrollback buffer instead of painting over them. The program
+      // starts on a clean viewport while shell history stays retrievable, and
+      // the renderer parks the cursor below the view on exit.
+      if (_initialScroll &&
+          !_altScreen &&
+          !initialView.altScreen &&
+          !_disableRenderer &&
+          identical(_output, stdout) &&
+          stdout.hasTerminal) {
+        final terminalHeight = stdout.terminalLines;
+        if (terminalHeight > 0) {
+          _output.write('\x1b[${terminalHeight.clamp(1, 1024)}S');
+        }
+      }
+
       // Render the first frame immediately before firing the init command.
       // This matches Bubbletea's behaviour: Init() runs concurrently while
       // the initial view is already visible on screen.
-      await render(_runningModel!.view());
+      await render(initialView);
       bench('first_frame');
 
       // Send capability queries AFTER the first frame so the first visible

@@ -315,4 +315,74 @@ void main() {
       expect(output, contains('\x1b[u')); // restore cursor
     });
   });
+
+  group('scrollback preservation (#18)', () {
+    test('close parks the cursor below the last painted row', () {
+      final buf = StringBuffer();
+      final renderer = AnsiRenderer(
+        output: _StringSink(buf),
+        defaultAltScreen: false,
+        defaultHideCursor: false,
+      );
+
+      renderer.render(newView('line1\nline2'));
+      buf.clear();
+
+      renderer.close();
+
+      expect(buf.toString(), endsWith('\x1b[3;1H'));
+    });
+
+    test('parking follows the bottom of the view as it grows', () {
+      final buf = StringBuffer();
+      final renderer = AnsiRenderer(
+        output: _StringSink(buf),
+        defaultAltScreen: false,
+        defaultHideCursor: false,
+      );
+
+      renderer.render(newView('one'));
+      renderer.render(newView('one\ntwo\nthree'));
+      buf.clear();
+
+      renderer.close();
+
+      expect(buf.toString(), endsWith('\x1b[4;1H'));
+    });
+
+    test('release(reset: true) does not park the cursor', () {
+      final buf = StringBuffer();
+      final renderer = AnsiRenderer(
+        output: _StringSink(buf),
+        defaultAltScreen: false,
+        defaultHideCursor: false,
+      );
+
+      renderer.render(newView('line1\nline2'));
+      buf.clear();
+
+      renderer.release(reset: true);
+
+      expect(buf.toString(), isNot(contains('\x1b[3;1H')));
+      expect(buf.toString(), contains('\x1b[2J'));
+    });
+
+    test('close skips cursor parking in the alternate screen', () {
+      final buf = StringBuffer();
+      final renderer = AnsiRenderer(
+        output: _StringSink(buf),
+        defaultAltScreen: false,
+        defaultHideCursor: false,
+      );
+
+      renderer.render(View(content: 'alt\nscreen', altScreen: true));
+      buf.clear();
+
+      renderer.close();
+
+      final output = buf.toString();
+      expect(output, contains('\x1b[?1049l'));
+      expect(output, isNot(contains(';1H')));
+    });
+  });
 }

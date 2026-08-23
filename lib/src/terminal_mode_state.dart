@@ -78,12 +78,16 @@ final class TerminalModeState {
 
   void reset(IOSink output) {
     output.write('\x1b[?25h');
-    output.write('\x1b[?1049l');
+    // Only exit the alternate screen when it is actually active (#18). On the
+    // primary buffer the sequence triggers a spurious buffer/cursor restore.
+    if (_altScreenEnabled) {
+      output.write('\x1b[?1049l');
+      _altScreenEnabled = false;
+    }
     output.write('\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l');
     output.write('\x1b[?1004l');
     output.write('\x1b[?2004l');
     _cursorHidden = false;
-    _altScreenEnabled = false;
     _focusReportingEnabled = false;
     _bracketedPasteEnabled = false;
     _mouseMode = MouseMode.none;
