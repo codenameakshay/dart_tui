@@ -6,7 +6,10 @@ import 'msg.dart';
 
 final class TerminalInputDecoder {
   final List<int> _buffer = <int>[];
-  final StringBuffer _pasteBuffer = StringBuffer();
+  // Pasted bytes accumulate RAW: terminals send UTF-8, so mapping each byte
+  // to a char code (Latin-1) mangles multi-byte text — the paste content is
+  // decoded as UTF-8 once, at the end marker.
+  final List<int> _pasteBytes = <int>[];
   bool _inPaste = false;
 
   List<Msg> feed(List<int> data) {
@@ -19,15 +22,17 @@ final class TerminalInputDecoder {
         if (endMatch == _PrefixMatch.partial) break;
         if (endMatch == _PrefixMatch.full) {
           _consume(_pasteEnd.length);
-          out.add(PasteMsg(_pasteBuffer.toString()));
+          out.add(
+            PasteMsg(utf8.decode(_pasteBytes, allowMalformed: true)),
+          );
           out.add(PasteEndMsg());
-          _pasteBuffer.clear();
+          _pasteBytes.clear();
           _inPaste = false;
           continue;
         }
 
         if (_buffer.isEmpty) break;
-        _pasteBuffer.writeCharCode(_buffer.removeAt(0));
+        _pasteBytes.add(_buffer.removeAt(0));
         continue;
       }
 
