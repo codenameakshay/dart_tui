@@ -578,30 +578,6 @@ dart run example/shopping_list.dart
 
 ---
 
-### prompts\_chain
-
-Chains `promptSelect` → `promptConfirm` → `promptInput` in sequence, each running its own `Program`. Shows how the prompt helpers compose together.
-
-![prompts_chain](https://dart-tui.vercel.app/gifs/prompts_chain.gif)
-
-```bash
-dart run example/prompts_chain.dart
-```
-
----
-
-### gum
-
-gum-style one-shot helpers chained together: `filter()` (fuzzy picker) → `spin()` (spinner while awaiting a `Future`) → `pager()` (scrollable viewer). Type to filter, Enter to pick, `q` to leave the pager.
-
-![gum](https://dart-tui.vercel.app/gifs/gum.gif)
-
-```bash
-dart run example/gum.dart
-```
-
----
-
 ### form
 
 A composable, huh-style form: typed fields (`input` / `select` / `multiSelect` / `confirm` / `note`) grouped into wizard pages, with per-field validation and a dynamic page that only appears when “Deploy now?” is Yes. `Enter`/`Tab` advance, `Esc` cancels.

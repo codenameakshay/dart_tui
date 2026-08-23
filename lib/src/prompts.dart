@@ -5,6 +5,10 @@ import 'program.dart';
 import 'view.dart';
 
 /// Prompt helpers built on [Program] + [OutcomeModel] (optional sugar).
+///
+/// Each helper starts its own [Program]. Implicit default stdin supports one
+/// [Program] lifecycle per process, so multi-step flows should stay inside one
+/// `Program`/`Form` or pass an explicit stream with `withInput(...)`.
 
 /// Single-choice list; returns the selected string, or `null` if cancelled.
 Future<String?> promptSelect(
