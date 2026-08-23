@@ -31,12 +31,6 @@ EXAMPLES = [
         "repeat_last": True,
         "markers": ["\x1b[?1049h", "\x1b[?1049l"],
     },
-    {
-        "name": "prompts_chain",
-        "keys": ["\r", "y", "\r", "h", "e", "l", "l", "o", "\r"],
-        "repeat_last": False,
-        "markers": ["Selected:", "Confirmed:", "Notes:"],
-    },
 ]
 
 

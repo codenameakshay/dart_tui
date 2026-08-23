@@ -14,10 +14,18 @@ import 'windows_terminal.dart';
 
 typedef ProgramOption = void Function(Program program);
 
-Stream<List<int>>? _stdinBroadcastCache;
+bool _defaultStdinClaimed = false;
 
-Stream<List<int>> _stdinBroadcast() {
-  return _stdinBroadcastCache ??= stdin.asBroadcastStream();
+Stream<List<int>> _claimDefaultStdin() {
+  if (_defaultStdinClaimed) {
+    throw StateError(
+      'Implicit stdin supports one Program lifecycle per process. '
+      'Reuse one Program/Form for multi-step interaction or pass '
+      'withInput(...) to provide an explicit stream.',
+    );
+  }
+  _defaultStdinClaimed = true;
+  return stdin;
 }
 
 ProgramOption withContext(Future<void> Function() cancellation) {
@@ -126,6 +134,7 @@ final class Program {
   Timer? _tickTimer;
   Timer? _loneEscTimer;
   StreamSubscription<List<int>>? _inputSub;
+  Future<void>? _inputCancel;
   bool _unicodeCoreSupported = false;
   StreamSubscription<ProcessSignal>? _sigSub;
   TeaRenderer? _renderer;
@@ -208,6 +217,7 @@ final class Program {
     _killed = false;
     _finished = Completer<void>();
     _activityWake = null;
+    _inputCancel = null;
     _runningModel = initial;
     _logClose = null;
 
@@ -499,7 +509,7 @@ final class Program {
       bench('terminal_queries');
 
       if (!_disableInput) {
-        final source = _input ?? _stdinBroadcast();
+        final source = _input ?? _claimDefaultStdin();
         final decoder = TerminalInputDecoder();
         _inputSub = source.listen(
           (bytes) {
@@ -584,14 +594,11 @@ final class Program {
       }
     } finally {
       await externalMsgSub.cancel();
-      // Await stdin subscription cancellation explicitly so stdin is fully
-      // released before _shutdown() marks the program done. Without this,
-      // the Dart event loop keeps running after main() returns (waiting for
-      // the unawaited cancel future), leaving the terminal hanging until Ctrl-C.
-      final inputSub = _inputSub;
-      _inputSub = null;
-      await inputSub?.cancel();
       _shutdown();
+      // Await stdin cancellation so the process can actually exit (issue #15),
+      // but only after cooked mode has been restored. Cancelling first closes
+      // the stdin fd; later echoMode/lineMode writes fail with EBADF.
+      await _inputCancel;
       await _logClose;
       if (!_disableRenderer) {
         // Move to a fresh line so the shell prompt appears cleanly after exit,
@@ -617,15 +624,16 @@ final class Program {
     _tickTimer = null;
     _loneEscTimer?.cancel();
     _loneEscTimer = null;
-    unawaited(_inputSub?.cancel());
-    _inputSub = null;
-    unawaited(_sigSub?.cancel());
-    _sigSub = null;
-    _renderer?.close();
-    _renderer = null;
     if (!_disableRenderer) {
       _setRawMode(false);
     }
+    _renderer?.close();
+    _renderer = null;
+    final inputSub = _inputSub;
+    _inputSub = null;
+    _inputCancel ??= inputSub?.cancel();
+    unawaited(_sigSub?.cancel());
+    _sigSub = null;
     final logSink = _logSink;
     _logSink = null;
     if (logSink != null) {

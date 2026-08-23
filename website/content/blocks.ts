@@ -71,18 +71,14 @@ final regions = values?.get<List<String>>('regions');`,
     featured: true,
     tagline: "One-shot promptSelect / promptConfirm / promptInput.",
     description:
-      "Self-contained, one-shot flows built on `Program` — no model to write. Each returns a `Future` and accepts a `options` list so it can be scripted or tested headlessly. All return `null` when cancelled with `Esc`/`Ctrl+C`.",
-    gif: "prompts_chain.gif",
+      "Self-contained, one-shot flows built on `Program` — no model to write. Each returns a `Future` and accepts an `options` list so it can be scripted or tested headlessly. All return `null` when cancelled with `Esc`/`Ctrl+C`. Implicit default stdin supports one `Program` lifecycle per process; keep multi-step interaction inside one `Program`/`Form`, or pass an explicit stream with `withInput(...)`.",
     snippets: [
       {
         label: "Usage",
         lang: "dart",
         code: `final choice = await promptSelect(['apple', 'banana'], title: 'Pick one');
-final ok     = await promptConfirm('Continue?');
-final name   = await promptInput('Name');
-
-if (name == null) return; // user cancelled
-print('Hello, \$name!');`,
+if (choice == null) return;
+print('Picked \$choice');`,
       },
     ],
     api: {
@@ -102,20 +98,25 @@ print('Hello, \$name!');`,
     order: 3,
     tagline: "gum-style filter / spin / pager one-liners.",
     description:
-      "Interactive one-liners inspired by Charm's [gum](https://github.com/charmbracelet/gum): fuzzy-`filter` a list, `spin` a spinner while awaiting a `Future`, or `pager` through long text. Ideal for glue scripts and quick tooling.",
-    gif: "gum.gif",
+      "Interactive one-liners inspired by Charm's [gum](https://github.com/charmbracelet/gum): fuzzy-`filter` a list, `spin` a spinner while awaiting a `Future`, or `pager` through long text. Run one helper per process with implicit stdin, or pass `withInput(...)` when you need an explicit stream.",
     snippets: [
       {
-        label: "Usage",
+        label: "filter()",
         lang: "dart",
-        code: `// Interactive fuzzy filter over a list:
-final picked = await filter(['red', 'green', 'blue']);
-
-// Show a spinner while a Future resolves:
-final result = await spin(fetchData(), label: 'Loading…');
-
-// Scrollable viewer (q / Esc to exit):
-await pager(longText);`,
+        code: `final picked = await filter(['red', 'green', 'blue']);
+if (picked == null) return;
+print('Picked \$picked');`,
+      },
+      {
+        label: "spin()",
+        lang: "dart",
+        code: `final result = await spin(fetchData(), label: 'Loading…');
+print(result);`,
+      },
+      {
+        label: "pager()",
+        lang: "dart",
+        code: `await pager(longText);`,
       },
     ],
     api: {
@@ -206,7 +207,7 @@ make kernel EXAMPLE=showcase && dart run tool/bin/showcase.dill`,
     blocks: [
       {
         type: "prose",
-        md: "See also `example/all_features.dart` for a component-integration demo, and the [Examples](/guides/examples) guide for the full catalogue of 60+ runnable programs.",
+        md: "See also `example/all_features.dart` for a component-integration demo, and the [Examples](/guides/examples) guide for the full catalogue of runnable examples.",
       },
     ],
     related: ["canvas", "styling"],

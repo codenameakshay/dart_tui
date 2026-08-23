@@ -287,7 +287,7 @@ export default function HomePage() {
                   href="/guides/examples"
                   className="inline-flex h-11 items-center gap-2 rounded-lg bg-mauve px-5 font-medium text-[#11111b] transition-transform hover:-translate-y-0.5"
                 >
-                  See 60+ examples
+                  See examples
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </div>
