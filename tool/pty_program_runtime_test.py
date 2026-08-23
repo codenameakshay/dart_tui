@@ -48,6 +48,9 @@ class _Probe:
     def continue_process(self) -> None:
         os.kill(self.pid, signal.SIGCONT)
 
+    def write(self, data: bytes) -> None:
+        os.write(self.master, data)
+
     def wait_for_stop(self) -> None:
         deadline = time.monotonic() + TIMEOUT
         while time.monotonic() < deadline:
@@ -203,6 +206,44 @@ class ProgramRuntimePtyTest(unittest.TestCase):
         probe.read_until(b"STDIN_QUIT_READY")
         output = probe.finish()
         self.assert_terminal_restored(output)
+        self.assert_cooked_mode(probe)
+
+    def test_normal_screen_quit_preserves_scrollback_and_parks_cursor(self) -> None:
+        probe = self._probe("normal-screen-stdin-quit")
+        startup = probe.read_until(b"NORMAL_SCREEN_READY")
+        self.assertIn(b"\x1b[24S", startup)
+        self.assertLess(
+            startup.index(b"\x1b[24S"),
+            startup.index(b"\x1b[1;1H"),
+            startup,
+        )
+        self.assertNotIn(b"\x1b[5S", startup)
+
+        probe.write(b"q")
+        output = probe.finish()
+
+        self.assertNotIn(b"\x1b[2J", output)
+        self.assertNotIn(b"\x1b[?1049h", output)
+        self.assertNotIn(b"\x1b[?1049l", output)
+        self.assertIn(b"\x1b[?25h", output)
+        self.assertIn(b"\x1b[?2004l", output)
+        self.assertIn(b"\x1b[4;1H", output)
+        self.assert_cooked_mode(probe)
+
+    def test_view_driven_alt_screen_skips_primary_scroll_and_restores_terminal(self) -> None:
+        probe = self._probe("view-alt-screen-stdin-quit")
+        startup = probe.read_until(b"VIEW_ALT_SCREEN_READY")
+        self.assertNotIn(b"\x1b[24S", startup)
+        self.assertIn(b"\x1b[?1049h", startup)
+
+        probe.write(b"q")
+        output = probe.finish()
+
+        self.assertNotIn(b"\x1b[2J", output)
+        self.assertIn(b"\x1b[?1049h", output)
+        self.assertIn(b"\x1b[?1049l", output)
+        self.assertIn(b"\x1b[?25h", output)
+        self.assertIn(b"\x1b[?2004l", output)
         self.assert_cooked_mode(probe)
 
     def test_second_implicit_stdin_program_fails_with_clear_error(self) -> None:

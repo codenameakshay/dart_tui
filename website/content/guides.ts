@@ -207,6 +207,7 @@ Cmd scrollDown([int n = 1])// scroll viewport down n lines`,
     withCellRenderer(),       // cell-level diff (less flicker on older terminals)
     withAltScreen(),          // enter alternate screen buffer
     withHideCursor(),         // hide terminal cursor
+    withoutInitialScroll(),   // opt out of scrollback preservation (on by default)
     withTickInterval(const Duration(milliseconds: 100)), // global tick rate
     withMouseCellMotion(),    // enable button-event mouse tracking
     withMouseAllMotion(),     // enable all-motion mouse tracking
@@ -228,6 +229,7 @@ Cmd scrollDown([int n = 1])// scroll viewport down n lines`,
           ["withCellRenderer()", "Use the cell-level diff renderer for older terminals."],
           ["withAltScreen()", "Render on the alternate screen buffer."],
           ["withHideCursor()", "Hide the terminal cursor."],
+          ["withoutInitialScroll()", "Opt out of scrollback preservation: paint over the visible screen instead of scrolling it into history."],
           ["withTickInterval(duration)", "Deliver TickMsg values on a fixed interval."],
           ["withMouseCellMotion() / withMouseAllMotion()", "Enable mouse tracking."],
           ["withReportFocus()", "Deliver FocusMsg / BlurMsg on focus changes."],
