@@ -102,13 +102,13 @@ void main() {
 
     tearDown(() => tmp.deleteSync(recursive: true));
 
-    FilePickerModel loaded(FilePickerModel m) {
-      final msg = (m.init()!() as Msg);
-      return m.update(msg).$1 as FilePickerModel;
+    Future<FilePickerModel> loaded(FilePickerModel m) async {
+      final msg = await m.init()!();
+      return m.update(msg!).$1 as FilePickerModel;
     }
 
-    test('init loads entries, hides dotfiles, filters extensions', () {
-      final m = loaded(FilePickerModel(
+    test('init loads entries, hides dotfiles, filters extensions', () async {
+      final m = await loaded(FilePickerModel(
           currentDir: tmp.path, allowedExtensions: const ['.txt']));
       expect(m.loading, isFalse);
       final names = m.entries.map((e) => p.basename(e.path)).toSet();
@@ -118,17 +118,17 @@ void main() {
       expect(names, isNot(contains('.hidden'))); // dotfile hidden
     });
 
-    test('toggling hidden shows dotfiles', () {
-      var m = loaded(FilePickerModel(currentDir: tmp.path));
+    test('toggling hidden shows dotfiles', () async {
+      var m = await loaded(FilePickerModel(currentDir: tmp.path));
       m = m.update(_r('h')).$1
           as FilePickerModel; // toggles showHidden + reloads
-      m = loaded(m);
+      m = await loaded(m);
       final names = m.entries.map((e) => p.basename(e.path)).toSet();
       expect(names, contains('.hidden'));
     });
 
-    test('navigation, entering a directory, and selecting a file', () {
-      var m = loaded(FilePickerModel(currentDir: tmp.path));
+    test('navigation, entering a directory, and selecting a file', () async {
+      var m = await loaded(FilePickerModel(currentDir: tmp.path));
       // move down/up
       m = m.update(_k(KeyCode.down)).$1 as FilePickerModel;
       m = m.update(_k(KeyCode.up)).$1 as FilePickerModel;
@@ -143,8 +143,8 @@ void main() {
     });
 
     test('selecting a file sets selected; view has loading and list states',
-        () {
-      var m = loaded(FilePickerModel(currentDir: tmp.path));
+        () async {
+      var m = await loaded(FilePickerModel(currentDir: tmp.path));
       // move cursor onto the first file entry
       while ((m.entries[m.cursor] is Directory) &&
           m.cursor < m.entries.length - 1) {

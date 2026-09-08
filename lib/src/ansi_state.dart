@@ -22,18 +22,30 @@ List<AnsiToken> tokenizeAnsi(String input) {
   final tokens = <AnsiToken>[];
   var index = 0;
   while (index < input.length) {
-    if (input[index] == _escape) {
-      final end = _escapeSequenceEnd(input, index);
-      if (end != null) {
-        tokens.add(AnsiToken(input.substring(index, end), 0, isControl: true));
-        index = end;
-        continue;
+    final nextEscape = input.indexOf(_escape, index);
+    final plainEnd = nextEscape < 0 ? input.length : nextEscape;
+    if (plainEnd > index) {
+      final plain = index == 0 && plainEnd == input.length
+          ? input
+          : input.substring(index, plainEnd);
+      for (final grapheme in plain.characters) {
+        tokens.add(AnsiToken(grapheme, graphemeWidth(grapheme)));
       }
+      index = plainEnd;
+      continue;
     }
 
-    final grapheme = input.substring(index).characters.first;
-    tokens.add(AnsiToken(grapheme, graphemeWidth(grapheme)));
-    index += grapheme.length;
+    final end = _escapeSequenceEnd(input, index);
+    if (end != null) {
+      tokens.add(AnsiToken(input.substring(index, end), 0, isControl: true));
+      index = end;
+      continue;
+    }
+
+    // An incomplete escape is treated as a zero-width printable token, which
+    // preserves the legacy behavior while letting the following text recover.
+    tokens.add(const AnsiToken(_escape, 0));
+    index++;
   }
   return tokens;
 }
@@ -41,10 +53,26 @@ List<AnsiToken> tokenizeAnsi(String input) {
 /// Removes terminal control sequences while preserving printable Unicode.
 String stripAnsiSequences(String input) {
   if (!input.contains(_escape)) return input;
-  return tokenizeAnsi(input)
-      .where((token) => !token.isControl)
-      .map((token) => token.value)
-      .join();
+  final output = StringBuffer();
+  var index = 0;
+  while (index < input.length) {
+    final escape = input.indexOf(_escape, index);
+    if (escape < 0) {
+      output.write(input.substring(index));
+      break;
+    }
+    if (escape > index) output.write(input.substring(index, escape));
+    final end = _escapeSequenceEnd(input, escape);
+    if (end == null) {
+      // Preserve incomplete escapes exactly as the tokenized implementation
+      // did, while allowing the following text to be measured normally.
+      output.write(_escape);
+      index = escape + 1;
+    } else {
+      index = end;
+    }
+  }
+  return output.toString();
 }
 
 /// Closes active SGR and OSC 8 state at newlines and reopens it afterwards.
@@ -72,7 +100,8 @@ String balanceAnsiState(String input) {
 
 /// Tracks the terminal styling needed to safely cross a layout boundary.
 final class AnsiStateTracker {
-  final List<String> _sgr = [];
+  final StringBuffer _sgr = StringBuffer();
+  String? _sgrOpenCache;
   String? _hyperlink;
 
   void accept(String sequence) {
@@ -82,10 +111,11 @@ final class AnsiStateTracker {
       final lastReset = parts.lastIndexWhere((part) => part == '0');
       if (lastReset >= 0) {
         _sgr.clear();
-        if (lastReset < parts.length - 1) _sgr.add(sequence);
+        if (lastReset < parts.length - 1) _sgr.write(sequence);
       } else {
-        _sgr.add(sequence);
+        _sgr.write(sequence);
       }
+      _sgrOpenCache = null;
       return;
     }
 
@@ -98,9 +128,9 @@ final class AnsiStateTracker {
   }
 
   String get closeSequence =>
-      '${_sgr.isEmpty ? '' : '\x1b[0m'}${_hyperlink == null ? '' : _osc8Close}';
+      '${_sgr.length == 0 ? '' : '\x1b[0m'}${_hyperlink == null ? '' : _osc8Close}';
 
-  String get sgrOpenSequence => _sgr.join();
+  String get sgrOpenSequence => _sgrOpenCache ??= _sgr.toString();
 
   String get hyperlinkOpenSequence => _hyperlink ?? '';
 

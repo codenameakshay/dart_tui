@@ -8,35 +8,51 @@ import 'msg.dart';
 /// Mutates [buffer] only when a full key sequence is recognised.
 /// Returns `null` if more bytes are needed (incomplete escape sequence).
 TeaKey? parseKeyFromBuffer(List<int> buffer) {
-  if (buffer.isEmpty) return null;
+  final parsed = parseKeyFromBufferAt(buffer, 0);
+  if (parsed == null) return null;
+  buffer.removeRange(0, parsed.consumed);
+  return parsed.key;
+}
 
-  final b0 = buffer[0];
+/// Parses a key without moving bytes in [buffer]. The returned record contains
+/// the key and number of bytes consumed from [offset]. This lets the streaming
+/// decoder keep a read cursor instead of shifting the whole buffer per key.
+({TeaKey key, int consumed})? parseKeyFromBufferAt(
+  List<int> buffer,
+  int offset,
+) {
+  final length = buffer.length - offset;
+  if (length <= 0) return null;
+
+  final b0 = buffer[offset];
 
   // Control characters 0x01–0x1a (Ctrl+A … Ctrl+Z)
   if (b0 >= 0x01 && b0 <= 0x1a) {
-    buffer.removeAt(0);
-    return switch (b0) {
-      0x09 => const TeaKey(code: KeyCode.tab), // HT / Tab
-      0x0a => const TeaKey(code: KeyCode.enter), // LF / Enter (Linux/WSL)
-      0x0d => const TeaKey(code: KeyCode.enter), // CR / Enter
-      _ => TeaKey(
-          code: KeyCode.rune,
-          // 0x01→'a', 0x02→'b', … 0x1a→'z'
-          text: String.fromCharCode(b0 + 0x60),
-          modifiers: const {KeyMod.ctrl},
-        ),
-    };
+    return (
+      key: switch (b0) {
+        0x09 => const TeaKey(code: KeyCode.tab), // HT / Tab
+        0x0a => const TeaKey(code: KeyCode.enter), // LF / Enter (Linux/WSL)
+        0x0d => const TeaKey(code: KeyCode.enter), // CR / Enter
+        _ => TeaKey(
+            code: KeyCode.rune,
+            // 0x01→'a', 0x02→'b', … 0x1a→'z'
+            text: String.fromCharCode(b0 + 0x60),
+            modifiers: const {KeyMod.ctrl},
+          ),
+      },
+      consumed: 1
+    );
   }
 
   // Escape sequences
   if (b0 == 0x1b) {
-    if (buffer.length < 2) return null;
-    final b1 = buffer[1];
+    if (length < 2) return null;
+    final b1 = buffer[offset + 1];
 
     // CSI: ESC [
     if (b1 == 0x5b) {
-      if (buffer.length < 3) return null;
-      final b2 = buffer[2];
+      if (length < 3) return null;
+      final b2 = buffer[offset + 2];
       final arrowOrNav = switch (b2) {
         0x41 => const TeaKey(code: KeyCode.up),
         0x42 => const TeaKey(code: KeyCode.down),
@@ -50,13 +66,12 @@ TeaKey? parseKeyFromBuffer(List<int> buffer) {
         _ => null,
       };
       if (arrowOrNav != null) {
-        buffer.removeRange(0, 3);
-        return arrowOrNav;
+        return (key: arrowOrNav, consumed: 3);
       }
       // ESC [ n ~  (delete, pgup, pgdn, home, end)
       if (b2 >= 0x31 && b2 <= 0x39) {
-        if (buffer.length < 4) return null;
-        final b3 = buffer[3];
+        if (length < 4) return null;
+        final b3 = buffer[offset + 3];
         if (b3 == 0x7e) {
           final key = switch (b2) {
             0x31 => const TeaKey(code: KeyCode.home),
@@ -68,18 +83,16 @@ TeaKey? parseKeyFromBuffer(List<int> buffer) {
             0x38 => const TeaKey(code: KeyCode.end),
             _ => const TeaKey(code: KeyCode.unknown),
           };
-          buffer.removeRange(0, 4);
-          return key;
+          return (key: key, consumed: 4);
         }
       }
-      buffer.removeRange(0, 3);
-      return const TeaKey(code: KeyCode.unknown);
+      return (key: const TeaKey(code: KeyCode.unknown), consumed: 3);
     }
 
     // SS3: ESC O  (home, end, F1–F4)
     if (b1 == 0x4f) {
-      if (buffer.length < 3) return null;
-      final b2 = buffer[2];
+      if (length < 3) return null;
+      final b2 = buffer[offset + 2];
       final key = switch (b2) {
         0x48 => const TeaKey(code: KeyCode.home),
         0x46 => const TeaKey(code: KeyCode.end),
@@ -89,50 +102,51 @@ TeaKey? parseKeyFromBuffer(List<int> buffer) {
         0x53 => const TeaKey(code: KeyCode.f4),
         _ => null,
       };
-      buffer.removeRange(0, 3);
-      return key ?? const TeaKey(code: KeyCode.unknown);
+      return (key: key ?? const TeaKey(code: KeyCode.unknown), consumed: 3);
     }
 
     // Alt+Left: ESC b
     if (b1 == 0x62) {
-      buffer.removeRange(0, 2);
-      return const TeaKey(code: KeyCode.left, modifiers: {KeyMod.alt});
+      return (
+        key: const TeaKey(code: KeyCode.left, modifiers: {KeyMod.alt}),
+        consumed: 2
+      );
     }
     // Alt+Right: ESC f
     if (b1 == 0x66) {
-      buffer.removeRange(0, 2);
-      return const TeaKey(code: KeyCode.right, modifiers: {KeyMod.alt});
+      return (
+        key: const TeaKey(code: KeyCode.right, modifiers: {KeyMod.alt}),
+        consumed: 2
+      );
     }
     // Alt+Backspace: ESC DEL
     if (b1 == 0x7f) {
-      buffer.removeRange(0, 2);
-      return const TeaKey(code: KeyCode.backspace, modifiers: {KeyMod.alt});
+      return (
+        key: const TeaKey(code: KeyCode.backspace, modifiers: {KeyMod.alt}),
+        consumed: 2
+      );
     }
 
-    buffer.removeRange(0, 2);
-    return const TeaKey(code: KeyCode.unknown);
+    return (key: const TeaKey(code: KeyCode.unknown), consumed: 2);
   }
 
   // DEL / Backspace
   if (b0 == 0x7f) {
-    buffer.removeAt(0);
-    return const TeaKey(code: KeyCode.backspace);
+    return (key: const TeaKey(code: KeyCode.backspace), consumed: 1);
   }
 
   // Other non-printable controls
   if (b0 == 0x00 || (b0 >= 0x1c && b0 <= 0x1f)) {
-    buffer.removeAt(0);
-    return const TeaKey(code: KeyCode.unknown);
+    return (key: const TeaKey(code: KeyCode.unknown), consumed: 1);
   }
 
   // Multi-byte UTF-8 or Printable ASCII
   // Try to decode as much as possible from the start of the buffer.
   for (var len = 4; len >= 1; len--) {
-    if (buffer.length >= len) {
+    if (length >= len) {
       try {
-        final decoded = utf8.decode(buffer.sublist(0, len));
-        buffer.removeRange(0, len);
-        return TeaKey(code: KeyCode.rune, text: decoded);
+        final decoded = utf8.decode(buffer.sublist(offset, offset + len));
+        return (key: TeaKey(code: KeyCode.rune, text: decoded), consumed: len);
       } catch (_) {
         // Continue trying shorter lengths or wait for more bytes
       }
@@ -143,8 +157,10 @@ TeaKey? parseKeyFromBuffer(List<int> buffer) {
   // UTF-8 lead bytes: 110xxxxx (2 bytes), 1110xxxx (3 bytes), 11110xxx (4 bytes).
   if (b0 & 0x80 == 0) {
     // Should have been handled by utf8.decode(len=1) but for safety:
-    buffer.removeAt(0);
-    return TeaKey(code: KeyCode.rune, text: String.fromCharCode(b0));
+    return (
+      key: TeaKey(code: KeyCode.rune, text: String.fromCharCode(b0)),
+      consumed: 1,
+    );
   }
 
   // Wait for more bytes if it looks like a lead byte

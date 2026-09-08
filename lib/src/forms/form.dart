@@ -129,18 +129,18 @@ final class Form extends Model implements OutcomeModel<FormValues> {
           if (g.fields[i].acceptsInput && !g.fields[i].isHidden(v)) i,
       ];
 
-  List<int> _visibleGroups() => [
+  List<int> _visibleGroups(FormValues values) => [
         for (var i = 0; i < groups.length; i++)
-          if (!(groups[i].hidden?.call(_rawValues) ?? false)) i
+          if (!(groups[i].hidden?.call(values) ?? false)) i
       ];
 
-  int? _firstFocusable(int gi) {
-    final t = _focusable(groups[gi], _rawValues);
+  int? _firstFocusable(int gi, FormValues values) {
+    final t = _focusable(groups[gi], values);
     return t.isEmpty ? null : t.first;
   }
 
-  int? _lastFocusable(int gi) {
-    final t = _focusable(groups[gi], _rawValues);
+  int? _lastFocusable(int gi, FormValues values) {
+    final t = _focusable(groups[gi], values);
     return t.isEmpty ? null : t.last;
   }
 
@@ -160,17 +160,18 @@ final class Form extends Model implements OutcomeModel<FormValues> {
     final cleared = active.error == null ? this : _setActiveError(null);
 
     final g = cleared.groups[cleared.groupIndex];
-    final targets = cleared._focusable(g, cleared._rawValues);
+    final values = cleared._rawValues;
+    final targets = cleared._focusable(g, values);
     final pos = targets.indexOf(cleared.fieldIndex);
     if (pos >= 0 && pos < targets.length - 1) {
       return (cleared._copy(fieldIndex: targets[pos + 1]), null);
     }
     // past the last focusable field of this group → next visible group
-    final vg = cleared._visibleGroups();
+    final vg = cleared._visibleGroups(values);
     final gp = vg.indexOf(cleared.groupIndex);
     if (gp + 1 < vg.length) {
       final gi = vg[gp + 1];
-      final ff = cleared._firstFocusable(gi);
+      final ff = cleared._firstFocusable(gi, values);
       return (cleared._copy(groupIndex: gi, fieldIndex: ff ?? 0), null);
     }
     return cleared._submit();
@@ -198,14 +199,15 @@ final class Form extends Model implements OutcomeModel<FormValues> {
   }
 
   (Model, Cmd?) _back() {
-    final targets = _focusable(groups[groupIndex], _rawValues);
+    final values = _rawValues;
+    final targets = _focusable(groups[groupIndex], values);
     final pos = targets.indexOf(fieldIndex);
     if (pos > 0) return (_copy(fieldIndex: targets[pos - 1]), null);
     // before the first field of this group → previous visible group's last field
-    final vg = _visibleGroups();
+    final vg = _visibleGroups(values);
     final gp = vg.indexOf(groupIndex);
     for (var j = gp - 1; j >= 0; j--) {
-      final lf = _lastFocusable(vg[j]);
+      final lf = _lastFocusable(vg[j], values);
       if (lf != null) return (_copy(groupIndex: vg[j], fieldIndex: lf), null);
     }
     return (this, null); // no-op at the very first field
@@ -250,8 +252,9 @@ final class Form extends Model implements OutcomeModel<FormValues> {
 
     // if the active field is now hidden, refocus to the next (or last) target
     final active2 = nf.groups[nf.groupIndex].fields[nf.fieldIndex];
-    if (!active2.acceptsInput || active2.isHidden(nf._rawValues)) {
-      final targets = nf._focusable(nf.groups[nf.groupIndex], nf._rawValues);
+    final nfValues = nf._rawValues;
+    if (!active2.acceptsInput || active2.isHidden(nfValues)) {
+      final targets = nf._focusable(nf.groups[nf.groupIndex], nfValues);
       if (targets.isNotEmpty) {
         final after = targets.firstWhere((i) => i > nf.fieldIndex,
             orElse: () => targets.last);
@@ -266,7 +269,7 @@ final class Form extends Model implements OutcomeModel<FormValues> {
     final g = groups[groupIndex];
     final v = _rawValues;
     final b = StringBuffer();
-    final visible = _visibleGroups();
+    final visible = _visibleGroups(v);
     if (visible.length > 1) {
       final pos = visible.indexOf(groupIndex) + 1;
       b.writeln(styles.pageIndicator

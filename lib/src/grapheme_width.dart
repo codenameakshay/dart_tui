@@ -4,18 +4,21 @@ import 'package:characters/characters.dart';
 int graphemeWidth(String grapheme) {
   if (grapheme.isEmpty) return 0;
 
-  final runes = grapheme.runes.toList(growable: false);
-  if (runes.every(_isZeroWidth)) return 0;
-
-  if (runes.contains(0xfe0f) ||
-      runes.contains(0x20e3) ||
-      runes.any(_isRegionalIndicator) ||
-      runes.any(_isEmoji) ||
-      runes.any(_isEastAsianWide)) {
-    return 2;
+  var hasVisibleRune = false;
+  var isWide = false;
+  for (final rune in grapheme.runes) {
+    if (!_isZeroWidth(rune)) hasVisibleRune = true;
+    if (rune == 0xfe0f ||
+        rune == 0x20e3 ||
+        _isRegionalIndicator(rune) ||
+        _isEmoji(rune) ||
+        _isEastAsianWide(rune)) {
+      isWide = true;
+    }
   }
 
-  return 1;
+  if (!hasVisibleRune) return 0;
+  return isWide ? 2 : 1;
 }
 
 /// Returns the terminal-cell width of [text], measured by grapheme cluster.

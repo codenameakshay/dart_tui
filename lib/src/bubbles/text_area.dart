@@ -62,6 +62,23 @@ final class TextAreaModel extends Model {
     this.styles = TextAreaStyles.defaults,
   });
 
+  TextAreaModel._copy({
+    required this.value,
+    required this.cursorRow,
+    required this.cursorCol,
+    required this.scrollOffset,
+    required this.maxHeight,
+    required this.minHeight,
+    required this.dynamicHeight,
+    required this.maxContentHeight,
+    required this.width,
+    required this.charLimit,
+    required this.focused,
+    required this.placeholder,
+    required this.styles,
+    List<_TextAreaVisualRow>? visualRowsCache,
+  }) : _visualRowsCache = visualRowsCache;
+
   final String value;
   final int cursorRow;
   final int cursorCol;
@@ -81,9 +98,11 @@ final class TextAreaModel extends Model {
   final bool focused;
   final String placeholder;
   final TextAreaStyles styles;
+  List<_TextAreaVisualRow>? _visualRowsCache;
 
   List<String> get lines => value.split('\n');
-  List<_TextAreaVisualRow> get _visualRows => _buildVisualRows(value, width);
+  List<_TextAreaVisualRow> get _visualRows =>
+      _visualRowsCache ??= List.unmodifiable(_buildVisualRows(value, width));
   int get visualLineCount => _visualRows.length;
 
   /// Zero-based logical line containing the cursor.
@@ -151,22 +170,28 @@ final class TextAreaModel extends Model {
     bool? focused,
     String? placeholder,
     TextAreaStyles? styles,
-  }) =>
-      TextAreaModel(
-        value: value ?? this.value,
-        cursorRow: cursorRow ?? this.cursorRow,
-        cursorCol: cursorCol ?? this.cursorCol,
-        scrollOffset: scrollOffset ?? this.scrollOffset,
-        maxHeight: maxHeight ?? this.maxHeight,
-        minHeight: minHeight ?? this.minHeight,
-        dynamicHeight: dynamicHeight ?? this.dynamicHeight,
-        maxContentHeight: maxContentHeight ?? this.maxContentHeight,
-        width: width ?? this.width,
-        charLimit: charLimit ?? this.charLimit,
-        focused: focused ?? this.focused,
-        placeholder: placeholder ?? this.placeholder,
-        styles: styles ?? this.styles,
-      );
+  }) {
+    final nextValue = value ?? this.value;
+    final nextWidth = width ?? this.width;
+    return TextAreaModel._copy(
+      value: nextValue,
+      cursorRow: cursorRow ?? this.cursorRow,
+      cursorCol: cursorCol ?? this.cursorCol,
+      scrollOffset: scrollOffset ?? this.scrollOffset,
+      maxHeight: maxHeight ?? this.maxHeight,
+      minHeight: minHeight ?? this.minHeight,
+      dynamicHeight: dynamicHeight ?? this.dynamicHeight,
+      maxContentHeight: maxContentHeight ?? this.maxContentHeight,
+      width: nextWidth,
+      charLimit: charLimit ?? this.charLimit,
+      focused: focused ?? this.focused,
+      placeholder: placeholder ?? this.placeholder,
+      styles: styles ?? this.styles,
+      visualRowsCache: nextValue == this.value && nextWidth == this.width
+          ? _visualRowsCache
+          : null,
+    );
+  }
 
   static int _wordStartBefore(List<String> chars, int pos) {
     var i = pos;
@@ -218,9 +243,10 @@ final class TextAreaModel extends Model {
       final isLineEnd =
           col == lineChars.length && candidate.end == lineChars.length;
       if ((col >= candidate.start && col < candidate.end) || isLineEnd) {
-        final cellColumn = textWidth(
-          lineChars.sublist(candidate.start, col).join(),
-        );
+        var cellColumn = 0;
+        for (var i = candidate.start; i < col; i++) {
+          cellColumn += graphemeWidth(lineChars[i]);
+        }
         return _TextAreaCursorLocation(visual, cellColumn);
       }
     }

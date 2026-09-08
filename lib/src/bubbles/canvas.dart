@@ -46,6 +46,9 @@ final class _Layer {
 /// Higher [zIndex] layers overwrite lower ones at overlapping cells.
 /// All layers are collapsed into a flat string when [render] is called.
 final class Canvas {
+  static final RegExp _ansiRe =
+      RegExp(r'\x1b(?:\[[0-9;?]*[A-Za-z]|[\]O][^\x07]*\x07?)');
+
   Canvas(this.width, this.height)
       : assert(width > 0 && height > 0,
             'Canvas width and height must be positive');
@@ -119,44 +122,58 @@ final class Canvas {
   /// at column [startX].
   void _paintStyledLine(List<_Cell?> gridRow, int startX, String line) {
     var col = startX;
-    var i = 0;
-    final ansiRe = RegExp(r'\x1b(?:\[[0-9;?]*[A-Za-z]|[\]O][^\x07]*\x07?)');
-    var currentAnsi = StringBuffer();
+    var segmentStart = 0;
+    final currentAnsi = StringBuffer();
 
-    while (i < line.length) {
-      // Check for an escape sequence at position i
-      final match = ansiRe.matchAsPrefix(line, i);
-      if (match != null) {
-        final seq = match.group(0)!;
-        i += seq.length;
-        // Reset clears accumulated state
-        if (seq == '\x1b[0m' || seq == '\x1b[m') {
-          currentAnsi.clear();
-        } else {
-          currentAnsi.write(seq);
-        }
-        continue;
+    for (final match in _ansiRe.allMatches(line)) {
+      if (match.start > segmentStart) {
+        col = _paintGraphemes(
+          gridRow,
+          col,
+          line.substring(segmentStart, match.start),
+          currentAnsi.toString(),
+        );
+        if (col >= gridRow.length) return;
       }
 
-      // Printable grapheme cluster
-      final remaining = line.substring(i);
-      final char = remaining.characters.first;
-      i += char.length;
+      final seq = match.group(0)!;
+      if (seq == '\x1b[0m' || seq == '\x1b[m') {
+        currentAnsi.clear();
+      } else {
+        currentAnsi.write(seq);
+      }
+      segmentStart = match.end;
+    }
 
+    if (segmentStart < line.length) {
+      _paintGraphemes(
+        gridRow,
+        col,
+        line.substring(segmentStart),
+        currentAnsi.toString(),
+      );
+    }
+  }
+
+  int _paintGraphemes(
+    List<_Cell?> gridRow,
+    int col,
+    String text,
+    String ansiOpen,
+  ) {
+    for (final char in text.characters) {
+      if (col >= gridRow.length) break;
       final charWidth = graphemeWidth(char);
-
-      if (col >= 0 && col < gridRow.length) {
-        gridRow[col] = _Cell(
-          char: char,
-          ansiOpen: currentAnsi.toString(),
-        );
-        // If double width, mark next cell as null to skip it during rendering
+      if (col >= 0) {
+        gridRow[col] = _Cell(char: char, ansiOpen: ansiOpen);
+        // If double width, mark next cell as null to skip it during rendering.
         if (charWidth == 2 && col + 1 < gridRow.length) {
           gridRow[col + 1] = null;
         }
       }
       col += charWidth;
     }
+    return col;
   }
 }
 

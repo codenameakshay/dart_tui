@@ -236,9 +236,10 @@ final class MultiSelectModel extends Model {
     }
 
     if (showStatusBar) {
-      final n = selected.length;
+      final selectedCount = items.where((item) => item.selected).length;
       b.writeln();
-      b.write(styles.statusBar.render('$n/${items.length} selected'));
+      b.write(
+          styles.statusBar.render('$selectedCount/${items.length} selected'));
     }
 
     return newView(b.toString());

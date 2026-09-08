@@ -458,11 +458,12 @@ final class CellRenderer implements TeaRenderer {
           final nextEscape = raw.indexOf('\x1b', i);
           final plainEnd = nextEscape < 0 ? raw.length : nextEscape;
           final plainText = raw.substring(i, plainEnd);
+          final attrs = state.sgrOpenSequence;
+          final hyperlink = state.hyperlinkOpenSequence;
           for (final cluster in plainText.characters) {
-            final attrs = state.sgrOpenSequence;
-            final hyperlink = state.hyperlinkOpenSequence;
             cells.add(_Cell(cluster, attrs, hyperlink));
-            for (var column = 1; column < graphemeWidth(cluster); column++) {
+            final width = graphemeWidth(cluster);
+            for (var column = 1; column < width; column++) {
               cells.add(_Cell.continuation(attrs, hyperlink));
             }
           }

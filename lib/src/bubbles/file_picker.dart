@@ -9,8 +9,14 @@ import '../view.dart';
 
 /// Internal message: directory listing loaded.
 final class _DirLoadedMsg extends Msg {
-  _DirLoadedMsg(this.entries);
+  _DirLoadedMsg(this.loadState, this.loadToken, this.entries);
+  final _FilePickerLoadState loadState;
+  final Object loadToken;
   final List<FileSystemEntity> entries;
+}
+
+final class _FilePickerLoadState {
+  Object? latestToken;
 }
 
 /// Filesystem browser bubble.
@@ -28,7 +34,20 @@ final class FilePickerModel extends Model {
     this.allowedExtensions = const [],
     this.selected,
     this.loading = true,
-  });
+  }) : _loadState = _FilePickerLoadState();
+
+  FilePickerModel._withLoadState({
+    required this.currentDir,
+    required this.entries,
+    required this.cursor,
+    required this.scrollOffset,
+    required this.height,
+    required this.showHidden,
+    required this.allowedExtensions,
+    required this.selected,
+    required this.loading,
+    required _FilePickerLoadState loadState,
+  }) : _loadState = loadState;
 
   final String currentDir;
   final List<FileSystemEntity> entries;
@@ -39,6 +58,7 @@ final class FilePickerModel extends Model {
   final List<String> allowedExtensions;
   final String? selected;
   final bool loading;
+  final _FilePickerLoadState _loadState;
 
   FilePickerModel copyWith({
     String? currentDir,
@@ -51,7 +71,7 @@ final class FilePickerModel extends Model {
     String? selected,
     bool? loading,
   }) =>
-      FilePickerModel(
+      FilePickerModel._withLoadState(
         currentDir: currentDir ?? this.currentDir,
         entries: entries ?? this.entries,
         cursor: cursor ?? this.cursor,
@@ -61,24 +81,22 @@ final class FilePickerModel extends Model {
         allowedExtensions: allowedExtensions ?? this.allowedExtensions,
         selected: selected ?? this.selected,
         loading: loading ?? this.loading,
+        loadState: currentDir != null && currentDir != this.currentDir ||
+                showHidden != null && showHidden != this.showHidden ||
+                allowedExtensions != null
+            ? _FilePickerLoadState()
+            : _loadState,
       );
 
-  static List<FileSystemEntity> _loadDir(
+  static Future<List<FileSystemEntity>> _loadDir(
     String dir,
     bool showHidden,
     List<String> allowedExtensions,
-  ) {
+  ) async {
     try {
       final d = Directory(dir);
-      if (!d.existsSync()) return [];
-      final all = d.listSync()
-        ..sort((a, b) {
-          final aIsDir = a is Directory ? 0 : 1;
-          final bIsDir = b is Directory ? 0 : 1;
-          if (aIsDir != bIsDir) return aIsDir - bIsDir;
-          return p.basename(a.path).compareTo(p.basename(b.path));
-        });
-      return all.where((e) {
+      if (!await d.exists()) return [];
+      final all = (await d.list().toList()).where((e) {
         final name = p.basename(e.path);
         if (!showHidden && name.startsWith('.')) return false;
         if (e is File && allowedExtensions.isNotEmpty) {
@@ -86,7 +104,14 @@ final class FilePickerModel extends Model {
           return allowedExtensions.contains(ext);
         }
         return true;
-      }).toList();
+      }).toList()
+        ..sort((a, b) {
+          final aIsDir = a is Directory ? 0 : 1;
+          final bIsDir = b is Directory ? 0 : 1;
+          if (aIsDir != bIsDir) return aIsDir - bIsDir;
+          return p.basename(a.path).compareTo(p.basename(b.path));
+        });
+      return all;
     } catch (_) {
       return [];
     }
@@ -94,9 +119,11 @@ final class FilePickerModel extends Model {
 
   @override
   Cmd? init() {
-    return () {
-      final loaded = _loadDir(currentDir, showHidden, allowedExtensions);
-      return _DirLoadedMsg(loaded);
+    final loadToken = Object();
+    _loadState.latestToken = loadToken;
+    return () async {
+      final loaded = await _loadDir(currentDir, showHidden, allowedExtensions);
+      return _DirLoadedMsg(_loadState, loadToken, loaded);
     };
   }
 
@@ -112,7 +139,11 @@ final class FilePickerModel extends Model {
   @override
   (Model, Cmd?) update(Msg msg) {
     switch (msg) {
-      case _DirLoadedMsg(:final entries):
+      case _DirLoadedMsg(:final loadState, :final loadToken, :final entries):
+        if (!identical(loadState, _loadState) ||
+            !identical(loadToken, _loadState.latestToken)) {
+          return (this, null);
+        }
         return (
           copyWith(
               entries: entries, cursor: 0, scrollOffset: 0, loading: false),

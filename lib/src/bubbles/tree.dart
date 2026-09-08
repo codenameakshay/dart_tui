@@ -237,15 +237,13 @@ final class TreeModel extends Model {
   /// Recursively walk [path] through [node]'s child hierarchy, applying
   /// [transform] to the node at the end of the path.
   static TreeNode _updateNodeAtPath(
-    TreeNode node,
-    List<int> path,
-    TreeNode Function(TreeNode) transform,
-  ) {
-    if (path.isEmpty) return transform(node);
-    final idx = path.first;
-    final rest = path.sublist(1);
+      TreeNode node, List<int> path, TreeNode Function(TreeNode) transform,
+      [int offset = 0]) {
+    if (offset == path.length) return transform(node);
+    final idx = path[offset];
     final newChildren = List<TreeNode>.from(node.children);
-    newChildren[idx] = _updateNodeAtPath(newChildren[idx], rest, transform);
+    newChildren[idx] =
+        _updateNodeAtPath(newChildren[idx], path, transform, offset + 1);
     return node.copyWith(children: newChildren);
   }
 
