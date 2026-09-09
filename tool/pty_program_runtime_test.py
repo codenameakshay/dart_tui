@@ -75,6 +75,9 @@ class _Probe:
             self.fail(f"missing marker {marker!r}; output={bytes(self.data)!r}")
         return bytes(self.data)
 
+    def send(self, data: bytes) -> None:
+        os.write(self.master, data)
+
     def finish(self) -> bytes:
         deadline = time.monotonic() + TIMEOUT
         while not self._poll() and time.monotonic() < deadline:
@@ -151,17 +154,40 @@ class ProgramRuntimePtyTest(unittest.TestCase):
         self.assertIn(b"\x1b[?1049l", output)
         self.assertIn(b"\x1b[?2004l", output)
 
+    def assert_cooked_mode(self, probe: _Probe) -> None:
+        lflag = termios.tcgetattr(probe.master)[3]
+        self.assertTrue(lflag & termios.ECHO)
+        self.assertTrue(lflag & termios.ICANON)
+
     def test_kill_wakes_an_idle_program_and_restores_terminal(self) -> None:
         probe = self._probe("kill")
         probe.read_until(b"KILL_READY")
         output = probe.finish()
         self.assert_terminal_restored(output)
+        self.assert_cooked_mode(probe)
 
     def test_external_cancellation_interrupts_and_restores_terminal(self) -> None:
         probe = self._probe("cancel")
         probe.read_until(b"CANCEL_READY")
         output = probe.finish()
         self.assert_terminal_restored(output)
+        self.assert_cooked_mode(probe)
+
+    def test_q_exits_and_restores_terminal(self) -> None:
+        probe = self._probe("stdin-quit")
+        probe.read_until(b"STDIN_QUIT_READY")
+        probe.send(b"q")
+        output = probe.finish()
+        self.assert_terminal_restored(output)
+        self.assert_cooked_mode(probe)
+
+    def test_ctrl_c_exits_and_restores_terminal(self) -> None:
+        probe = self._probe("stdin-ctrl-c")
+        probe.read_until(b"STDIN_CTRL_C_READY")
+        probe.send(b"\x03")
+        output = probe.finish()
+        self.assert_terminal_restored(output)
+        self.assert_cooked_mode(probe)
 
     def test_sigwinch_delivers_the_new_pty_size(self) -> None:
         probe = self._probe("resize")

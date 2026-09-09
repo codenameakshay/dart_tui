@@ -178,6 +178,10 @@ Program(
 ).run(MyModel());
 ```
 
+For an interactive program that explicitly owns terminal input, pass
+`withInput(stdin)`. `Program` restores cooked terminal mode before cancelling
+that subscription during shutdown.
+
 ---
 
 ## Styling

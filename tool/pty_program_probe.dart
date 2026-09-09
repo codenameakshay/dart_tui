@@ -18,10 +18,13 @@ Future<void> main(List<String> arguments) async {
   final scenario = arguments.single;
   late final Program program;
   final options = <ProgramOption>[
-    withInput(null),
+    if ({'stdin-quit', 'stdin-ctrl-c'}.contains(scenario))
+      withInput(stdin)
+    else
+      withInput(null),
     withAltScreen(),
     withHideCursor(),
-    if (scenario != 'resize') withoutSignalHandler(),
+    if (!{'resize', 'stdin-ctrl-c'}.contains(scenario)) withoutSignalHandler(),
     if (scenario == 'cancel')
       withContext(
           () => Future<void>.delayed(const Duration(milliseconds: 250))),
@@ -36,7 +39,14 @@ Future<void> main(List<String> arguments) async {
   killTimer?.cancel();
 }
 
-const _scenarios = {'kill', 'cancel', 'resize', 'suspend'};
+const _scenarios = {
+  'kill',
+  'cancel',
+  'resize',
+  'suspend',
+  'stdin-quit',
+  'stdin-ctrl-c',
+};
 
 final class _ProbeModel implements Model {
   const _ProbeModel(this.scenario, [this.state]);
@@ -55,6 +65,11 @@ final class _ProbeModel implements Model {
 
   @override
   (Model, Cmd?) update(Msg msg) {
+    if ((scenario == 'stdin-quit' || scenario == 'stdin-ctrl-c') &&
+        msg is KeyMsg &&
+        (msg.key == 'q' || msg.key == 'ctrl+c')) {
+      return (this, () => quit());
+    }
     if (scenario == 'resize' &&
         msg is WindowSizeMsg &&
         msg.width == 101 &&
@@ -78,6 +93,8 @@ final class _ProbeModel implements Model {
               'cancel' => 'CANCEL_READY',
               'resize' => 'RESIZE_READY',
               'suspend' => 'SUSPEND_READY',
+              'stdin-quit' => 'STDIN_QUIT_READY',
+              'stdin-ctrl-c' => 'STDIN_CTRL_C_READY',
               _ => throw StateError('unsupported probe scenario: $scenario'),
             },
         altScreen: true,
