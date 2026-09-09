@@ -6,6 +6,10 @@ import 'msg.dart';
 
 final class TerminalInputDecoder {
   final List<int> _buffer = <int>[];
+  int _bufferStart = 0;
+  int? _csiScanIndex;
+  int? _oscScanIndex;
+  int? _dcsScanIndex;
   // Pasted bytes accumulate RAW: terminals send UTF-8, so mapping each byte
   // to a char code (Latin-1) mangles multi-byte text — the paste content is
   // decoded as UTF-8 once, at the end marker.
@@ -18,7 +22,7 @@ final class TerminalInputDecoder {
 
     while (true) {
       if (_inPaste) {
-        final endMatch = _matchesPrefix(_buffer, _pasteEnd);
+        final endMatch = _matchesPrefix(_buffer, _bufferStart, _pasteEnd);
         if (endMatch == _PrefixMatch.partial) break;
         if (endMatch == _PrefixMatch.full) {
           _consume(_pasteEnd.length);
@@ -31,12 +35,13 @@ final class TerminalInputDecoder {
           continue;
         }
 
-        if (_buffer.isEmpty) break;
-        _pasteBytes.add(_buffer.removeAt(0));
+        if (_bufferStart == _buffer.length) break;
+        _pasteBytes.add(_buffer[_bufferStart++]);
         continue;
       }
 
-      final pasteStartMatch = _matchesPrefix(_buffer, _pasteStart);
+      final pasteStartMatch =
+          _matchesPrefix(_buffer, _bufferStart, _pasteStart);
       if (pasteStartMatch == _PrefixMatch.partial) break;
       if (pasteStartMatch == _PrefixMatch.full) {
         _consume(_pasteStart.length);
@@ -45,7 +50,7 @@ final class TerminalInputDecoder {
         continue;
       }
 
-      final focusInMatch = _matchesPrefix(_buffer, _focusIn);
+      final focusInMatch = _matchesPrefix(_buffer, _bufferStart, _focusIn);
       if (focusInMatch == _PrefixMatch.partial) break;
       if (focusInMatch == _PrefixMatch.full) {
         _consume(_focusIn.length);
@@ -53,7 +58,7 @@ final class TerminalInputDecoder {
         continue;
       }
 
-      final focusOutMatch = _matchesPrefix(_buffer, _focusOut);
+      final focusOutMatch = _matchesPrefix(_buffer, _bufferStart, _focusOut);
       if (focusOutMatch == _PrefixMatch.partial) break;
       if (focusOutMatch == _PrefixMatch.full) {
         _consume(_focusOut.length);
@@ -61,39 +66,53 @@ final class TerminalInputDecoder {
         continue;
       }
 
-      final osc = _tryParseOsc(_buffer);
-      if (osc == _ParseState.partial) break;
+      final osc = _tryParseOsc(_buffer, _bufferStart, _oscScanIndex);
+      if (osc is _ParseState && osc.kind == 1) {
+        _oscScanIndex = osc.scanIndex;
+        break;
+      }
       if (osc case _ParsedMessages(:final consumed, :final msgs)) {
+        _oscScanIndex = null;
         _consume(consumed);
         out.addAll(msgs);
         continue;
       }
 
-      final dcs = _tryParseDcs(_buffer);
-      if (dcs == _ParseState.partial) break;
+      final dcs = _tryParseDcs(_buffer, _bufferStart, _dcsScanIndex);
+      if (dcs is _ParseState && dcs.kind == 1) {
+        _dcsScanIndex = dcs.scanIndex;
+        break;
+      }
       if (dcs case _ParsedMessages(:final consumed, :final msgs)) {
+        _dcsScanIndex = null;
         _consume(consumed);
         out.addAll(msgs);
         continue;
       }
 
-      final csi = _tryParseCsi(_buffer);
-      if (csi == _ParseState.partial) break;
+      final csi = _tryParseCsi(_buffer, _bufferStart, _csiScanIndex);
+      if (csi is _ParseState && csi.kind == 1) {
+        _csiScanIndex = csi.scanIndex;
+        break;
+      }
       if (csi case _ParsedMessages(:final consumed, :final msgs)) {
+        _csiScanIndex = null;
         _consume(consumed);
         out.addAll(msgs);
         continue;
       }
 
-      final TeaKey? key = parseKeyFromBuffer(_buffer);
-      if (key != null) {
-        out.add(KeyPressMsg(key));
+      final parsedKey = parseKeyFromBufferAt(_buffer, _bufferStart);
+      if (parsedKey != null) {
+        _bufferStart += parsedKey.consumed;
+        out.add(KeyPressMsg(parsedKey.key));
         continue;
       }
 
       break;
     }
 
+    _compactBuffer();
     return out;
   }
 
@@ -104,18 +123,41 @@ final class TerminalInputDecoder {
   /// arrive, it calls [takeLoneEscapeIfStillPending] to emit [KeyPressMsg] for
   /// Escape without breaking split `ESC [`… sequences across stdin chunks.
   bool get hasPendingLoneEscape =>
-      !_inPaste && _buffer.length == 1 && _buffer[0] == 0x1b;
+      !_inPaste &&
+      _buffer.length - _bufferStart == 1 &&
+      _buffer[_bufferStart] == 0x1b;
 
   /// If [hasPendingLoneEscape] is still true, consume the byte and return a
   /// single [KeyPressMsg] for Escape; otherwise returns an empty list.
   List<Msg> takeLoneEscapeIfStillPending() {
     if (!hasPendingLoneEscape) return const <Msg>[];
-    _buffer.clear();
+    _bufferStart = _buffer.length;
+    _compactBuffer();
     return <Msg>[KeyPressMsg(const TeaKey(code: KeyCode.escape))];
   }
 
   void _consume(int count) {
-    _buffer.removeRange(0, count);
+    _bufferStart += count;
+  }
+
+  void _compactBuffer() {
+    if (_bufferStart == 0) return;
+    if (_bufferStart == _buffer.length) {
+      _buffer.clear();
+      _bufferStart = 0;
+      _csiScanIndex = null;
+      _oscScanIndex = null;
+      _dcsScanIndex = null;
+      return;
+    }
+    // Keep a small unread tail in place; periodic compaction avoids the
+    // quadratic front-shifting cost while preserving bounded retained input.
+    if (_bufferStart < 4096 && _bufferStart * 2 < _buffer.length) return;
+    _buffer.removeRange(0, _bufferStart);
+    _bufferStart = 0;
+    _csiScanIndex = null;
+    _oscScanIndex = null;
+    _dcsScanIndex = null;
   }
 }
 
@@ -129,11 +171,12 @@ sealed class _ParseResult {
 }
 
 final class _ParseState extends _ParseResult {
-  const _ParseState._(this.kind);
+  const _ParseState._(this.kind, [this.scanIndex]);
   final int kind;
+  final int? scanIndex;
 
   static const _ParseState none = _ParseState._(0);
-  static const _ParseState partial = _ParseState._(1);
+  static _ParseState partialAt(int scanIndex) => _ParseState._(1, scanIndex);
 }
 
 final class _ParsedMessages extends _ParseResult {
@@ -152,30 +195,37 @@ enum _PrefixMatch {
   full,
 }
 
-_PrefixMatch _matchesPrefix(List<int> buffer, List<int> seq) {
-  final len = buffer.length < seq.length ? buffer.length : seq.length;
+_PrefixMatch _matchesPrefix(List<int> buffer, int offset, List<int> seq) {
+  final available = buffer.length - offset;
+  final len = available < seq.length ? available : seq.length;
   for (var i = 0; i < len; i++) {
-    if (buffer[i] != seq[i]) return _PrefixMatch.none;
+    if (buffer[offset + i] != seq[i]) return _PrefixMatch.none;
   }
-  if (buffer.length < seq.length) return _PrefixMatch.partial;
+  if (available < seq.length) return _PrefixMatch.partial;
   return _PrefixMatch.full;
 }
 
-_ParseResult _tryParseCsi(List<int> buffer) {
-  if (buffer.length < 2) return _ParseState.none;
-  if (buffer[0] != 0x1b || buffer[1] != 0x5b) return _ParseState.none;
+_ParseResult _tryParseCsi(List<int> buffer, int offset, int? scanIndex) {
+  final length = buffer.length - offset;
+  if (length < 2) return _ParseState.none;
+  if (buffer[offset] != 0x1b || buffer[offset + 1] != 0x5b) {
+    return _ParseState.none;
+  }
 
-  var i = 2;
-  while (i < buffer.length) {
-    final b = buffer[i];
+  var i = scanIndex == null ? 2 : scanIndex - offset;
+  if (i < 2 || i > length) i = 2;
+  while (i < length) {
+    final b = buffer[offset + i];
     if (b >= 0x40 && b <= 0x7e) {
-      final seq = String.fromCharCodes(buffer.sublist(2, i + 1));
+      final seq = String.fromCharCodes(
+        buffer.sublist(offset + 2, offset + i + 1),
+      );
       final msgs = _decodeCsi(seq);
       return _ParsedMessages(consumed: i + 1, msgs: msgs);
     }
     i++;
   }
-  return _ParseState.partial;
+  return _ParseState.partialAt(offset + i);
 }
 
 List<Msg> _decodeCsi(String seq) {
@@ -248,46 +298,60 @@ List<Msg> _decodeCsi(String seq) {
   return const <Msg>[];
 }
 
-_ParseResult _tryParseOsc(List<int> buffer) {
-  if (buffer.length < 2) return _ParseState.none;
-  if (buffer[0] != 0x1b || buffer[1] != 0x5d) return _ParseState.none;
+_ParseResult _tryParseOsc(List<int> buffer, int offset, int? scanIndex) {
+  final length = buffer.length - offset;
+  if (length < 2) return _ParseState.none;
+  if (buffer[offset] != 0x1b || buffer[offset + 1] != 0x5d) {
+    return _ParseState.none;
+  }
 
-  var i = 2;
-  while (i < buffer.length) {
-    final b = buffer[i];
+  var i = scanIndex == null ? 2 : scanIndex - offset;
+  if (i < 2 || i > length) i = 2;
+  while (i < length) {
+    final b = buffer[offset + i];
     if (b == 0x07) {
-      final seq = String.fromCharCodes(buffer.sublist(2, i));
+      final seq = String.fromCharCodes(buffer.sublist(offset + 2, offset + i));
       return _ParsedMessages(consumed: i + 1, msgs: _decodeOsc(seq));
     }
     if (b == 0x1b) {
-      if (i + 1 >= buffer.length) return _ParseState.partial;
-      if (buffer[i + 1] == 0x5c) {
-        final seq = String.fromCharCodes(buffer.sublist(2, i));
+      if (i + 1 >= length) {
+        return _ParseState.partialAt(offset + i);
+      }
+      if (buffer[offset + i + 1] == 0x5c) {
+        final seq =
+            String.fromCharCodes(buffer.sublist(offset + 2, offset + i));
         return _ParsedMessages(consumed: i + 2, msgs: _decodeOsc(seq));
       }
     }
     i++;
   }
-  return _ParseState.partial;
+  return _ParseState.partialAt(offset + i);
 }
 
-_ParseResult _tryParseDcs(List<int> buffer) {
-  if (buffer.length < 2) return _ParseState.none;
-  if (buffer[0] != 0x1b || buffer[1] != 0x50) return _ParseState.none;
+_ParseResult _tryParseDcs(List<int> buffer, int offset, int? scanIndex) {
+  final length = buffer.length - offset;
+  if (length < 2) return _ParseState.none;
+  if (buffer[offset] != 0x1b || buffer[offset + 1] != 0x50) {
+    return _ParseState.none;
+  }
 
-  var i = 2;
-  while (i < buffer.length) {
-    final b = buffer[i];
+  var i = scanIndex == null ? 2 : scanIndex - offset;
+  if (i < 2 || i > length) i = 2;
+  while (i < length) {
+    final b = buffer[offset + i];
     if (b == 0x1b) {
-      if (i + 1 >= buffer.length) return _ParseState.partial;
-      if (buffer[i + 1] == 0x5c) {
-        final seq = String.fromCharCodes(buffer.sublist(2, i));
+      if (i + 1 >= length) {
+        return _ParseState.partialAt(offset + i);
+      }
+      if (buffer[offset + i + 1] == 0x5c) {
+        final seq =
+            String.fromCharCodes(buffer.sublist(offset + 2, offset + i));
         return _ParsedMessages(consumed: i + 2, msgs: _decodeDcs(seq));
       }
     }
     i++;
   }
-  return _ParseState.partial;
+  return _ParseState.partialAt(offset + i);
 }
 
 List<Msg> _decodeDcs(String seq) {

@@ -775,6 +775,9 @@ Typical results:
 
 *Measured on WSL2 / Linux. Native Linux: ~350 ms kernel, ~80 ms AOT.*
 
+See the [performance audit](docs/performance.md) for measured workloads and
+reproduction commands.
+
 ### Re-recording GIFs
 
 ```bash

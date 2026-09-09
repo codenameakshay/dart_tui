@@ -765,7 +765,9 @@ final class Style {
       open.write(_colorCode(effectiveBg, foreground: false));
     }
 
-    final safeUrl = sanitizeOscText(hyperlinkUrl ?? '');
+    final safeUrl = hyperlinkUrl == null || hyperlinkUrl!.isEmpty
+        ? ''
+        : sanitizeOscText(hyperlinkUrl!);
     final linkOpen = safeUrl.isEmpty
         ? ''
         : '\x1b]8;${sanitizeOscText(hyperlinkParams)};$safeUrl\x1b\\';
@@ -1031,7 +1033,7 @@ int _nearestAnsi256(RgbColor rgb) {
   var best = 0;
   var bestDist = double.infinity;
   for (var i = 0; i < 256; i++) {
-    final c = _ansi256ToRgb(i);
+    final c = _ansi256Palette[i];
     final d = _colorDist(rgb, c);
     if (d < bestDist) {
       bestDist = d;
@@ -1040,6 +1042,12 @@ int _nearestAnsi256(RgbColor rgb) {
   }
   return best;
 }
+
+final _ansi256Palette = List<RgbColor>.generate(
+  256,
+  _ansi256ToRgb,
+  growable: false,
+);
 
 double _colorDist(RgbColor a, RgbColor b) {
   final dr = (a.r - b.r).toDouble();

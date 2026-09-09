@@ -69,7 +69,35 @@ final class ViewportModel extends Model {
     this.searchCaseSensitive = false,
   })  : highlights = List<ViewportHighlight>.unmodifiable(highlights),
         _logicalLines = _splitLines(content),
-        _rows = _computeRows(content, width, softWrap, gutterBuilder);
+        _rows = _computeRows(content, width, softWrap, gutterBuilder),
+        _derived = _ViewportDerived();
+
+  ViewportModel._reuseRows({
+    required this.content,
+    required this.width,
+    required this.height,
+    required this.yOffset,
+    required this.xOffset,
+    required this.softWrap,
+    required this.fillHeight,
+    required this.gutterBuilder,
+    required this.lineStyleBuilder,
+    required this.highlightStyle,
+    required this.selectedHighlightStyle,
+    required this.mouseWheelEnabled,
+    required this.mouseWheelDelta,
+    required this.horizontalStep,
+    required List<ViewportHighlight> highlights,
+    required this.selectedHighlightIndex,
+    required this.searchQuery,
+    required this.searchCaseSensitive,
+    required List<String> logicalLines,
+    required List<_ViewportRow> rows,
+    required _ViewportDerived derived,
+  })  : highlights = List<ViewportHighlight>.unmodifiable(highlights),
+        _logicalLines = logicalLines,
+        _rows = rows,
+        _derived = derived;
 
   final String content;
   final int width;
@@ -92,6 +120,17 @@ final class ViewportModel extends Model {
 
   final List<String> _logicalLines;
   final List<_ViewportRow> _rows;
+  final _ViewportDerived _derived;
+
+  // These values are stable for the lifetime of a model. Caching them avoids
+  // rescanning all content once per visible row during a frame.
+  int get _visibleContentWidth => gutterBuilder == null
+      ? width
+      : (width - _gutterWidth(_logicalLines, gutterBuilder)).clamp(0, width);
+  int get _longestLineWidthValue =>
+      _derived.longestLineWidth ??= _computeLongestLineWidth();
+  Map<int, List<int>> get _highlightIndicesByLine =>
+      _derived.highlightIndicesByLine ??= _indexHighlightsByLine(highlights);
 
   int get totalLines => _rows.length;
   int get logicalLineCount => _logicalLines.length;
@@ -102,10 +141,8 @@ final class ViewportModel extends Model {
   double get horizontalScrollPercent =>
       _maxXOffset == 0 ? 1.0 : xOffset.clamp(0, _maxXOffset) / _maxXOffset;
 
-  int get _visibleContentWidth =>
-      (width - _gutterWidth(_logicalLines, gutterBuilder)).clamp(0, width);
   int get _maxYOffset => (totalLines - height).clamp(0, totalLines);
-  int get _longestLineWidth {
+  int _computeLongestLineWidth() {
     var longest = 0;
     for (final line in _logicalLines) {
       final lineWidth = textWidth(stripAnsi(line));
@@ -114,8 +151,8 @@ final class ViewportModel extends Model {
     return longest;
   }
 
-  int get _maxXOffset =>
-      (_longestLineWidth - _visibleContentWidth).clamp(0, _longestLineWidth);
+  int get _maxXOffset => (_longestLineWidthValue - _visibleContentWidth)
+      .clamp(0, _longestLineWidthValue);
 
   ViewportModel _copy({
     String? content,
@@ -129,14 +166,22 @@ final class ViewportModel extends Model {
     int? selectedHighlightIndex,
     String? searchQuery,
     bool? searchCaseSensitive,
-  }) =>
-      ViewportModel(
-        content: content ?? this.content,
-        width: width ?? this.width,
+  }) {
+    final nextContent = content ?? this.content;
+    final nextWidth = width ?? this.width;
+    final nextSoftWrap = softWrap ?? this.softWrap;
+    final nextHighlights = highlights ?? this.highlights;
+    if (gutterBuilder == null &&
+        identical(nextContent, this.content) &&
+        nextWidth == this.width &&
+        nextSoftWrap == this.softWrap) {
+      return ViewportModel._reuseRows(
+        content: this.content,
+        width: this.width,
         height: height ?? this.height,
         yOffset: yOffset ?? this.yOffset,
         xOffset: xOffset ?? this.xOffset,
-        softWrap: softWrap ?? this.softWrap,
+        softWrap: this.softWrap,
         fillHeight: fillHeight ?? this.fillHeight,
         gutterBuilder: gutterBuilder,
         lineStyleBuilder: lineStyleBuilder,
@@ -145,12 +190,40 @@ final class ViewportModel extends Model {
         mouseWheelEnabled: mouseWheelEnabled,
         mouseWheelDelta: mouseWheelDelta,
         horizontalStep: horizontalStep,
-        highlights: highlights ?? this.highlights,
+        highlights: nextHighlights,
         selectedHighlightIndex:
             selectedHighlightIndex ?? this.selectedHighlightIndex,
         searchQuery: searchQuery ?? this.searchQuery,
         searchCaseSensitive: searchCaseSensitive ?? this.searchCaseSensitive,
+        logicalLines: _logicalLines,
+        rows: _rows,
+        derived: identical(nextHighlights, this.highlights)
+            ? _derived
+            : _derived.withoutHighlightIndex(),
       );
+    }
+    return ViewportModel(
+      content: nextContent,
+      width: nextWidth,
+      height: height ?? this.height,
+      yOffset: yOffset ?? this.yOffset,
+      xOffset: xOffset ?? this.xOffset,
+      softWrap: nextSoftWrap,
+      fillHeight: fillHeight ?? this.fillHeight,
+      gutterBuilder: gutterBuilder,
+      lineStyleBuilder: lineStyleBuilder,
+      highlightStyle: highlightStyle,
+      selectedHighlightStyle: selectedHighlightStyle,
+      mouseWheelEnabled: mouseWheelEnabled,
+      mouseWheelDelta: mouseWheelDelta,
+      horizontalStep: horizontalStep,
+      highlights: highlights ?? this.highlights,
+      selectedHighlightIndex:
+          selectedHighlightIndex ?? this.selectedHighlightIndex,
+      searchQuery: searchQuery ?? this.searchQuery,
+      searchCaseSensitive: searchCaseSensitive ?? this.searchCaseSensitive,
+    );
+  }
 
   ViewportModel setContent(String newContent) => _copy(
         content: newContent,
@@ -365,6 +438,7 @@ final class ViewportModel extends Model {
     if (chars.isEmpty || highlights.isEmpty) {
       return lineStyle?.render(text) ?? text;
     }
+    final lineHighlightIndices = _highlightIndicesByLine[line];
     final output = StringBuffer();
     Style? currentStyle;
     var run = StringBuffer();
@@ -380,7 +454,7 @@ final class ViewportModel extends Model {
     for (var i = 0; i < chars.length; i++) {
       final absolute = start + i;
       Style? nextStyle;
-      for (var h = 0; h < highlights.length; h++) {
+      for (final h in lineHighlightIndices ?? const <int>[]) {
         final range = highlights[h];
         if (range.line == line &&
             absolute >= range.start &&
@@ -507,6 +581,16 @@ final class ViewportModel extends Model {
     return matches;
   }
 
+  static Map<int, List<int>> _indexHighlightsByLine(
+    List<ViewportHighlight> highlights,
+  ) {
+    final index = <int, List<int>>{};
+    for (var i = 0; i < highlights.length; i++) {
+      (index[highlights[i].line] ??= <int>[]).add(i);
+    }
+    return index;
+  }
+
   static _ViewportSlice _sliceCells(
     String text,
     int offset,
@@ -554,6 +638,15 @@ final class _ViewportRow {
   final int start;
   final int end;
   final bool isSoftWrap;
+}
+
+// Shared by cursor/scroll copies whose content layout is unchanged.
+final class _ViewportDerived {
+  int? longestLineWidth;
+  Map<int, List<int>>? highlightIndicesByLine;
+
+  _ViewportDerived withoutHighlightIndex() =>
+      _ViewportDerived()..longestLineWidth = longestLineWidth;
 }
 
 final class _ViewportSlice {

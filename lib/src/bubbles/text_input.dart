@@ -105,6 +105,24 @@ final class TextInputModel extends Model {
   })  : suggestions = List<String>.unmodifiable(suggestions),
         assert(suggestionIndex >= 0, 'suggestionIndex must not be negative');
 
+  TextInputModel._copy({
+    required this.value,
+    required this.cursorPos,
+    required this.placeholder,
+    required this.label,
+    required this.echoMode,
+    required this.charLimit,
+    required this.focused,
+    required this.validate,
+    required this.suggestions,
+    required this.suggestionIndex,
+    required this.styles,
+    List<String>? graphemesCache,
+    List<String>? matchedSuggestionsCache,
+  })  : _graphemesCache = graphemesCache,
+        _matchedSuggestionsCache = matchedSuggestionsCache,
+        assert(suggestionIndex >= 0, 'suggestionIndex must not be negative');
+
   final String value;
 
   /// Grapheme index within [value] (zero is before the first grapheme).
@@ -131,6 +149,8 @@ final class TextInputModel extends Model {
   final int suggestionIndex;
 
   final InputStyles styles;
+  List<String>? _graphemesCache;
+  List<String>? _matchedSuggestionsCache;
 
   TextInputModel copyWith({
     String? value,
@@ -144,30 +164,43 @@ final class TextInputModel extends Model {
     List<String>? suggestions,
     int? suggestionIndex,
     InputStyles? styles,
-  }) =>
-      TextInputModel(
-        value: value ?? this.value,
-        cursorPos: cursorPos ?? this.cursorPos,
-        placeholder: placeholder ?? this.placeholder,
-        label: label ?? this.label,
-        echoMode: echoMode ?? this.echoMode,
-        charLimit: charLimit ?? this.charLimit,
-        focused: focused ?? this.focused,
-        validate: validate ?? this.validate,
-        suggestions: suggestions ?? this.suggestions,
-        suggestionIndex: suggestionIndex ??
-            ((value != null || suggestions != null) ? 0 : this.suggestionIndex),
-        styles: styles ?? this.styles,
-      );
+  }) {
+    final nextValue = value ?? this.value;
+    final nextSuggestions = suggestions ?? this.suggestions;
+    return TextInputModel._copy(
+      value: nextValue,
+      cursorPos: cursorPos ?? this.cursorPos,
+      placeholder: placeholder ?? this.placeholder,
+      label: label ?? this.label,
+      echoMode: echoMode ?? this.echoMode,
+      charLimit: charLimit ?? this.charLimit,
+      focused: focused ?? this.focused,
+      validate: validate ?? this.validate,
+      suggestions: suggestions == null
+          ? this.suggestions
+          : List<String>.unmodifiable(nextSuggestions),
+      suggestionIndex: suggestionIndex ??
+          ((value != null || suggestions != null) ? 0 : this.suggestionIndex),
+      styles: styles ?? this.styles,
+      graphemesCache: nextValue == this.value ? _graphemesCache : null,
+      matchedSuggestionsCache: nextValue == this.value && suggestions == null
+          ? _matchedSuggestionsCache
+          : null,
+    );
+  }
 
-  late final List<String> matchedSuggestions = List<String>.unmodifiable(
-    suggestions.where((suggestion) {
-      if (value.isEmpty) return false;
-      final candidate = suggestion.toLowerCase();
-      final input = value.toLowerCase();
-      return candidate.startsWith(input) && candidate != input;
-    }),
-  );
+  List<String> get _graphemes =>
+      _graphemesCache ??= List<String>.unmodifiable(value.characters);
+
+  List<String> get matchedSuggestions =>
+      _matchedSuggestionsCache ??= List<String>.unmodifiable(() {
+        if (value.isEmpty) return const <String>[];
+        final input = value.toLowerCase();
+        return suggestions.where((suggestion) {
+          final candidate = suggestion.toLowerCase();
+          return candidate.startsWith(input) && candidate != input;
+        });
+      }());
 
   int get currentSuggestionIndex => matchedSuggestions.isEmpty
       ? 0
@@ -201,7 +234,7 @@ final class TextInputModel extends Model {
   @override
   (Model, Cmd?) update(Msg msg) {
     if (msg is! KeyMsg) return (this, null);
-    final chars = value.characters.toList();
+    final chars = _graphemes;
     switch (msg.key) {
       case 'backspace':
         if (value.isEmpty || cursorPos == 0) return (this, null);
@@ -308,7 +341,7 @@ final class TextInputModel extends Model {
 
   @override
   View view() {
-    final chars = value.characters.toList();
+    final chars = _graphemes;
     if (!focused && value.isEmpty) {
       final display = label.isEmpty ? placeholder : '$label $placeholder';
       return newView(styles.placeholder.render(display));
@@ -339,8 +372,10 @@ final class TextInputModel extends Model {
     if (focused) {
       // Calculate cursor position in cells, not characters
       final prefixWidth = textWidth(label.isEmpty ? '' : '$label ');
-      final textBeforeCursor = chars.sublist(0, cursorPos).join();
-      final cursorX = prefixWidth + textWidth(textBeforeCursor);
+      var cursorX = prefixWidth;
+      for (var i = 0; i < cursorPos; i++) {
+        cursorX += graphemeWidth(chars[i]);
+      }
       view.cursor = Cursor(x: cursorX, y: 0, shape: CursorShape.bar);
     }
 
