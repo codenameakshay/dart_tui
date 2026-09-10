@@ -26,6 +26,10 @@ debug.log
 .coverage_out/
 coverage/
 
+# Python bytecode from tool benches
+**/__pycache__/
+*.pyc
+
 # --- extra: dev-only paths that are not part of the Dart package ---
 
 # The documentation website is a standalone Next.js app deployed to Vercel.

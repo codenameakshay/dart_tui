@@ -40,7 +40,7 @@ Build rich, interactive CLI applications with a clean **Model–Update–View** 
 ```yaml
 # pubspec.yaml
 dependencies:
-  dart_tui: ^2.0.0
+  dart_tui: ^2.1.0
 ```
 
 ```bash
