@@ -22,3 +22,7 @@ debug.log
 # Coverage output
 .coverage_out/
 coverage/
+
+# Python bytecode from tool benches
+**/__pycache__/
+*.pyc

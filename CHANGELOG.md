@@ -1,12 +1,28 @@
 # Changelog
 
-## Unreleased
+## 2.1.0 - 2026-09-10
 
+Performance and terminal-lifecycle follow-up to 2.0.0. No breaking API changes.
+
+### Performance
+
+- Faster input decoding, layout, and rendering on large pastes, viewports, and
+  text widgets.
 - Cache `TextAreaModel` logical lines across cursor-only copies.
 - Fast-path `textWidth` for ASCII-only strings.
+- `make bench-hotpath` compares naive Dart with dart_tui;
+  `make bench-startup-pty` measures first-visible startup.
+
+### Fixes
+
+- Bracketed paste no longer mangles multi-byte UTF-8.
+- Restore cooked TTY mode before stdin cancel on exit.
 - Skip `\x1b[?1049l` on shutdown when alt screen was never entered.
-- Add `make bench-hotpath` (naive Dart vs dart_tui) and
-  `make bench-startup-pty`.
+
+### Docs
+
+- Performance guide and README hot-path table.
+- Re-recorded all 60 VHS example GIFs.
 
 ## 2.0.0 - 2026-08-08
 
