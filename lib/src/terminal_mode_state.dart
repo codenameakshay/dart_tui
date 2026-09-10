@@ -78,7 +78,9 @@ final class TerminalModeState {
 
   void reset(IOSink output) {
     output.write('\x1b[?25h');
-    output.write('\x1b[?1049l');
+    if (_altScreenEnabled) {
+      output.write('\x1b[?1049l');
+    }
     output.write('\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l');
     output.write('\x1b[?1004l');
     output.write('\x1b[?2004l');

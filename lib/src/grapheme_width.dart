@@ -24,8 +24,16 @@ int graphemeWidth(String grapheme) {
 /// Returns the terminal-cell width of [text], measured by grapheme cluster.
 int textWidth(String text) {
   var width = 0;
-  for (final grapheme in text.characters) {
-    width += graphemeWidth(grapheme);
+  for (var i = 0; i < text.length; i++) {
+    final unit = text.codeUnitAt(i);
+    if (unit >= 0x80) {
+      width = 0;
+      for (final grapheme in text.characters) {
+        width += graphemeWidth(grapheme);
+      }
+      return width;
+    }
+    if (unit >= 0x20 && unit < 0x7f) width++;
   }
   return width;
 }

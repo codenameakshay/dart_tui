@@ -588,4 +588,60 @@ dart run tool/bin/simple.dill`,
     ],
     related: ["installation", "showcase"],
   },
+  {
+    slug: "performance",
+    name: "Performance",
+    category: "guides",
+    order: 12,
+    featured: true,
+    tagline:
+      "Measure naive Dart vs dart_tui hot paths, plus kernel and AOT startup.",
+    description:
+      "Cell-level diff, grapheme width, and cached component models beat reprinting the whole screen every frame. Run the benches locally to see naive Dart vs dart_tui, and kernel/AOT first-visible startup.",
+    blocks: [
+      { type: "heading", text: "Why not print every frame" },
+      {
+        type: "prose",
+        md: "Reprint-the-screen loops pay for every cell on every tick. dart_tui writes only cells that changed, measures grapheme width without reallocating on every call, and keeps cached row models in components like TextArea and Viewport so update/view work stays cheap.",
+      },
+      { type: "heading", text: "Run the benches" },
+      {
+        type: "code",
+        lang: "bash",
+        code: `make bench-hotpath
+make bench-startup-pty`,
+      },
+      {
+        type: "table",
+        headers: ["Workload", "Naive", "dart_tui", "Ratio"],
+        rows: [
+          ["getWidth plain x10000", "30080 µs", "2511 µs", "12.0x"],
+          ["getWidth ANSI x10000", "33792 µs", "3353 µs", "10.1x"],
+          ["textarea update+view x300", "19733 µs", "3752 µs", "5.3x"],
+          ["viewport soft-wrap scroll+view x20", "338586 µs", "17266 µs", "19.6x"],
+          ["decoder plain 100000 bytes", "6445149 µs", "3686 µs", "1748.5x"],
+        ],
+      },
+      { type: "heading", text: "Startup (first visible frame)" },
+      {
+        type: "table",
+        headers: ["Mode", "Median first visible"],
+        rows: [
+          ["JIT source", "553 ms"],
+          ["Kernel snapshot", "158 ms"],
+          ["AOT executable", "11 ms"],
+        ],
+      },
+      {
+        type: "callout",
+        variant: "note",
+        md: "Microbench ratios are host-specific. Clone the repo and run `make bench-hotpath` on your machine rather than treating any published number as a guarantee.",
+      },
+      {
+        type: "prose",
+        md: "For the full audit vs `e00de92`, see [docs/performance.md](https://github.com/codenameakshay/dart_tui/blob/main/docs/performance.md).",
+      },
+    ],
+    related: ["installation", "architecture"],
+  },
 ];

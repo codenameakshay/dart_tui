@@ -768,19 +768,39 @@ bash tool/build.sh --kernel
 dart run tool/startup_bench.dart --dill tool/bin/simple.dill
 ```
 
-Typical results:
+Typical results (macOS arm64, Dart 3.13.1, measured with `tool/bench_command.py`):
 
-| Mode | Startup |
-|------|---------|
-| JIT source (cold) | ~1 400 ms |
-| JIT source (warm) | ~1 050 ms |
-| **Kernel snapshot** | **~550 ms** |
-| AOT (`dart compile exe`) | ~100 ms |
+| Mode | Median first visible |
+|------|----------------------|
+| JIT source | 553 ms |
+| Kernel snapshot | 158 ms |
+| AOT executable | 11 ms |
 
-*Measured on WSL2 / Linux. Native Linux: ~350 ms kernel, ~80 ms AOT.*
+### Hot-path benchmarks
 
-See the [performance audit](docs/performance.md) for measured workloads and
-reproduction commands.
+`make bench-hotpath` (or `dart run tool/hotpath_bench.dart`) prints naive Dart
+vs dart_tui timings for width, cell diff, textarea, viewport, and decoder so
+you can see the before/after of using the library.
+
+Sample output from `make bench-hotpath` (macOS arm64, Dart 3.13.1; your
+machine will differ):
+
+| Workload | Naive | dart_tui | Ratio |
+|----------|------:|---------:|------:|
+| getWidth plain x10000 | 30080 µs | 2511 µs | 12.0x |
+| getWidth ANSI x10000 | 33792 µs | 3353 µs | 10.1x |
+| textarea update+view x300 | 19733 µs | 3752 µs | 5.3x |
+| viewport soft-wrap scroll+view x20 | 338586 µs | 17266 µs | 19.6x |
+| decoder plain 100000 bytes | 6445149 µs | 3686 µs | 1748.5x |
+
+```bash
+make bench-hotpath
+```
+
+See [docs/performance.md](docs/performance.md) for the historical #20 vs
+`e00de92` audit.
+
+For first-visible-frame startup, use `make bench-startup-pty`.
 
 ### Re-recording GIFs
 

@@ -3,14 +3,16 @@
 /// Wall-clock startup latency benchmark for dart_tui examples.
 ///
 /// Measures time from process start → first byte on stdout (i.e., first
-/// rendered frame). Each example is run twice to show cold (first JIT
-/// compile) vs warm (cached kernel) times.
+/// rendered frame). Each example is run three times; the reported value is
+/// the median of those three runs.
 ///
 /// Usage:
 ///   dart run tool/startup_bench.dart example/simple.dart         # JIT (source)
 ///   dart run tool/startup_bench.dart --dill tool/bin/simple.dill # kernel snapshot
 ///   dart run tool/startup_bench.dart --aot example/simple.dart   # AOT (native exe)
 ///   dart run tool/startup_bench.dart --all                       # all examples (JIT)
+///   dart run tool/startup_bench.dart --all --dill                # all kernel snapshots
+///   dart run tool/startup_bench.dart --all --aot                 # all AOT executables
 ///
 /// Build kernel snapshots first with:
 ///   bash tool/build.sh --kernel example/simple.dart
@@ -52,16 +54,14 @@ void _usage() {
   print('  dart run tool/startup_bench.dart --dill tool/bin/simple.dill');
   print('  dart run tool/startup_bench.dart --aot example/simple.dart');
   print('  dart run tool/startup_bench.dart --all');
+  print('  dart run tool/startup_bench.dart --all --dill');
+  print('  dart run tool/startup_bench.dart --all --aot');
+  print('For first-visible-frame, use python3 tool/bench_command.py.');
 }
 
 Future<void> _benchAll({bool aot = false, bool dill = false}) async {
-  final examples = Directory('example')
-      .listSync()
-      .whereType<File>()
-      .where((f) => f.path.endsWith('.dart'))
-      .map((f) => f.path)
-      .toList()
-    ..sort();
+  final examples = _allTargets(aot: aot, dill: dill);
+  if (examples.isEmpty) return;
 
   const nameWidth = 30;
   const msWidth = 10;
@@ -75,6 +75,43 @@ Future<void> _benchAll({bool aot = false, bool dill = false}) async {
   }
 }
 
+List<String> _allTargets({required bool aot, required bool dill}) {
+  if (dill || aot) {
+    final dir = Directory('tool/bin');
+    if (!dir.existsSync()) {
+      stderr.writeln(
+        dill
+            ? 'tool/bin/ not found; build kernel snapshots first with `make kernels`.'
+            : 'tool/bin/ not found; compile AOT executables first with `bash tool/compile_examples.sh`.',
+      );
+      return const [];
+    }
+    final files = dir.listSync().whereType<File>();
+    if (dill) {
+      return files
+          .where((f) => f.path.endsWith('.dill'))
+          .map((f) => f.path)
+          .toList()
+        ..sort();
+    }
+    return files
+        .where((f) => !_basename(f.path).contains('.'))
+        .map((f) => f.path)
+        .toList()
+      ..sort();
+  }
+
+  return Directory('example')
+      .listSync()
+      .whereType<File>()
+      .where((f) => f.path.endsWith('.dart'))
+      .map((f) => f.path)
+      .toList()
+    ..sort();
+}
+
+String _basename(String path) => path.split(Platform.pathSeparator).last;
+
 Future<void> _benchOne(
   String path, {
   required bool aot,
@@ -84,7 +121,12 @@ Future<void> _benchOne(
 }) async {
   final name = dill
       ? path.replaceFirst('tool/bin/', '').replaceFirst('.dill', '')
-      : path.replaceFirst('example/', '').replaceFirst('.dart', '');
+      : aot
+          ? path
+              .replaceFirst('tool/bin/', '')
+              .replaceFirst('example/', '')
+              .replaceFirst('.dart', '')
+          : path.replaceFirst('example/', '').replaceFirst('.dart', '');
 
   if (printHeader) {
     final mode = dill
@@ -126,8 +168,11 @@ Future<int> _measureStartup(
 }) async {
   List<String> command;
   if (aot) {
-    final name = path.replaceFirst('example/', '').replaceFirst('.dart', '');
-    command = ['tool/bin/$name'];
+    final executable = path.startsWith('tool/bin/') &&
+            !_basename(path).contains('.')
+        ? path
+        : 'tool/bin/${path.replaceFirst('example/', '').replaceFirst('.dart', '')}';
+    command = [executable];
   } else {
     command = [Platform.resolvedExecutable, 'run', path];
   }

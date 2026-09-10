@@ -17,7 +17,7 @@ DART     ?= dart
 export DART
 TAPES    := $(wildcard example/tapes/*.tape)
 
-.PHONY: help test analyze format coverage run kernels run-fast bench gifs new-example clean
+.PHONY: help test analyze format coverage run kernels run-fast bench bench-all gifs new-example clean bench-hotpath bench-startup-pty
 
 # ── Help ───────────────────────────────────────────────────────────────────────
 help:
@@ -40,6 +40,9 @@ help:
 	@echo "  Benchmark"
 	@echo "    make bench EXAMPLE=foo       Startup benchmark (dill vs JIT)"
 	@echo "    make bench-jit EXAMPLE=foo   Startup benchmark (JIT source only)"
+	@echo "    make bench-all               Startup benchmark all kernel snapshots"
+	@echo "    make bench-hotpath           Naive Dart vs dart_tui hot-path table"
+	@echo "    make bench-startup-pty       First-visible-frame startup (PTY)"
 	@echo ""
 	@echo "  GIF recording (requires VHS + ffmpeg)"
 	@echo "    make gifs                    Build all kernels then record all GIFs"
@@ -99,6 +102,12 @@ bench-all: kernels
 		name=$$(basename $$f .dill); \
 		$(DART) run tool/startup_bench.dart --dill "$$f" 2>/dev/null | grep "median" | sed "s/^/  $$name: /"; \
 	done
+
+bench-hotpath:
+	$(DART) run tool/hotpath_bench.dart
+
+bench-startup-pty:
+	python3 tool/bench_command.py -- dart run example/simple.dart
 
 # ── GIF recording ──────────────────────────────────────────────────────────────
 gifs: kernels

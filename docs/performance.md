@@ -5,6 +5,26 @@ workload results, and implementation audit. It is intentionally evidence
 based: a covered line is not the same as a user-visible performance guarantee,
 and this document does not claim that every component has been stress tested.
 
+## Visitor entry point
+
+`make bench-hotpath` is the one-command naive Dart vs dart_tui table.
+`make bench-startup-pty` measures first-visible startup.
+
+Paired rows compare the same visible job (regex width vs `getWidth`,
+rebuild-the-model vs cached update, front-pop decoder vs streaming).
+`CellRenderer` timings stay dart_tui-only: writing a `StringBuffer` is not
+terminal I/O, so a naive/library ratio there is not a product claim.
+
+Sample paired medians on macOS arm64, Dart 3.13.1:
+
+| Workload | Naive | dart_tui | Ratio |
+| --- | ---: | ---: | ---: |
+| getWidth plain x10000 | 30080 µs | 2511 µs | 12.0x |
+| getWidth ANSI x10000 | 33792 µs | 3353 µs | 10.1x |
+| textarea update+view x300 | 19733 µs | 3752 µs | 5.3x |
+| viewport soft-wrap scroll+view x20 | 338586 µs | 17266 µs | 19.6x |
+| decoder plain 100000 bytes | 6445149 µs | 3686 µs | 1748.5x |
+
 ## Baseline
 
 The baseline was an archive checkout of `e00de92` (`origin/main`) in a
@@ -53,10 +73,9 @@ time to the first visible character and verifies that the child exits.
 The existing `tool/startup_bench.dart` reported medians of 636 ms for JIT,
 143 ms for kernel, and 17 ms for AOT on `example/simple.dart`. That tool waits
 for the first stdout byte, which can be terminal control output rather than a
-visible frame. Its documentation says two runs while the implementation runs
-three. Also, `--all --dill` labels the run as a dill benchmark but passes the
-source example path to the child. Use the PTY benchmark for before/after
-comparisons until those semantics are corrected.
+visible frame. It runs three times and reports the median. `--all --dill` now
+walks `tool/bin/*.dill`. Use `make bench-startup-pty` (`tool/bench_command.py`)
+for first-visible-frame comparisons.
 
 The AOT steady-state result is 11 ms median in this baseline. There is no
 measured need for a Rust rendering or startup backend. A Rust rewrite should be

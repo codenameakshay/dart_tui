@@ -45,6 +45,46 @@ void main() {
     );
   });
 
+  test('text area keeps logical lines cached across cursor-only copyWith', () {
+    final model = TextAreaModel(value: 'a\nb\nc', cursorRow: 1, cursorCol: 1);
+    final warmed = model.lines;
+    expect(warmed, ['a', 'b', 'c']);
+    final moved = model.copyWith(cursorRow: 2, cursorCol: 0);
+    expect(moved.lines, ['a', 'b', 'c']);
+    moved.lines[0] = 'changed';
+    expect(moved.lines, ['a', 'b', 'c']);
+    expect(model.lines, ['a', 'b', 'c']);
+  });
+
+  test('text area invalidates logical lines cache on value edits', () {
+    final model = TextAreaModel(value: 'a\nb')..lines;
+    final edited = model.copyWith(value: 'x\ny\nz');
+    expect(edited.lines, ['x', 'y', 'z']);
+
+    final inserted = TextAreaModel(value: 'ab', cursorCol: 2)
+        .update(KeyPressMsg(const TeaKey(code: KeyCode.rune, text: 'c')))
+        .$1 as TextAreaModel;
+    expect(inserted.lines, ['abc']);
+  });
+
+  test('text area moveToLineEnd and moveToDocumentEnd use cached lines', () {
+    final model = TextAreaModel(
+      value: 'first\nsecond\nthird',
+      cursorRow: 1,
+      cursorCol: 0,
+    );
+    model.lines;
+
+    expect(model.moveToLineEnd().cursorColumn, 6);
+    expect(
+      (
+        model.moveToDocumentEnd().cursorLine,
+        model.moveToDocumentEnd().cursorColumn,
+      ),
+      (2, 5),
+    );
+  });
+
   test('form observes caller-owned field list mutations', () {
     final fields = <FormField>[
       Field.input(key: 'name', initial: 'before'),
