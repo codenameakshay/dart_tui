@@ -76,8 +76,10 @@ final class TextAreaModel extends Model {
     required this.focused,
     required this.placeholder,
     required this.styles,
+    List<String>? linesCache,
     List<_TextAreaVisualRow>? visualRowsCache,
-  }) : _visualRowsCache = visualRowsCache;
+  })  : _linesCache = linesCache,
+        _visualRowsCache = visualRowsCache;
 
   final String value;
   final int cursorRow;
@@ -98,19 +100,21 @@ final class TextAreaModel extends Model {
   final bool focused;
   final String placeholder;
   final TextAreaStyles styles;
+  List<String>? _linesCache;
   List<_TextAreaVisualRow>? _visualRowsCache;
 
-  List<String> get lines => value.split('\n');
+  List<String> get _logicalLines => _linesCache ??= value.split('\n');
+  List<String> get lines => List<String>.of(_logicalLines);
   List<_TextAreaVisualRow> get _visualRows =>
       _visualRowsCache ??= List.unmodifiable(_buildVisualRows(value, width));
   int get visualLineCount => _visualRows.length;
 
   /// Zero-based logical line containing the cursor.
-  int get cursorLine => cursorRow.clamp(0, lines.length - 1);
+  int get cursorLine => cursorRow.clamp(0, _logicalLines.length - 1);
 
   /// Zero-based grapheme index within [cursorLine].
   int get cursorColumn =>
-      cursorCol.clamp(0, lines[cursorLine].characters.length);
+      cursorCol.clamp(0, _logicalLines[cursorLine].characters.length);
 
   int get visibleHeight {
     final contentHeight = visualLineCount;
@@ -142,17 +146,17 @@ final class TextAreaModel extends Model {
 
   TextAreaModel moveToLineEnd() => copyWith(
         cursorRow: cursorLine,
-        cursorCol: lines[cursorLine].characters.length,
+        cursorCol: _logicalLines[cursorLine].characters.length,
       )._normalized();
 
   TextAreaModel moveToDocumentStart() =>
       copyWith(cursorRow: 0, cursorCol: 0)._normalized();
 
   TextAreaModel moveToDocumentEnd() {
-    final lastLine = lines.length - 1;
+    final lastLine = _logicalLines.length - 1;
     return copyWith(
       cursorRow: lastLine,
-      cursorCol: lines[lastLine].characters.length,
+      cursorCol: _logicalLines[lastLine].characters.length,
     )._normalized();
   }
 
@@ -187,6 +191,7 @@ final class TextAreaModel extends Model {
       focused: focused ?? this.focused,
       placeholder: placeholder ?? this.placeholder,
       styles: styles ?? this.styles,
+      linesCache: nextValue == this.value ? _linesCache : null,
       visualRowsCache: nextValue == this.value && nextWidth == this.width
           ? _visualRowsCache
           : null,
@@ -214,7 +219,7 @@ final class TextAreaModel extends Model {
   }
 
   TextAreaModel _normalized() {
-    final currentLines = lines;
+    final currentLines = _logicalLines;
     final row = cursorRow.clamp(0, currentLines.length - 1);
     final col = cursorCol.clamp(0, currentLines[row].characters.length);
     var next = copyWith(cursorRow: row, cursorCol: col);
@@ -232,7 +237,7 @@ final class TextAreaModel extends Model {
   }
 
   _TextAreaCursorLocation get _cursorLocation {
-    final currentLines = lines;
+    final currentLines = _logicalLines;
     final row = cursorRow.clamp(0, currentLines.length - 1);
     final lineChars = currentLines[row].characters.toList();
     final col = cursorCol.clamp(0, lineChars.length);
@@ -254,7 +259,7 @@ final class TextAreaModel extends Model {
   }
 
   TextAreaModel _insertText(String text) {
-    final currentLines = lines;
+    final currentLines = List<String>.of(_logicalLines);
     final row = cursorRow.clamp(0, currentLines.length - 1);
     final chars = currentLines[row].characters.toList();
     final col = cursorCol.clamp(0, chars.length);
@@ -271,7 +276,7 @@ final class TextAreaModel extends Model {
   }
 
   TextAreaModel _insertNewline() {
-    final currentLines = lines;
+    final currentLines = List<String>.of(_logicalLines);
     final row = cursorRow.clamp(0, currentLines.length - 1);
     final chars = currentLines[row].characters.toList();
     final col = cursorCol.clamp(0, chars.length);
@@ -287,7 +292,7 @@ final class TextAreaModel extends Model {
   }
 
   TextAreaModel _deleteBackward() {
-    final currentLines = lines;
+    final currentLines = List<String>.of(_logicalLines);
     final row = cursorRow.clamp(0, currentLines.length - 1);
     final chars = currentLines[row].characters.toList();
     final col = cursorCol.clamp(0, chars.length);
@@ -311,7 +316,7 @@ final class TextAreaModel extends Model {
   }
 
   TextAreaModel _deleteForward() {
-    final currentLines = lines;
+    final currentLines = List<String>.of(_logicalLines);
     final row = cursorRow.clamp(0, currentLines.length - 1);
     final chars = currentLines[row].characters.toList();
     final col = cursorCol.clamp(0, chars.length);
@@ -332,7 +337,7 @@ final class TextAreaModel extends Model {
     final target = (location.visualRow + delta).clamp(0, rows.length - 1);
     if (target == location.visualRow) return this;
     final targetRow = rows[target];
-    final targetChars = lines[targetRow.logicalRow].characters.toList();
+    final targetChars = _logicalLines[targetRow.logicalRow].characters.toList();
     var col = targetRow.start;
     var cells = 0;
     while (col < targetRow.end) {
@@ -350,7 +355,7 @@ final class TextAreaModel extends Model {
   @override
   (Model, Cmd?) update(Msg msg) {
     if (msg is! KeyMsg) return (this, null);
-    final currentLines = lines;
+    final currentLines = _logicalLines;
     final row = cursorRow.clamp(0, currentLines.length - 1);
     final lineChars = currentLines[row].characters.toList();
     final col = cursorCol.clamp(0, lineChars.length);
@@ -409,30 +414,33 @@ final class TextAreaModel extends Model {
       case 'alt+backspace':
         final start = _wordStartBefore(lineChars, col);
         if (start == col) return (this, null);
-        currentLines[row] = [
+        final mutableLines = List<String>.of(_logicalLines);
+        mutableLines[row] = [
           ...lineChars.sublist(0, start),
           ...lineChars.sublist(col),
         ].join();
         return (
           copyWith(
-            value: currentLines.join('\n'),
+            value: mutableLines.join('\n'),
             cursorCol: start,
           )._normalized(),
           null,
         );
       default:
         if (msg.key == 'ctrl+k') {
-          currentLines[row] = lineChars.sublist(0, col).join();
+          final mutableLines = List<String>.of(_logicalLines);
+          mutableLines[row] = lineChars.sublist(0, col).join();
           return (
-            copyWith(value: currentLines.join('\n'))._normalized(),
+            copyWith(value: mutableLines.join('\n'))._normalized(),
             null,
           );
         }
         if (msg.key == 'ctrl+u') {
-          currentLines[row] = lineChars.sublist(col).join();
+          final mutableLines = List<String>.of(_logicalLines);
+          mutableLines[row] = lineChars.sublist(col).join();
           return (
             copyWith(
-              value: currentLines.join('\n'),
+              value: mutableLines.join('\n'),
               cursorCol: 0,
             )._normalized(),
             null,

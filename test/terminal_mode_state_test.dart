@@ -75,6 +75,7 @@ void main() {
           mouseMode: MouseMode.allMotion,
         ),
       );
+      expect(buffer.toString(), contains('\x1b[?1049h'));
       buffer.clear();
 
       state.reset(sink);
@@ -89,6 +90,25 @@ void main() {
           '\x1b[?2004l',
         ),
       );
+      expect(state.altScreenEnabled, isFalse);
+    });
+
+    test('reset skips alt-screen exit when it was never entered', () {
+      final sink = _StringSink(buffer);
+      state.apply(sink, newView('value'));
+      buffer.clear();
+
+      state.reset(sink);
+
+      final output = buffer.toString();
+      expect(output, isNot(contains('\x1b[?1049l')));
+      expect(output, contains('\x1b[?25h'));
+      expect(
+        output,
+        contains('\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l'),
+      );
+      expect(output, contains('\x1b[?1004l'));
+      expect(output, contains('\x1b[?2004l'));
       expect(state.altScreenEnabled, isFalse);
     });
   });

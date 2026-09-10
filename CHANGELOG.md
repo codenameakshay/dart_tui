@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Cache `TextAreaModel` logical lines across cursor-only copies.
+- Fast-path `textWidth` for ASCII-only strings.
+- Skip `\x1b[?1049l` on shutdown when alt screen was never entered.
+- Add `make bench-hotpath` (naive Dart vs dart_tui) and
+  `make bench-startup-pty`.
+
 ## 2.0.0 - 2026-08-08
 
 This major release hardens the terminal runtime, ports the selected Bubble Tea
