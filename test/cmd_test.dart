@@ -2,6 +2,23 @@ import 'package:dart_tui/dart_tui.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('every rejects non-positive intervals immediately', () {
+    expect(() => every(Duration.zero, (_) => QuitMsg()), throwsArgumentError);
+    expect(
+      () => every(const Duration(microseconds: -1), (_) => QuitMsg()),
+      throwsArgumentError,
+    );
+  });
+
+  test('tick helpers reject negative delays immediately', () {
+    expect(() => tick(const Duration(microseconds: -1), (_) => QuitMsg()),
+        throwsArgumentError);
+    expect(
+      () => tickWithId(const Duration(microseconds: -1), 'timer'),
+      throwsArgumentError,
+    );
+  });
+
   test('batch wraps multiple commands in BatchMsg', () async {
     final c = batch([
       () async => KeyPressMsg(const TeaKey(code: KeyCode.rune, text: 'a')),

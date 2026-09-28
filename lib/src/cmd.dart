@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'msg.dart';
+import 'printf_format.dart';
 
 /// Async side-effect that eventually yields a [Msg] (Bubble Tea `Cmd`).
 typedef Cmd = FutureOr<Msg?> Function();
@@ -20,6 +21,7 @@ Cmd? _compactCmds(List<Cmd?> cmds, Msg Function(List<Cmd>) wrap) {
 
 /// Delay before delivering a time-based message.
 Cmd tick(Duration d, Msg Function(DateTime t) fn) {
+  _requireNonNegative(d, 'd');
   return () async {
     await Future<void>.delayed(d);
     return fn(DateTime.now());
@@ -28,6 +30,9 @@ Cmd tick(Duration d, Msg Function(DateTime t) fn) {
 
 /// Tick aligned to wall clock boundary.
 Cmd every(Duration d, Msg Function(DateTime t) fn) {
+  if (d <= Duration.zero) {
+    throw ArgumentError.value(d, 'd', 'Must be greater than zero');
+  }
   return () async {
     final now = DateTime.now();
     final micros = d.inMicroseconds;
@@ -73,13 +78,17 @@ Cmd execProcess(
         );
 
 /// Tick with an ID for routing to specific timer/stopwatch models.
-Cmd tickWithId(Duration d, Object id) => () async {
-      await Future<void>.delayed(d);
-      return TickMsg(DateTime.now(), id: id);
-    };
+Cmd tickWithId(Duration d, Object id) {
+  _requireNonNegative(d, 'd');
+  return () async {
+    await Future<void>.delayed(d);
+    return TickMsg(DateTime.now(), id: id);
+  };
+}
+
 Cmd println([Object? value]) => () => PrintLineMsg('${value ?? ''}');
 Cmd printf(String template, [List<Object?> args = const []]) =>
-    () => PrintLineMsg(_format(template, args));
+    () => PrintLineMsg(formatPrintf(template, args));
 
 // ── Terminal mode commands ─────────────────────────────────────────────────────
 
@@ -159,10 +168,8 @@ final class ScrollMsg extends Msg {
   final bool up;
 }
 
-String _format(String template, List<Object?> args) {
-  var out = template;
-  for (final arg in args) {
-    out = out.replaceFirst('%s', '$arg');
+void _requireNonNegative(Duration duration, String name) {
+  if (duration.isNegative) {
+    throw ArgumentError.value(duration, name, 'Must not be negative');
   }
-  return out;
 }
