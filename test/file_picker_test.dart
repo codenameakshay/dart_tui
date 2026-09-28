@@ -64,5 +64,35 @@ void main() {
       expect((afterBack as FilePickerModel).currentDir,
           isNot(equals(tempDir.path)));
     });
+
+    test('out-of-range cursor is safely clamped when opening entries', () {
+      final picker = FilePickerModel(
+        currentDir: tempDir.path,
+        entries: [File('${tempDir.path}/file_a.txt')],
+        cursor: 99,
+        height: 0,
+        loading: false,
+      );
+      expect(picker.cursor, 0);
+      expect(() => picker.update(_special(KeyCode.enter)), returnsNormally);
+      expect(picker.view().content, contains('file_a.txt'));
+    });
+
+    test('selected can be explicitly cleared', () {
+      final picker = FilePickerModel(currentDir: tempDir.path, selected: 'x');
+      expect(picker.copyWith(clearSelected: true).selected, isNull);
+    });
+
+    test('load failures are visible and distinct from empty directories',
+        () async {
+      final picker = FilePickerModel(currentDir: '${tempDir.path}/missing');
+      final msg = await picker.init()!();
+      final (next, _) = picker.update(msg!);
+      final loaded = next as FilePickerModel;
+      expect(loaded.entries, isEmpty);
+      expect(loaded.error, isNotNull);
+      expect(loaded.view().content, contains('Unable to load directory'));
+      expect(loaded.view().content, isNot(contains('(empty)')));
+    });
   });
 }

@@ -9,10 +9,11 @@ import '../view.dart';
 
 /// Internal message: directory listing loaded.
 final class _DirLoadedMsg extends Msg {
-  _DirLoadedMsg(this.loadState, this.loadToken, this.entries);
+  _DirLoadedMsg(this.loadState, this.loadToken, this.entries, this.error);
   final _FilePickerLoadState loadState;
   final Object loadToken;
   final List<FileSystemEntity> entries;
+  final String? error;
 }
 
 final class _FilePickerLoadState {
@@ -27,27 +28,35 @@ final class FilePickerModel extends Model {
   FilePickerModel({
     required this.currentDir,
     this.entries = const [],
-    this.cursor = 0,
-    this.scrollOffset = 0,
-    this.height = 15,
+    int cursor = 0,
+    int scrollOffset = 0,
+    int height = 15,
     this.showHidden = false,
     this.allowedExtensions = const [],
     this.selected,
     this.loading = true,
-  }) : _loadState = _FilePickerLoadState();
+    this.error,
+  })  : cursor = cursor.clamp(0, entries.isEmpty ? 0 : entries.length - 1),
+        scrollOffset = scrollOffset < 0 ? 0 : scrollOffset,
+        height = height < 1 ? 1 : height,
+        _loadState = _FilePickerLoadState();
 
   FilePickerModel._withLoadState({
     required this.currentDir,
     required this.entries,
-    required this.cursor,
-    required this.scrollOffset,
-    required this.height,
+    required int cursor,
+    required int scrollOffset,
+    required int height,
     required this.showHidden,
     required this.allowedExtensions,
     required this.selected,
     required this.loading,
+    required this.error,
     required _FilePickerLoadState loadState,
-  }) : _loadState = loadState;
+  })  : cursor = cursor.clamp(0, entries.isEmpty ? 0 : entries.length - 1),
+        scrollOffset = scrollOffset < 0 ? 0 : scrollOffset,
+        height = height < 1 ? 1 : height,
+        _loadState = loadState;
 
   final String currentDir;
   final List<FileSystemEntity> entries;
@@ -58,6 +67,7 @@ final class FilePickerModel extends Model {
   final List<String> allowedExtensions;
   final String? selected;
   final bool loading;
+  final String? error;
   final _FilePickerLoadState _loadState;
 
   FilePickerModel copyWith({
@@ -69,7 +79,10 @@ final class FilePickerModel extends Model {
     bool? showHidden,
     List<String>? allowedExtensions,
     String? selected,
+    bool clearSelected = false,
     bool? loading,
+    String? error,
+    bool clearError = false,
   }) =>
       FilePickerModel._withLoadState(
         currentDir: currentDir ?? this.currentDir,
@@ -79,23 +92,36 @@ final class FilePickerModel extends Model {
         height: height ?? this.height,
         showHidden: showHidden ?? this.showHidden,
         allowedExtensions: allowedExtensions ?? this.allowedExtensions,
-        selected: selected ?? this.selected,
+        selected: clearSelected ? null : (selected ?? this.selected),
         loading: loading ?? this.loading,
+        error: clearError ? null : (error ?? this.error),
         loadState: currentDir != null && currentDir != this.currentDir ||
                 showHidden != null && showHidden != this.showHidden ||
-                allowedExtensions != null
+                (allowedExtensions != null &&
+                    !_sameStrings(allowedExtensions, this.allowedExtensions))
             ? _FilePickerLoadState()
             : _loadState,
       );
 
-  static Future<List<FileSystemEntity>> _loadDir(
+  static bool _sameStrings(List<String> a, List<String> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  static Future<({List<FileSystemEntity> entries, String? error})> _loadDir(
     String dir,
     bool showHidden,
     List<String> allowedExtensions,
   ) async {
     try {
       final d = Directory(dir);
-      if (!await d.exists()) return [];
+      if (!await d.exists()) {
+        throw FileSystemException('Directory does not exist', dir);
+      }
       final all = (await d.list().toList()).where((e) {
         final name = p.basename(e.path);
         if (!showHidden && name.startsWith('.')) return false;
@@ -111,9 +137,9 @@ final class FilePickerModel extends Model {
           if (aIsDir != bIsDir) return aIsDir - bIsDir;
           return p.basename(a.path).compareTo(p.basename(b.path));
         });
-      return all;
-    } catch (_) {
-      return [];
+      return (entries: all, error: null);
+    } on FileSystemException catch (error) {
+      return (entries: <FileSystemEntity>[], error: error.message);
     }
   }
 
@@ -122,14 +148,15 @@ final class FilePickerModel extends Model {
     final loadToken = Object();
     _loadState.latestToken = loadToken;
     return () async {
-      final loaded = await _loadDir(currentDir, showHidden, allowedExtensions);
-      return _DirLoadedMsg(_loadState, loadToken, loaded);
+      final result = await _loadDir(currentDir, showHidden, allowedExtensions);
+      return _DirLoadedMsg(_loadState, loadToken, result.entries, result.error);
     };
   }
 
   FilePickerModel _moveCursor(int delta) {
     final newCursor =
-        (cursor + delta).clamp(0, entries.isEmpty ? 0 : entries.length - 1);
+        (cursor.clamp(0, entries.isEmpty ? 0 : entries.length - 1) + delta)
+            .clamp(0, entries.isEmpty ? 0 : entries.length - 1);
     var newOffset = scrollOffset;
     if (newCursor < newOffset) newOffset = newCursor;
     if (newCursor >= newOffset + height) newOffset = newCursor - height + 1;
@@ -139,14 +166,24 @@ final class FilePickerModel extends Model {
   @override
   (Model, Cmd?) update(Msg msg) {
     switch (msg) {
-      case _DirLoadedMsg(:final loadState, :final loadToken, :final entries):
+      case _DirLoadedMsg(
+          :final loadState,
+          :final loadToken,
+          :final entries,
+          :final error
+        ):
         if (!identical(loadState, _loadState) ||
             !identical(loadToken, _loadState.latestToken)) {
           return (this, null);
         }
         return (
           copyWith(
-              entries: entries, cursor: 0, scrollOffset: 0, loading: false),
+              entries: entries,
+              cursor: 0,
+              scrollOffset: 0,
+              loading: false,
+              error: error,
+              clearError: error == null),
           null
         );
 
@@ -163,7 +200,7 @@ final class FilePickerModel extends Model {
           case 'enter':
           case 'right':
             if (entries.isEmpty) return (this, null);
-            final entry = entries[cursor];
+            final entry = entries[cursor.clamp(0, entries.length - 1)];
             if (entry is Directory) {
               final next = copyWith(
                 currentDir: entry.path,
@@ -205,6 +242,11 @@ final class FilePickerModel extends Model {
 
     if (loading) {
       b.write('Loading...');
+      return newView(b.toString());
+    }
+
+    if (error != null) {
+      b.write('Unable to load directory: $error');
       return newView(b.toString());
     }
 

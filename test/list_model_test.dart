@@ -12,6 +12,8 @@ KeyMsg _namedKey(String name) {
     'enter' => KeyCode.enter,
     'backspace' => KeyCode.backspace,
     'esc' => KeyCode.escape,
+    'pgup' => KeyCode.pageUp,
+    'pgdown' => KeyCode.pageDown,
     _ => KeyCode.unknown,
   };
   return KeyPressMsg(TeaKey(code: code));
@@ -76,6 +78,27 @@ void main() {
       final (next3, _) = (next2 as ListModel).update(_key('z'));
       expect((next3 as ListModel).selected, isNull);
     });
+
+    test('navigation on an empty filtered result keeps a valid cursor', () {
+      var model = ListModel(items: [const ListItem(title: 'only')]);
+      for (final key in ['/', 'z', 'down', 'pgup', 'pgdown']) {
+        final (next, _) = model.update(
+            key == 'down' || key == 'pgup' || key == 'pgdown'
+                ? _namedKey(key)
+                : _key(key));
+        model = next as ListModel;
+        expect(model.cursor, 0);
+        if (key != '/') expect(model.selected, isNull);
+      }
+    });
+
+    test('filter controls still work when there are no source items', () {
+      final empty = ListModel(items: const []);
+      final (filtering, _) = empty.update(_key('/'));
+      expect((filtering as ListModel).filterMode, isTrue);
+      final (exited, _) = filtering.update(_namedKey('esc'));
+      expect((exited as ListModel).filterMode, isFalse);
+    });
   });
 
   group('ListModel filter mode', () {
@@ -100,6 +123,35 @@ void main() {
       final m = ListModel(items: items, filter: 'App', filterMode: true);
       final (next, _) = m.update(_namedKey('backspace'));
       expect((next as ListModel).filter, equals('Ap'));
+    });
+
+    test('typing and backspacing treats emoji as one filter character', () {
+      var model = ListModel(items: [const ListItem(title: '😀')]);
+      var (next, _) = model.update(_key('/'));
+      (next, _) = (next as ListModel).update(_key('😀'));
+      model = next as ListModel;
+      expect(model.filter, '😀');
+      expect(model.selected?.title, '😀');
+      (next, _) = model.update(_namedKey('backspace'));
+      expect((next as ListModel).filter, isEmpty);
+    });
+
+    test('click row mapping accounts for only items with descriptions', () {
+      final model = ListModel(
+        items: const [
+          ListItem(title: 'one', description: 'detail'),
+          ListItem(title: 'two'),
+          ListItem(title: 'three', description: 'detail'),
+        ],
+        height: 10,
+        showDescription: true,
+      );
+      final (next, _) = model.update(MouseClickMsg(const Mouse(
+        x: 0,
+        y: 3,
+        button: MouseButton.left,
+      )));
+      expect((next as ListModel).selected?.title, 'three');
     });
 
     test('backspace on empty filter exits filter mode', () {
