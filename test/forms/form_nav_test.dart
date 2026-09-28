@@ -32,7 +32,7 @@ void main() {
       Group([Field.input(key: 'a', title: 'A')])
     ]);
     final same = step(f, shiftTab());
-    expect(same.fieldIndexForTest, 0);
+    expect(stripAnsi(same.view().content), contains('› A'));
   });
 
   test('enter inserts newline in text field; ctrl+d advances', () {
@@ -62,11 +62,11 @@ void main() {
       ]),
     ]);
     f = step(f, key(KeyCode.tab)); // try to advance with empty 'a'
-    expect(f.fieldIndexForTest, 0); // blocked, still on field a
+    expect(stripAnsi(f.view().content), contains('› A'));
     expect(f.view().content, contains('required'));
     f = step(f, rune('x')); // fix it
     f = step(f, key(KeyCode.tab)); // now advances
-    expect(f.fieldIndexForTest, 1);
+    expect(stripAnsi(f.view().content), contains('› B'));
   });
 
   test('submit re-validates whole form and blocks on the first error', () {
@@ -99,5 +99,49 @@ void main() {
     expect(f.submitted, isTrue);
     expect(f.values.get<String>('a'), 'x');
     expect(f.values.get<String>('b'), 'y');
+  });
+
+  test('tab skips a visible group with no focusable fields', () {
+    var f = Form([
+      Group([Field.input(key: 'a', title: 'A')]),
+      Group([Field.note(title: 'Information')]),
+      Group([Field.input(key: 'b', title: 'B')]),
+    ]);
+    f = step(f, key(KeyCode.tab));
+    expect(stripAnsi(f.view().content), contains('› B'));
+  });
+
+  test('all-hidden form remains cancellable and submits on tab', () {
+    final f = Form([
+      Group([
+        Field.input(key: 'hidden', hidden: (_) => true),
+        Field.note(title: 'Information'),
+      ]),
+    ]);
+
+    final submitted = step(f, key(KeyCode.tab));
+    expect(submitted.submitted, isTrue);
+    expect(submitted.view().content, contains('tab next'));
+    final cancelled = step(f, key(KeyCode.escape));
+    expect(cancelled.cancelled, isTrue);
+  });
+
+  test('tab skips validation in a hidden-only group', () {
+    final form = Form([
+      Group(
+        [
+          Field.input(
+            key: 'secret',
+            validate: (_) => 'must not validate hidden input',
+          ),
+        ],
+        hidden: (_) => true,
+      ),
+    ]);
+
+    final next = step(form, key(KeyCode.tab));
+    expect(next.submitted, isTrue);
+    expect(
+        stripAnsi(next.view().content), isNot(contains('must not validate')));
   });
 }

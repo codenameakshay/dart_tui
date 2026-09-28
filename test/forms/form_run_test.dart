@@ -9,6 +9,17 @@ const _ctrlC = [0x03];
 const _timeout = Timeout(Duration(seconds: 5));
 
 void main() {
+  test('form rejects duplicate keys and empty groups at runtime', () {
+    expect(() => Form([]), throwsArgumentError);
+    expect(
+      () => Form([
+        Group([Field.input(key: 'x'), Field.confirm(key: 'x')])
+      ]),
+      throwsArgumentError,
+    );
+    expect(() => Form([Group([])]), throwsArgumentError);
+  });
+
   test('collects values and submits on enter (single field)', () async {
     final form = Form([
       Group([Field.confirm(key: 'ok', title: 'OK?', initial: true)]),

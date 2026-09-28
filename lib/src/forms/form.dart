@@ -1,5 +1,3 @@
-import 'package:meta/meta.dart';
-
 import '../cmd.dart';
 import '../model.dart';
 import '../msg.dart';
@@ -25,13 +23,20 @@ final class Form extends Model implements OutcomeModel<FormValues> {
         submitted = false,
         cancelled = false {
     final keys = <String>{};
+    if (groups.isEmpty) {
+      throw ArgumentError('a Form needs at least one group');
+    }
     for (final g in groups) {
+      if (g.fields.isEmpty) {
+        throw ArgumentError('a Form group needs at least one field');
+      }
       for (final f in g.fields) {
         final k = f.key;
-        assert(k == null || keys.add(k), 'duplicate field key: $k');
+        if (k != null && !keys.add(k)) {
+          throw ArgumentError('duplicate field key: $k');
+        }
       }
     }
-    assert(groups.isNotEmpty, 'a Form needs at least one group');
   }
 
   Form._(this.groups, this.styles, this.groupIndex, this.fieldIndex,
@@ -43,9 +48,6 @@ final class Form extends Model implements OutcomeModel<FormValues> {
   final int fieldIndex;
   final bool submitted;
   final bool cancelled;
-
-  @visibleForTesting
-  int get fieldIndexForTest => fieldIndex;
 
   Form _copy(
           {int? groupIndex,
@@ -153,28 +155,67 @@ final class Form extends Model implements OutcomeModel<FormValues> {
     return _withGroups(next);
   }
 
-  (Model, Cmd?) _advance() {
+  Form _normalizeFocus() {
+    final values = _rawValues;
     final active = groups[groupIndex].fields[fieldIndex];
-    final err = active.validate();
-    if (err != null) return (_setActiveError(err), null); // blocked
-    final cleared = active.error == null ? this : _setActiveError(null);
+    final groupVisible = !(groups[groupIndex].hidden?.call(values) ?? false);
+    if (groupVisible && active.acceptsInput && !active.isHidden(values)) {
+      return this;
+    }
 
-    final g = cleared.groups[cleared.groupIndex];
-    final values = cleared._rawValues;
-    final targets = cleared._focusable(g, values);
-    final pos = targets.indexOf(cleared.fieldIndex);
-    if (pos >= 0 && pos < targets.length - 1) {
-      return (cleared._copy(fieldIndex: targets[pos + 1]), null);
+    final visible = _visibleGroups(values);
+    if (groupVisible) {
+      final sameGroup =
+          _focusable(groups[groupIndex], values).where((i) => i > fieldIndex);
+      if (sameGroup.isNotEmpty) return _copy(fieldIndex: sameGroup.first);
     }
-    // past the last focusable field of this group → next visible group
-    final vg = cleared._visibleGroups(values);
-    final gp = vg.indexOf(cleared.groupIndex);
-    if (gp + 1 < vg.length) {
-      final gi = vg[gp + 1];
-      final ff = cleared._firstFocusable(gi, values);
-      return (cleared._copy(groupIndex: gi, fieldIndex: ff ?? 0), null);
+    for (final gi in visible.where((i) => i > groupIndex)) {
+      final field = _firstFocusable(gi, values);
+      if (field != null) return _copy(groupIndex: gi, fieldIndex: field);
     }
-    return cleared._submit();
+    for (final gi in visible.where((i) => i < groupIndex).toList().reversed) {
+      final field = _lastFocusable(gi, values);
+      if (field != null) return _copy(groupIndex: gi, fieldIndex: field);
+    }
+    if (groupVisible) {
+      final remaining = _focusable(groups[groupIndex], values);
+      if (remaining.isNotEmpty) return _copy(fieldIndex: remaining.last);
+    }
+    return this;
+  }
+
+  (Model, Cmd?) _advance() {
+    var current = _normalizeFocus();
+    final active =
+        current.groups[current.groupIndex].fields[current.fieldIndex];
+    final values = current._rawValues;
+    final groupVisible =
+        !(current.groups[current.groupIndex].hidden?.call(values) ?? false);
+    if (groupVisible && active.acceptsInput && !active.isHidden(values)) {
+      final err = active.validate();
+      if (err != null) return (current._setActiveError(err), null);
+      if (active.error != null) current = current._setActiveError(null);
+    }
+
+    final nextValues = current._rawValues;
+    final visible = current._visibleGroups(nextValues);
+    final currentPosition = visible.indexOf(current.groupIndex);
+    final sameGroup = groupVisible
+        ? current
+            ._focusable(current.groups[current.groupIndex], nextValues)
+            .where((i) => i > current.fieldIndex)
+        : const <int>[];
+    if (sameGroup.isNotEmpty) {
+      return (current._copy(fieldIndex: sameGroup.first), null);
+    }
+    for (var i = currentPosition + 1; i < visible.length; i++) {
+      final gi = visible[i];
+      final field = current._firstFocusable(gi, nextValues);
+      if (field != null) {
+        return (current._copy(groupIndex: gi, fieldIndex: field), null);
+      }
+    }
+    return current._submit();
   }
 
   // Validate every visible keyed field; jump to the first error, else submit.
@@ -216,30 +257,34 @@ final class Form extends Model implements OutcomeModel<FormValues> {
   @override
   (Model, Cmd?) update(Msg msg) {
     if (msg is! KeyMsg) return (_broadcast(msg), null);
-    final active = groups[groupIndex].fields[fieldIndex];
+    final current = _normalizeFocus();
+    final active =
+        current.groups[current.groupIndex].fields[current.fieldIndex];
     final multiline = active.isMultiline;
     switch (msg.key) {
       case 'esc':
       case 'ctrl+c':
-        return (_copy(cancelled: true), null);
+        return (current._copy(cancelled: true), null);
       case 'ctrl+d':
       case 'tab':
         return _advance();
       case 'shift+tab':
-        return _back();
+        return current._back();
       case 'enter':
         if (!multiline) return _advance();
     }
     // delegate to the active field's editor, then recompute dynamics
-    final g0 = groups[groupIndex];
+    final values = current._rawValues;
+    if (!active.acceptsInput || active.isHidden(values)) return (current, null);
+    final g0 = current.groups[current.groupIndex];
     final edited = [...g0.fields];
-    edited[fieldIndex] = active.updateEditor(msg);
-    var nf = _withGroups([
-      for (var i = 0; i < groups.length; i++)
-        if (i == groupIndex)
+    edited[current.fieldIndex] = active.updateEditor(msg);
+    var nf = current._withGroups([
+      for (var i = 0; i < current.groups.length; i++)
+        if (i == current.groupIndex)
           Group(edited, title: g0.title, hidden: g0.hidden)
         else
-          groups[i],
+          current.groups[i],
     ]);
 
     // recompute dynamic options/selection against the new raw values
@@ -250,36 +295,34 @@ final class Form extends Model implements OutcomeModel<FormValues> {
             title: g.title, hidden: g.hidden),
     ]);
 
-    // if the active field is now hidden, refocus to the next (or last) target
-    final active2 = nf.groups[nf.groupIndex].fields[nf.fieldIndex];
-    final nfValues = nf._rawValues;
-    if (!active2.acceptsInput || active2.isHidden(nfValues)) {
-      final targets = nf._focusable(nf.groups[nf.groupIndex], nfValues);
-      if (targets.isNotEmpty) {
-        final after = targets.firstWhere((i) => i > nf.fieldIndex,
-            orElse: () => targets.last);
-        nf = nf._copy(fieldIndex: after);
-      }
-    }
-    return (nf, null);
+    return (nf._normalizeFocus(), null);
   }
 
   @override
   View view() {
-    final g = groups[groupIndex];
     final v = _rawValues;
-    final b = StringBuffer();
     final visible = _visibleGroups(v);
+    final currentGroupIsVisible = visible.contains(groupIndex);
+    final displayGroupIndex = currentGroupIsVisible
+        ? groupIndex
+        : visible.isEmpty
+            ? groupIndex
+            : visible.first;
+    final g = groups[displayGroupIndex];
+    final b = StringBuffer();
     if (visible.length > 1) {
-      final pos = visible.indexOf(groupIndex) + 1;
+      final pos = visible.indexOf(displayGroupIndex) + 1;
       b.writeln(styles.pageIndicator
           .render('${g.title ?? 'Step'}  $pos/${visible.length}'));
     } else if (g.title != null) {
       b.writeln(styles.activeTitle.render(g.title!));
     }
-    for (var i = 0; i < g.fields.length; i++) {
-      if (g.fields[i].isHidden(v)) continue;
-      b.writeln(g.fields[i].render(i == fieldIndex, styles, v));
+    if (visible.contains(displayGroupIndex)) {
+      for (var i = 0; i < g.fields.length; i++) {
+        if (g.fields[i].isHidden(v)) continue;
+        b.writeln(g.fields[i].render(
+            displayGroupIndex == groupIndex && i == fieldIndex, styles, v));
+      }
     }
     b.write(styles.help
         .render('tab next · shift+tab back · enter submit · esc cancel'));

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dart_tui/dart_tui.dart';
 import 'package:test/test.dart';
 
@@ -58,6 +60,17 @@ void main() {
   });
 
   group('promptInput', () {
+    test('accepts and backspaces an entire emoji grapheme', () async {
+      final r = await promptInput('name',
+          options: _opts([
+            [0x61],
+            utf8.encode('😀'),
+            _backspace,
+            _enter,
+          ]));
+      expect(r, 'a');
+    }, timeout: _timeout);
+
     test('typing then enter returns the value', () async {
       final r = await promptInput('name',
           options: _opts([

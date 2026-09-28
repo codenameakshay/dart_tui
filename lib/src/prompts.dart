@@ -1,3 +1,5 @@
+import 'package:characters/characters.dart';
+
 import 'cmd.dart';
 import 'model.dart';
 import 'msg.dart';
@@ -41,19 +43,15 @@ final class _SelectPromptModel extends Model implements OutcomeModel<String> {
     required this.title,
     this.cursor = 0,
     this.result,
-    this.finished = false,
   });
 
   final List<String> choices;
   final String title;
   final int cursor;
   final String? result;
-  final bool finished;
 
   @override
   String? get outcome => result;
-
-  bool get quit => finished;
 
   int get _c => cursor.clamp(0, choices.length - 1);
 
@@ -70,7 +68,6 @@ final class _SelectPromptModel extends Model implements OutcomeModel<String> {
             title: title,
             cursor: _c > 0 ? _c - 1 : 0,
             result: result,
-            finished: finished,
           ),
           null,
         );
@@ -82,7 +79,6 @@ final class _SelectPromptModel extends Model implements OutcomeModel<String> {
             title: title,
             cursor: _c < choices.length - 1 ? _c + 1 : choices.length - 1,
             result: result,
-            finished: finished,
           ),
           null,
         );
@@ -95,7 +91,6 @@ final class _SelectPromptModel extends Model implements OutcomeModel<String> {
             title: title,
             cursor: cursor,
             result: choices[_c],
-            finished: true,
           ),
           null,
         );
@@ -107,7 +102,6 @@ final class _SelectPromptModel extends Model implements OutcomeModel<String> {
             title: title,
             cursor: cursor,
             result: null,
-            finished: true,
           ),
           () => QuitMsg(),
         );
@@ -136,17 +130,13 @@ final class _ConfirmPromptModel extends Model implements OutcomeModel<bool> {
   _ConfirmPromptModel({
     required this.question,
     this.result,
-    this.finished = false,
   });
 
   final String question;
   final bool? result;
-  final bool finished;
 
   @override
   bool? get outcome => result;
-
-  bool get quit => finished;
 
   @override
   (Model, Cmd?) update(Msg msg) {
@@ -156,26 +146,25 @@ final class _ConfirmPromptModel extends Model implements OutcomeModel<bool> {
       case 'y':
       case 'Y':
         return (
-          _ConfirmPromptModel(question: question, result: true, finished: true),
+          _ConfirmPromptModel(question: question, result: true),
           null,
         );
       case 'n':
       case 'N':
         return (
-          _ConfirmPromptModel(
-              question: question, result: false, finished: true),
+          _ConfirmPromptModel(question: question, result: false),
           null,
         );
       case 'enter':
       case 'ctrl+j':
         return (
-          _ConfirmPromptModel(question: question, result: true, finished: true),
+          _ConfirmPromptModel(question: question, result: true),
           null,
         );
       case 'esc':
       case 'ctrl+c':
         return (
-          _ConfirmPromptModel(question: question, result: null, finished: true),
+          _ConfirmPromptModel(question: question, result: null),
           () => QuitMsg(),
         );
       default:
@@ -193,18 +182,14 @@ final class _InputPromptModel extends Model implements OutcomeModel<String> {
     required this.label,
     this.value = '',
     this.result,
-    this.finished = false,
   });
 
   final String label;
   final String value;
   final String? result;
-  final bool finished;
 
   @override
   String? get outcome => result;
-
-  bool get quit => finished;
 
   @override
   (Model, Cmd?) update(Msg msg) {
@@ -218,7 +203,6 @@ final class _InputPromptModel extends Model implements OutcomeModel<String> {
             label: label,
             value: value,
             result: value,
-            finished: true,
           ),
           null,
         );
@@ -229,7 +213,6 @@ final class _InputPromptModel extends Model implements OutcomeModel<String> {
             label: label,
             value: value,
             result: null,
-            finished: true,
           ),
           () => QuitMsg(),
         );
@@ -238,18 +221,16 @@ final class _InputPromptModel extends Model implements OutcomeModel<String> {
         return (
           _InputPromptModel(
             label: label,
-            value: value.substring(0, value.length - 1),
-            finished: false,
+            value: value.characters.skipLast(1).toString(),
           ),
           null,
         );
       default:
-        if (msg.key.length == 1) {
+        if (msg.key.characters.length == 1) {
           return (
             _InputPromptModel(
               label: label,
               value: value + msg.key,
-              finished: false,
             ),
             null,
           );
