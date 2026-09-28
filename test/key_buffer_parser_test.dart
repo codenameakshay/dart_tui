@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:dart_tui/src/input_decoder.dart';
 import 'package:dart_tui/src/key_buffer_parser.dart';
 import 'package:dart_tui/src/msg.dart';
 import 'package:test/test.dart';
@@ -9,6 +12,49 @@ void main() {
     expect(k?.code, KeyCode.rune);
     expect(k?.text, 'a');
     expect(b, isEmpty);
+  });
+
+  test('parseKeyFromBuffer consumes one scalar per key', () {
+    final input = [0x61, 0x62, 0xc3, 0xa9, 0x63];
+    final keys = <String?>[];
+    while (input.isNotEmpty) {
+      keys.add(parseKeyFromBuffer(input)?.text);
+    }
+    expect(keys, ['a', 'b', 'é', 'c']);
+  });
+
+  test('streaming decoder emits one key event per scalar', () {
+    final messages = TerminalInputDecoder().feed(utf8.encode('abéc'));
+    expect(
+      messages.whereType<KeyPressMsg>().map((message) => message.key),
+      ['a', 'b', 'é', 'c'],
+    );
+  });
+
+  test('parseKeyFromBuffer decodes UTF-8 scalar values', () {
+    for (final text in ['é', '你', '🧑']) {
+      expect(parseKeyFromBuffer(utf8.encode(text).toList())?.text, text);
+    }
+  });
+
+  test('parseKeyFromBuffer waits for fragmented UTF-8', () {
+    final input = [0xc3];
+    expect(parseKeyFromBuffer(input), isNull);
+    expect(input, [0xc3]);
+    input.add(0xa9);
+    expect(parseKeyFromBuffer(input)?.text, 'é');
+  });
+
+  test('parseKeyFromBuffer consumes malformed UTF-8 one byte at a time', () {
+    final invalidLead = [0xff, 0x61];
+    expect(parseKeyFromBuffer(invalidLead)?.code, KeyCode.unknown);
+    expect(invalidLead, [0x61]);
+    expect(parseKeyFromBuffer(invalidLead)?.text, 'a');
+
+    final invalidContinuation = [0xe2, 0x28, 0xa1];
+    expect(parseKeyFromBuffer(invalidContinuation)?.code, KeyCode.unknown);
+    expect(invalidContinuation, [0x28, 0xa1]);
+    expect(parseKeyFromBuffer(invalidContinuation)?.text, '(');
   });
 
   test('parseKeyFromBuffer parses arrow escape sequence', () {
