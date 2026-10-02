@@ -90,6 +90,25 @@ void main() {
     );
   });
 
+  test('dynamic select retains a chosen null value when options change', () {
+    var field = Field.selectOf<String?>(
+      key: 'p',
+      optionsFor: (values) => values.get<bool>('empty') == true
+          ? const []
+          : values.get<bool>('swap') == true
+              ? const [Option('None', null), Option('A', 'a')]
+              : const [Option('A', 'a'), Option('None', null)],
+      initial: 'a',
+    ).recompute(FormValues.empty);
+
+    field = field.updateEditor(key(KeyCode.down)).recompute(FormValues.empty);
+    expect(field.value, isNull);
+    field = field.recompute(const FormValues({'empty': true}));
+    field = field.recompute(const FormValues({'swap': true}));
+    expect(field.value, isNull);
+    expect(field.render(true, styles, v), contains('(•) None'));
+  });
+
   test('dynamic multi-select retains chosen values across option changes', () {
     final f = Field.multiSelectOf<String>(
       key: 'p',

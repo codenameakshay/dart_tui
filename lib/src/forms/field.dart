@@ -595,14 +595,14 @@ final class _SelectField<T> extends FormField with _FieldCommon {
   _SelectField<T> _copy(
           {List<Option<T>>? options,
           int? index,
-          T? selectedValue,
+          required T? selectedValue,
           String? error}) =>
       _SelectField<T>(
         key: key,
         options: options ?? this.options,
         optionsForFn: optionsForFn,
         index: index ?? this.index,
-        selectedValue: selectedValue ?? this.selectedValue,
+        selectedValue: selectedValue,
         titleSpec: titleSpec,
         description: description,
         validator: validator,
@@ -633,7 +633,9 @@ final class _SelectField<T> extends FormField with _FieldCommon {
   FormField recompute(FormValues values) {
     if (optionsForFn == null) return this;
     final next = optionsForFn!(values);
-    if (next.isEmpty) return _copy(options: next, index: 0);
+    if (next.isEmpty) {
+      return _copy(options: next, index: 0, selectedValue: selectedValue);
+    }
     final matchingIndex =
         next.indexWhere((option) => option.value == selectedValue);
     final nextIndex =
@@ -646,7 +648,8 @@ final class _SelectField<T> extends FormField with _FieldCommon {
   }
 
   @override
-  FormField withError(String? error) => _copy(error: error);
+  FormField withError(String? error) =>
+      _copy(error: error, selectedValue: selectedValue);
 
   @override
   String render(bool active, FormStyles styles, FormValues values) {
