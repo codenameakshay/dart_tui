@@ -30,8 +30,6 @@ final class View {
   bool disableBracketedPasteMode;
   MouseMode mouseMode;
   KeyboardEnhancements keyboardEnhancements;
-
-  void setContent(String s) => content = s;
 }
 
 View newView(String s) => View(content: s);

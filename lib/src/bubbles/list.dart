@@ -1,3 +1,5 @@
+import 'package:characters/characters.dart';
+
 import '../cmd.dart';
 import '../model.dart';
 import '../msg.dart';
@@ -234,6 +236,7 @@ final class ListModel extends Model {
     // Mouse scroll wheel navigation
     if (msg is MouseClickMsg) {
       final fi = filteredItems;
+      if (fi.isEmpty) return (this, null);
       switch (msg.mouse.button) {
         case MouseButton.wheelUp:
           final cur = _safeCursor;
@@ -255,11 +258,15 @@ final class ListModel extends Model {
           }
           final itemY = relY - headerRows;
           if (itemY >= 0) {
-            final rowsPerItem = showDescription ? 2 : 1;
-            final idx = _viewportStart(_safeCursor, fi.length, height) +
-                itemY ~/ rowsPerItem;
-            if (idx >= 0 && idx < fi.length) {
-              return (_copy(cursor: idx), null);
+            final start = _viewportStart(_safeCursor, fi.length, height);
+            var row = 0;
+            for (var idx = start;
+                idx < fi.length && idx < start + height;
+                idx++) {
+              final itemRows =
+                  showDescription && fi[idx].description.isNotEmpty ? 2 : 1;
+              if (itemY < row + itemRows) return (_copy(cursor: idx), null);
+              row += itemRows;
             }
           }
           return (this, null);
@@ -271,16 +278,18 @@ final class ListModel extends Model {
     final fi = filteredItems;
 
     if (filterMode) {
-      return _updateFilterMode(msg, fi);
+      return _updateFilterMode(msg);
     }
 
     switch (msg.key) {
       case 'up':
       case 'k':
+        if (fi.isEmpty) return (this, null);
         final cur = _safeCursor;
         return (_copy(cursor: cur > 0 ? cur - 1 : 0), null);
       case 'down':
       case 'j':
+        if (fi.isEmpty) return (this, null);
         final cur = _safeCursor;
         return (
           _copy(cursor: cur < fi.length - 1 ? cur + 1 : fi.length - 1),
@@ -288,10 +297,12 @@ final class ListModel extends Model {
         );
       case 'pgup':
       case 'ctrl+b':
+        if (fi.isEmpty) return (this, null);
         final cur = _safeCursor;
         return (_copy(cursor: (cur - height).clamp(0, fi.length - 1)), null);
       case 'pgdown':
       case 'ctrl+f':
+        if (fi.isEmpty) return (this, null);
         final cur = _safeCursor;
         return (
           _copy(cursor: (cur + height).clamp(0, fi.length - 1)),
@@ -319,7 +330,7 @@ final class ListModel extends Model {
     }
   }
 
-  (Model, Cmd?) _updateFilterMode(KeyMsg msg, List<ListItem> fi) {
+  (Model, Cmd?) _updateFilterMode(KeyMsg msg) {
     switch (msg.key) {
       case 'esc':
         return (_copy(filterMode: false, filter: '', cursor: 0), null);
@@ -327,7 +338,7 @@ final class ListModel extends Model {
         if (filter.isEmpty) {
           return (_copy(filterMode: false), null);
         }
-        final newFilter = filter.substring(0, filter.length - 1);
+        final newFilter = filter.characters.skipLast(1).toString();
         return (
           _copy(filter: newFilter, cursor: 0, filterMode: true),
           null,
@@ -337,7 +348,7 @@ final class ListModel extends Model {
       default:
         // Append printable characters to filter
         final key = msg.key;
-        if (key.length == 1 && !key.startsWith('\x1b')) {
+        if (key.characters.length == 1 && !key.startsWith('\x1b')) {
           final newFilter = filter + key;
           return (_copy(filter: newFilter, cursor: 0, filterMode: true), null);
         }

@@ -37,15 +37,13 @@ void main() {
       expect(k.keyEvent.text, 'a');
     });
 
-    test(
-        'multiple letters in one chunk: decoder greedily combines printable ASCII',
-        () {
+    test('multiple letters in one chunk produce one key per scalar', () {
       final d = TerminalInputDecoder();
       final msgs = d.feed(_str('xyz'));
-      // The key buffer parser greedily decodes as many UTF-8 bytes as possible
-      // in one pass, so a single chunk of printable ASCII becomes 1 KeyPressMsg.
-      expect(msgs, hasLength(1));
-      expect((msgs[0] as KeyPressMsg).keyEvent.text, 'xyz');
+      expect(
+        msgs.whereType<KeyPressMsg>().map((message) => message.keyEvent.text),
+        ['x', 'y', 'z'],
+      );
     });
 
     test('letters fed one at a time each become a separate KeyPressMsg', () {
@@ -64,11 +62,13 @@ void main() {
       expect(k.keyEvent.text, ' ');
     });
 
-    test('digit characters in one chunk are greedy-decoded as one message', () {
+    test('digit characters in one chunk produce one key per scalar', () {
       final d = TerminalInputDecoder();
       final msgs = d.feed(_str('123'));
-      expect(msgs, hasLength(1));
-      expect((msgs[0] as KeyPressMsg).keyEvent.text, '123');
+      expect(
+        msgs.whereType<KeyPressMsg>().map((message) => message.keyEvent.text),
+        ['1', '2', '3'],
+      );
     });
   });
 

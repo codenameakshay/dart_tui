@@ -106,21 +106,23 @@ abstract final class Field {
     int maxHeight = 6,
     String? Function(String value)? validate,
     bool Function(FormValues)? hidden,
-  }) =>
-      _TextField(
-        key: key,
-        area: TextAreaModel(
-          value: initial,
-          cursorRow: initial.split('\n').length - 1,
-          cursorCol: initial.split('\n').last.characters.length,
-          maxHeight: maxHeight,
-          focused: true,
-        ),
-        titleSpec: _Title(title, titleFor),
-        description: description,
-        validator: validate,
-        hiddenFn: hidden,
-      );
+  }) {
+    final initialLines = initial.split('\n');
+    return _TextField(
+      key: key,
+      area: TextAreaModel(
+        value: initial,
+        cursorRow: initialLines.length - 1,
+        cursorCol: initialLines.last.characters.length,
+        maxHeight: maxHeight,
+        focused: true,
+      ),
+      titleSpec: _Title(title, titleFor),
+      description: description,
+      validator: validate,
+      hiddenFn: hidden,
+    );
+  }
 
   static FormField file({
     required String key,
@@ -170,6 +172,8 @@ abstract final class Field {
       options: [for (final o in options) Option(o, o)],
       optionsForFn: null,
       index: i < 0 ? 0 : i,
+      selectedValue:
+          i < 0 ? (options.isEmpty ? null : options.first) : options[i],
       titleSpec: _Title(title, titleFor),
       description: description,
       validator: validate,
@@ -188,8 +192,9 @@ abstract final class Field {
     String? Function(T value)? validate,
     bool Function(FormValues)? hidden,
   }) {
-    assert((options == null) != (optionsFor == null),
-        'provide exactly one of options / optionsFor');
+    if ((options == null) == (optionsFor == null)) {
+      throw ArgumentError('provide exactly one of options / optionsFor');
+    }
     final initialOpts = options ?? const [];
     var idx = 0;
     for (var i = 0; i < initialOpts.length; i++) {
@@ -200,6 +205,8 @@ abstract final class Field {
       options: initialOpts,
       optionsForFn: optionsFor,
       index: idx,
+      selectedValue:
+          idx < initialOpts.length ? initialOpts[idx].value : initial,
       titleSpec: _Title(title, titleFor),
       description: description,
       validator: validate,
@@ -216,22 +223,26 @@ abstract final class Field {
     Set<String> initial = const {},
     int? limit,
     bool Function(FormValues)? hidden,
-  }) =>
-      _MultiSelectField<String>(
-        key: key,
-        options: [for (final o in options) Option(o, o)],
-        optionsForFn: null,
-        selected: {
-          for (var i = 0; i < options.length; i++)
-            if (initial.contains(options[i])) i
-        },
-        cursor: 0,
-        limit: limit,
-        titleSpec: _Title(title, titleFor),
-        description: description,
-        hiddenFn: hidden,
-      );
+  }) {
+    final optionValues = [for (final o in options) Option(o, o)];
+    _requireUniqueOptionValues(optionValues);
+    return _MultiSelectField<String>(
+      key: key,
+      options: optionValues,
+      optionsForFn: null,
+      selected: initial.intersection(
+        optionValues.map((option) => option.value).toSet(),
+      ),
+      cursor: 0,
+      limit: limit,
+      titleSpec: _Title(title, titleFor),
+      description: description,
+      hiddenFn: hidden,
+    );
+  }
 
+  /// Creates a typed multi-select. Option values are selection identities and
+  /// must be unique in each option list.
   static FormField multiSelectOf<T>({
     required String key,
     String? title,
@@ -243,17 +254,18 @@ abstract final class Field {
     int? limit,
     bool Function(FormValues)? hidden,
   }) {
-    assert((options == null) != (optionsFor == null),
-        'provide exactly one of options / optionsFor');
+    if ((options == null) == (optionsFor == null)) {
+      throw ArgumentError('provide exactly one of options / optionsFor');
+    }
     final opts = options ?? const [];
+    if (options != null) _requireUniqueOptionValues(opts);
     return _MultiSelectField<T>(
       key: key,
       options: opts,
       optionsForFn: optionsFor,
-      selected: {
-        for (var i = 0; i < opts.length; i++)
-          if (initial.contains(opts[i].value)) i
-      },
+      selected: options == null
+          ? {...initial}
+          : initial.intersection(opts.map((option) => option.value).toSet()),
       cursor: 0,
       limit: limit,
       titleSpec: _Title(title, titleFor),
@@ -289,6 +301,19 @@ final class _Title {
   final String? static;
   final String Function(FormValues)? fn;
   String resolve(FormValues v) => fn?.call(v) ?? static ?? '';
+}
+
+void _requireUniqueOptionValues<T>(List<Option<T>> options) {
+  final values = <T>{};
+  for (final option in options) {
+    if (!values.add(option.value)) {
+      throw ArgumentError.value(
+        option.value,
+        'options',
+        'multi-select option values must be unique',
+      );
+    }
+  }
 }
 
 /// Shared helpers for the concrete field types.
@@ -534,6 +559,7 @@ final class _SelectField<T> extends FormField with _FieldCommon {
     required this.options,
     required this.optionsForFn,
     required this.index,
+    required this.selectedValue,
     required this.titleSpec,
     required this.description,
     required this.validator,
@@ -546,6 +572,7 @@ final class _SelectField<T> extends FormField with _FieldCommon {
   final List<Option<T>> options;
   final List<Option<T>> Function(FormValues)? optionsForFn;
   final int index;
+  final T? selectedValue;
   @override
   final _Title titleSpec;
   @override
@@ -566,12 +593,16 @@ final class _SelectField<T> extends FormField with _FieldCommon {
       : validator!(options[index].value);
 
   _SelectField<T> _copy(
-          {List<Option<T>>? options, int? index, String? error}) =>
+          {List<Option<T>>? options,
+          int? index,
+          required T? selectedValue,
+          String? error}) =>
       _SelectField<T>(
         key: key,
         options: options ?? this.options,
         optionsForFn: optionsForFn,
         index: index ?? this.index,
+        selectedValue: selectedValue,
         titleSpec: titleSpec,
         description: description,
         validator: validator,
@@ -586,11 +617,13 @@ final class _SelectField<T> extends FormField with _FieldCommon {
       case 'up':
       case 'left':
       case 'k':
-        return _copy(index: index > 0 ? index - 1 : options.length - 1);
+        final nextIndex = index > 0 ? index - 1 : options.length - 1;
+        return _copy(index: nextIndex, selectedValue: options[nextIndex].value);
       case 'down':
       case 'right':
       case 'j':
-        return _copy(index: index < options.length - 1 ? index + 1 : 0);
+        final nextIndex = index < options.length - 1 ? index + 1 : 0;
+        return _copy(index: nextIndex, selectedValue: options[nextIndex].value);
       default:
         return this;
     }
@@ -600,12 +633,23 @@ final class _SelectField<T> extends FormField with _FieldCommon {
   FormField recompute(FormValues values) {
     if (optionsForFn == null) return this;
     final next = optionsForFn!(values);
-    final clamped = next.isEmpty ? 0 : index.clamp(0, next.length - 1);
-    return _copy(options: next, index: clamped);
+    if (next.isEmpty) {
+      return _copy(options: next, index: 0, selectedValue: selectedValue);
+    }
+    final matchingIndex =
+        next.indexWhere((option) => option.value == selectedValue);
+    final nextIndex =
+        matchingIndex >= 0 ? matchingIndex : index.clamp(0, next.length - 1);
+    return _copy(
+      options: next,
+      index: nextIndex,
+      selectedValue: next[nextIndex].value,
+    );
   }
 
   @override
-  FormField withError(String? error) => _copy(error: error);
+  FormField withError(String? error) =>
+      _copy(error: error, selectedValue: selectedValue);
 
   @override
   String render(bool active, FormStyles styles, FormValues values) {
@@ -643,7 +687,7 @@ final class _MultiSelectField<T> extends FormField with _FieldCommon {
   final String? key;
   final List<Option<T>> options;
   final List<Option<T>> Function(FormValues)? optionsForFn;
-  final Set<int> selected;
+  final Set<T> selected;
   final int cursor;
   final int? limit;
   @override
@@ -660,14 +704,14 @@ final class _MultiSelectField<T> extends FormField with _FieldCommon {
   @override
   Object? get value => [
         for (var i = 0; i < options.length; i++)
-          if (selected.contains(i)) options[i].value
+          if (selected.contains(options[i].value)) options[i].value
       ];
   @override
   String? validate() => null;
 
   _MultiSelectField<T> _copy({
     List<Option<T>>? options,
-    Set<int>? selected,
+    Set<T>? selected,
     int? cursor,
     String? error,
   }) =>
@@ -697,10 +741,11 @@ final class _MultiSelectField<T> extends FormField with _FieldCommon {
       case 'space':
       case 'x':
         final next = {...selected};
-        if (next.contains(cursor)) {
-          next.remove(cursor);
+        final value = options[cursor].value;
+        if (next.contains(value)) {
+          next.remove(value);
         } else if (limit == null || next.length < limit!) {
-          next.add(cursor);
+          next.add(value);
         }
         return _copy(selected: next);
       default:
@@ -712,10 +757,9 @@ final class _MultiSelectField<T> extends FormField with _FieldCommon {
   FormField recompute(FormValues values) {
     if (optionsForFn == null) return this;
     final next = optionsForFn!(values);
-    final kept = {
-      for (final i in selected)
-        if (i < next.length) i
-    };
+    _requireUniqueOptionValues(next);
+    final available = next.map((option) => option.value).toSet();
+    final kept = selected.intersection(available);
     return _copy(
         options: next,
         selected: kept,
@@ -731,7 +775,7 @@ final class _MultiSelectField<T> extends FormField with _FieldCommon {
     final marker = active ? '${styles.cursor.render('›')} ' : '  ';
     final b = StringBuffer('$marker${titleStyle.render(titleText(values))}\n');
     for (var i = 0; i < options.length; i++) {
-      final box = selected.contains(i)
+      final box = selected.contains(options[i].value)
           ? styles.checkedBox.render('[x]')
           : styles.uncheckedBox.render('[ ]');
       final pointer = (active && i == cursor) ? '› ' : '  ';

@@ -75,4 +75,62 @@ void main() {
     expect(f.submitted, isTrue);
     expect(f.values.has('b'), isFalse);
   });
+
+  test('editing normalizes away from a hidden initial field', () {
+    var f = Form([
+      Group([
+        Field.input(key: 'hidden', hidden: (_) => true),
+        Field.input(key: 'visible', title: 'Visible'),
+      ]),
+    ]);
+
+    f = step(f, rune('x'));
+    expect(f.values.has('hidden'), isFalse);
+    expect(f.values.get<String>('visible'), 'x');
+    expect(stripAnsi(f.view().content), contains('› Visible'));
+  });
+
+  test('editing a field can hide its whole group and move focus', () {
+    var f = Form([
+      Group(
+        [Field.confirm(key: 'hide', initial: false)],
+        hidden: (values) => values.get<bool>('hide') == true,
+      ),
+      Group([Field.input(key: 'next')]),
+    ]);
+
+    f = step(f, rune('y'));
+    f = step(f, rune('z'));
+    expect(f.values.get<String>('next'), 'z');
+    expect(stripAnsi(f.view().content), contains('›'));
+  });
+
+  test('hidden active group displays the next visible note group', () {
+    final f = Form([
+      Group(
+        [Field.confirm(key: 'hidden', initial: true)],
+        hidden: (_) => true,
+      ),
+      Group([Field.note(title: 'Visible information')]),
+    ]);
+
+    expect(stripAnsi(f.view().content), contains('Visible information'));
+    expect(stripAnsi(f.view().content), isNot(contains('hidden')));
+  });
+
+  test('a hidden group cannot receive input when only notes are visible', () {
+    var f = Form([
+      Group(
+        [Field.confirm(key: 'show', initial: false)],
+        hidden: (values) => values.get<bool>('show') != true,
+      ),
+      Group([Field.note(title: 'Visible information')]),
+    ]);
+
+    f = step(f, rune('y'));
+    expect(f.values.has('show'), isFalse);
+    expect(stripAnsi(f.view().content), contains('Visible information'));
+    expect(step(f, key(KeyCode.enter)).submitted, isTrue);
+    expect(step(f, key(KeyCode.escape)).cancelled, isTrue);
+  });
 }

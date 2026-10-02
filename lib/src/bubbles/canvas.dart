@@ -18,11 +18,13 @@ final class _Layer {
     required this.x,
     required this.y,
     required this.zIndex,
+    required this.order,
     required this.content,
   });
   final int x;
   final int y;
   final int zIndex;
+  final int order;
   final String content;
 }
 
@@ -57,6 +59,7 @@ final class Canvas {
   final int height;
 
   final List<_Layer> _layers = [];
+  var _nextLayerOrder = 0;
 
   /// Paint [content] at column [x], row [y] with optional [zIndex].
   ///
@@ -67,7 +70,13 @@ final class Canvas {
   /// If [style] is provided it is applied to [content] before painting.
   void paint(int x, int y, String content, {int zIndex = 0, Style? style}) {
     final rendered = style != null ? style.render(content) : content;
-    _layers.add(_Layer(x: x, y: y, zIndex: zIndex, content: rendered));
+    _layers.add(_Layer(
+      x: x,
+      y: y,
+      zIndex: zIndex,
+      order: _nextLayerOrder++,
+      content: rendered,
+    ));
   }
 
   /// Clear all layers, resetting the canvas to blank.
@@ -85,7 +94,10 @@ final class Canvas {
 
     // Draw layers in ascending z order
     final sorted = List<_Layer>.from(_layers)
-      ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
+      ..sort((a, b) {
+        final zOrder = a.zIndex.compareTo(b.zIndex);
+        return zOrder != 0 ? zOrder : a.order.compareTo(b.order);
+      });
 
     for (final layer in sorted) {
       _paintLayer(grid, layer);

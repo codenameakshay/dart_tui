@@ -2,7 +2,6 @@
 library;
 
 export 'cmd.dart';
-export 'key_util.dart';
 export 'model.dart';
 export 'msg.dart';
 export 'program.dart';

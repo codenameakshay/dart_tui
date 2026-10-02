@@ -140,29 +140,49 @@ TeaKey? parseKeyFromBuffer(List<int> buffer) {
     return (key: const TeaKey(code: KeyCode.unknown), consumed: 1);
   }
 
-  // Multi-byte UTF-8 or Printable ASCII
-  // Try to decode as much as possible from the start of the buffer.
-  for (var len = 4; len >= 1; len--) {
-    if (length >= len) {
-      try {
-        final decoded = utf8.decode(buffer.sublist(offset, offset + len));
-        return (key: TeaKey(code: KeyCode.rune, text: decoded), consumed: len);
-      } catch (_) {
-        // Continue trying shorter lengths or wait for more bytes
-      }
-    }
-  }
-
-  // If we're here, it might be a partial UTF-8 sequence or invalid.
-  // UTF-8 lead bytes: 110xxxxx (2 bytes), 1110xxxx (3 bytes), 11110xxx (4 bytes).
-  if (b0 & 0x80 == 0) {
-    // Should have been handled by utf8.decode(len=1) but for safety:
+  if (b0 < 0x80) {
     return (
       key: TeaKey(code: KeyCode.rune, text: String.fromCharCode(b0)),
       consumed: 1,
     );
   }
 
-  // Wait for more bytes if it looks like a lead byte
-  return null;
+  final expectedLength = switch (b0) {
+    >= 0xc2 && <= 0xdf => 2,
+    >= 0xe0 && <= 0xef => 3,
+    >= 0xf0 && <= 0xf4 => 4,
+    _ => 0,
+  };
+  if (expectedLength == 0) {
+    return (key: const TeaKey(code: KeyCode.unknown), consumed: 1);
+  }
+
+  final availableContinuationBytes =
+      length - 1 < expectedLength - 1 ? length - 1 : expectedLength - 1;
+  for (var index = 1; index <= availableContinuationBytes; index++) {
+    final byte = buffer[offset + index];
+    if (byte < 0x80 || byte > 0xbf) {
+      return (key: const TeaKey(code: KeyCode.unknown), consumed: 1);
+    }
+    if (index == 1 &&
+        ((b0 == 0xe0 && byte < 0xa0) ||
+            (b0 == 0xed && byte > 0x9f) ||
+            (b0 == 0xf0 && byte < 0x90) ||
+            (b0 == 0xf4 && byte > 0x8f))) {
+      return (key: const TeaKey(code: KeyCode.unknown), consumed: 1);
+    }
+  }
+  if (length < expectedLength) return null;
+
+  try {
+    final decoded = utf8.decode(
+      buffer.sublist(offset, offset + expectedLength),
+    );
+    return (
+      key: TeaKey(code: KeyCode.rune, text: decoded),
+      consumed: expectedLength
+    );
+  } on FormatException {
+    return (key: const TeaKey(code: KeyCode.unknown), consumed: 1);
+  }
 }

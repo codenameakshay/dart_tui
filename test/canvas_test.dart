@@ -77,6 +77,15 @@ void main() {
       final out = plain(c.render());
       expect(out[1], equals('B'));
     });
+
+    test('equal z-index layers preserve insertion order across many paints',
+        () {
+      final c = Canvas(1, 1);
+      for (var i = 0; i < 20; i++) {
+        c.paint(0, 0, String.fromCharCode(65 + i), zIndex: 0);
+      }
+      expect(plain(c.render()), 'T');
+    });
   });
 
   group('Canvas clear', () {

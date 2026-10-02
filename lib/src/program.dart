@@ -7,6 +7,7 @@ import 'cmd.dart';
 import 'input_decoder.dart';
 import 'model.dart';
 import 'msg.dart';
+import 'printf_format.dart';
 import 'renderer.dart';
 import 'terminal_control.dart';
 import 'view.dart';
@@ -196,7 +197,7 @@ final class Program {
 
   void println([Object? value]) => send(PrintLineMsg('${value ?? ''}'));
   void printf(String template, [List<Object?> args = const []]) =>
-      send(PrintLineMsg(_formatProgram(template, args)));
+      send(PrintLineMsg(formatPrintf(template, args)));
 
   Future<void> wait() async {
     await _finished?.future;
@@ -641,14 +642,6 @@ final class Program {
     }
     _finished?.complete();
   }
-}
-
-String _formatProgram(String template, List<Object?> args) {
-  var out = template;
-  for (final arg in args) {
-    out = out.replaceFirst('%s', '$arg');
-  }
-  return out;
 }
 
 String _base64(String s) => base64Encode(utf8.encode(s));

@@ -86,11 +86,10 @@ Future<void> pager(
 // ── Models ───────────────────────────────────────────────────────────────────
 
 final class _FilterModel extends Model implements OutcomeModel<String> {
-  _FilterModel(this.list, {this.result, this.done = false});
+  _FilterModel(this.list, {this.result});
 
   final ListModel list;
   final String? result;
-  final bool done;
 
   @override
   String? get outcome => result;
@@ -102,19 +101,16 @@ final class _FilterModel extends Model implements OutcomeModel<String> {
         case 'enter':
         case 'ctrl+j':
           return (
-            _FilterModel(list, result: list.selected?.title, done: true),
+            _FilterModel(list, result: list.selected?.title),
             () => QuitMsg(),
           );
         case 'esc':
         case 'ctrl+c':
-          return (
-            _FilterModel(list, result: null, done: true),
-            () => QuitMsg()
-          );
+          return (_FilterModel(list, result: null), () => QuitMsg());
       }
     }
     final (next, cmd) = list.update(msg);
-    return (_FilterModel(next as ListModel, result: result, done: done), cmd);
+    return (_FilterModel(next as ListModel, result: result), cmd);
   }
 
   @override

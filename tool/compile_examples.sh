@@ -36,7 +36,7 @@ else
   echo ""
   for f in example/*.dart; do
     name=$(basename "$f" .dart)
-    compile_one "$name" || true
+    compile_one "$name"
   done
   echo ""
   echo "Done. Run any example with: $OUTDIR/<name>"
