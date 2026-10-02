@@ -275,7 +275,11 @@ final class Form extends Model implements OutcomeModel<FormValues> {
     }
     // delegate to the active field's editor, then recompute dynamics
     final values = current._rawValues;
-    if (!active.acceptsInput || active.isHidden(values)) return (current, null);
+    if ((current.groups[current.groupIndex].hidden?.call(values) ?? false) ||
+        !active.acceptsInput ||
+        active.isHidden(values)) {
+      return (current, null);
+    }
     final g0 = current.groups[current.groupIndex];
     final edited = [...g0.fields];
     edited[current.fieldIndex] = active.updateEditor(msg);

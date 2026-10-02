@@ -117,4 +117,20 @@ void main() {
     expect(stripAnsi(f.view().content), contains('Visible information'));
     expect(stripAnsi(f.view().content), isNot(contains('hidden')));
   });
+
+  test('a hidden group cannot receive input when only notes are visible', () {
+    var f = Form([
+      Group(
+        [Field.confirm(key: 'show', initial: false)],
+        hidden: (values) => values.get<bool>('show') != true,
+      ),
+      Group([Field.note(title: 'Visible information')]),
+    ]);
+
+    f = step(f, rune('y'));
+    expect(f.values.has('show'), isFalse);
+    expect(stripAnsi(f.view().content), contains('Visible information'));
+    expect(step(f, key(KeyCode.enter)).submitted, isTrue);
+    expect(step(f, key(KeyCode.escape)).cancelled, isTrue);
+  });
 }
