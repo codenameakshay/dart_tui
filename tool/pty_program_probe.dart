@@ -37,6 +37,32 @@ Future<void> main(List<String> arguments) async {
         .run(const _ProbeModel('exec-followup'));
     return;
   }
+  if (scenario == 'explicit-exec') {
+    await Program(options: [
+      withInput(stdin),
+      withAltScreen(),
+      withHideCursor(),
+    ]).run(const _ProbeModel('explicit-exec'));
+    return;
+  }
+  if (scenario == 'restart-suspend') {
+    late final Program program;
+    program = Program(options: [
+      withAltScreen(),
+      withHideCursor(),
+      withFilter((_, msg) {
+        if (msg is SuspendMsg) {
+          scheduleMicrotask(() {
+            program.kill();
+            unawaited(program.run(_RestartReadyModel()));
+          });
+        }
+        return msg;
+      }),
+    ]);
+    await program.run(const _ProbeModel('suspend'));
+    return;
+  }
   // `default-*` scenarios read the implicit process stdin with the default
   // signal handling, like a real application.
   final usesDefaults = scenario.startsWith('default-');
@@ -79,6 +105,8 @@ const _scenarios = {
   'default-exec',
   'default-exec-chain',
   'default-init-exec',
+  'explicit-exec',
+  'restart-suspend',
 };
 
 final class _ProbeModel implements Model {
@@ -111,6 +139,7 @@ final class _ProbeModel implements Model {
       return (this, () => quit());
     }
     if ((scenario == 'default-quit' ||
+            scenario == 'explicit-exec' ||
             scenario == 'exec-followup' ||
             scenario.startsWith('chain-')) &&
         msg is KeyMsg &&
@@ -129,7 +158,9 @@ final class _ProbeModel implements Model {
       if (msg.key == 'ctrl+z') return (this, suspend);
       if (msg.key == 'q') return (this, () => quit());
     }
-    if ((scenario == 'default-exec' || scenario == 'default-exec-chain') &&
+    if ((scenario == 'default-exec' ||
+            scenario == 'default-exec-chain' ||
+            scenario == 'explicit-exec') &&
         msg is KeyMsg) {
       if (msg.key == 'q') return (this, () => quit());
       if (msg.key == 'x') {
@@ -144,6 +175,7 @@ final class _ProbeModel implements Model {
       }
     }
     if (msg is _ExecDoneMsg) {
+      if (scenario == 'explicit-exec') stdout.writeln('EXPLICIT_EXEC_DONE');
       return (_ProbeModel(scenario, 'EXEC_DONE:${msg.code}'), null);
     }
     if (scenario == 'default-suspend' && msg is ResumeMsg) {
@@ -183,6 +215,7 @@ final class _ProbeModel implements Model {
               'default-exec' => 'DEFAULT_EXEC_READY',
               'default-exec-chain' => 'DEFAULT_EXEC_READY',
               'default-init-exec' => 'DEFAULT_INIT_EXEC_READY',
+              'explicit-exec' => 'EXPLICIT_EXEC_READY',
               'exec-followup' => 'EXEC_FOLLOWUP_READY',
               _ => throw StateError('unsupported probe scenario: $scenario'),
             },
@@ -193,6 +226,21 @@ final class _ProbeModel implements Model {
 final class _ExecDoneMsg extends Msg {
   _ExecDoneMsg(this.code);
   final int code;
+}
+
+final class _RestartReadyModel extends Model {
+  @override
+  Cmd? init() => () {
+        stdout.writeln('SECOND_RUN_READY');
+        return null;
+      };
+
+  @override
+  (Model, Cmd?) update(Msg msg) =>
+      msg is KeyMsg && msg.key == 'q' ? (this, () => quit()) : (this, null);
+
+  @override
+  View view() => newView('Second run ready. Press q.');
 }
 
 Cmd _delayedQuit() => () async {

@@ -172,6 +172,80 @@ void main() {
     expect(log, isNot(contains('stale')));
   });
 
+  test('a filter cannot quit a replacement run', () async {
+    final firstReady = Completer<void>();
+    final secondReady = Completer<void>();
+    final secondLog = <String>[];
+    final secondModel = _ReadyModel(secondReady, log: secondLog);
+    var replaced = false;
+    Future<Model>? secondRun;
+    late final Program program;
+    program = Program(options: [
+      withOutput(_StringSink()),
+      withInput(null),
+      withFilter((model, msg) {
+        if (!replaced && msg is _LabelMsg && msg.label == 'replace') {
+          replaced = true;
+          program.kill();
+          secondRun = program.run(secondModel);
+          return QuitMsg();
+        }
+        return msg;
+      }),
+    ]);
+    final firstRun = program.run(_ReadyModel(firstReady));
+    await firstReady.future;
+    addTearDown(() async {
+      program.kill();
+      if (secondRun != null) await secondRun;
+      await firstRun;
+    });
+    program.send(_LabelMsg('replace'));
+    await secondReady.future.timeout(const Duration(seconds: 1));
+    program.send(_LabelMsg('replacement-alive'));
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    expect(secondLog, contains('replacement-alive'));
+    program.quit();
+    await Future.wait([firstRun, secondRun!]);
+  });
+
+  test('a model update cannot overwrite a replacement run model', () async {
+    final firstReady = Completer<void>();
+    final secondReady = Completer<void>();
+    final sink = _StringSink();
+    final secondModel = _ReadyModel(secondReady);
+    Future<Model>? secondRun;
+    var restartedFromUpdate = false;
+    late final Program program;
+    program = Program(options: [
+      withOutput(sink),
+      withInput(null),
+      withFilter((model, msg) =>
+          identical(model, secondModel) && msg is! _LabelMsg ? null : msg),
+    ]);
+    final firstRun = program.run(_RestartOnUpdateModel(
+      firstReady,
+      onRestart: () {
+        restartedFromUpdate = true;
+        program.kill();
+        secondRun = program.run(secondModel);
+      },
+    ));
+    await firstReady.future;
+    program.send(_LabelMsg('restart'));
+    await secondReady.future;
+    expect(restartedFromUpdate, isTrue);
+    final restorationOffset = sink.buf.length;
+    await program.releaseTerminal();
+    await program.restoreTerminal();
+    final restoredOutput = sink.buf.toString().substring(restorationOffset);
+    expect(restoredOutput, contains('label=start'));
+    expect(restoredOutput, isNot(contains('label=old-updated')));
+    program.kill();
+    final results = await Future.wait([firstRun, secondRun!]);
+    expect(results.last, same(secondModel));
+  });
+
   test('input errors quit cleanly and restore the renderer', () async {
     final sink = _StringSink();
     final input = Stream<List<int>>.error(const StdinException('input failed'));
@@ -223,6 +297,113 @@ void main() {
     program.kill();
     await run;
     expect(sink.buf.toString(), isNot(contains('label=killed')));
+  }, timeout: const Timeout(Duration(seconds: 5)));
+
+  test('a killed run cannot render into a subsequent run', () async {
+    final sink = _StringSink();
+    final firstReady = Completer<void>();
+    final secondReady = Completer<void>();
+    final firstLog = <String>[];
+    final program = Program(options: [
+      withOutput(sink),
+      withInput(null),
+      withFps(1),
+    ]);
+    final firstRun = program.run(_ReadyModel(firstReady, log: firstLog));
+    await firstReady.future;
+    program.send(_LabelMsg('stale-first-run'));
+    while (!firstLog.contains('stale-first-run')) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    program.kill();
+
+    final secondRun = program.run(_ReadyModel(secondReady));
+    await secondReady.future;
+    await Future<void>.delayed(const Duration(milliseconds: 1050));
+    expect(sink.buf.toString(), isNot(contains('label=stale-first-run')));
+    program.quit();
+    await Future.wait([firstRun, secondRun]);
+  }, timeout: const Timeout(Duration(seconds: 5)));
+
+  test('an exec from a killed run cannot continue into a subsequent run',
+      () async {
+    if (Platform.isWindows) return;
+    final sink = _StringSink();
+    final firstReady = Completer<void>();
+    final secondReady = Completer<void>();
+    final cancelStarted = Completer<void>();
+    final cancelGate = Completer<void>();
+    final input = StreamController<List<int>>(onCancel: () {
+      cancelStarted.complete();
+      return cancelGate.future;
+    });
+    final secondLog = <String>[];
+    var onExitCalls = 0;
+    final firstModel = _ReadyModel(firstReady);
+    final secondModel = _ReadyModel(secondReady, log: secondLog);
+    final markerDir = await Directory.systemTemp.createTemp('dart_tui_exec_');
+    final childStarted = File('${markerDir.path}/child-started');
+    final childFinished = File('${markerDir.path}/child-finished');
+    addTearDown(() => markerDir.delete(recursive: true));
+    addTearDown(() {
+      if (!cancelGate.isCompleted) cancelGate.complete();
+    });
+    final program = Program(options: [
+      withOutput(sink),
+      withInput(input.stream),
+      withAltScreen(),
+    ]);
+    final firstRun = program.run(firstModel);
+    await firstReady.future;
+    final initialOutputLength = sink.buf.length;
+    program.send(ExecMsg(
+      cmd: '/bin/sh',
+      args: [
+        '-c',
+        r'touch "$1"; sleep 0.4; touch "$2"',
+        'dart_tui_exec',
+        childStarted.path,
+        childFinished.path,
+      ],
+      inheritStdio: false,
+      onExit: (_) {
+        onExitCalls++;
+        return _LabelMsg('stale-exec-follow-up');
+      },
+    ));
+    while (sink.buf.length == initialOutputLength ||
+        !sink.buf
+            .toString()
+            .substring(initialOutputLength)
+            .contains('\x1b[?1049l')) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    while (!childStarted.existsSync()) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    program.kill();
+    withInput(null)(program);
+
+    final secondRun = program.run(secondModel);
+    await secondReady.future;
+    await cancelStarted.future;
+    while (!childFinished.existsSync()) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    await expectLater(
+      firstRun.timeout(const Duration(milliseconds: 100)),
+      throwsA(isA<TimeoutException>()),
+    );
+    cancelGate.complete();
+    expect(secondLog, isNot(contains('stale-exec-follow-up')));
+    expect(onExitCalls, 0);
+    program.send(_LabelMsg('second-run-alive'));
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    expect(secondLog, contains('second-run-alive'));
+    program.quit();
+    final results = await Future.wait([firstRun, secondRun]);
+    expect(results.first, same(firstModel));
+    expect((results.last as _ReadyModel).label, 'second-run-alive');
   }, timeout: const Timeout(Duration(seconds: 5)));
 
   test('leaving the alt screen does not print a blank line', () async {
@@ -364,6 +545,37 @@ final class _ReadyModel extends Model {
     if (msg is _LabelMsg) {
       log?.add(msg.label);
       return (_ReadyModel(ready, label: msg.label, log: log), null);
+    }
+    return (this, null);
+  }
+
+  @override
+  View view() => newView('label=$label');
+}
+
+final class _RestartOnUpdateModel extends Model {
+  _RestartOnUpdateModel(this.ready,
+      {required this.onRestart, this.label = 'old'});
+
+  final Completer<void> ready;
+  final void Function() onRestart;
+  final String label;
+
+  @override
+  Cmd? init() => () {
+        if (!ready.isCompleted) ready.complete();
+        return null;
+      };
+
+  @override
+  (Model, Cmd?) update(Msg msg) {
+    if (msg is _LabelMsg && msg.label == 'restart') {
+      onRestart();
+      return (
+        _RestartOnUpdateModel(ready,
+            onRestart: onRestart, label: 'old-updated'),
+        null,
+      );
     }
     return (this, null);
   }

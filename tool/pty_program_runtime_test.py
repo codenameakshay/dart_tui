@@ -290,6 +290,31 @@ class ProgramRuntimePtyTest(unittest.TestCase):
                 self.assert_terminal_restored(probe.finish())
                 self.assert_cooked_mode(probe)
 
+    def test_explicit_stdin_exec_child_receives_terminal_input_twice(self) -> None:
+        probe = self._probe("explicit-exec")
+        probe.read_until(b"EXPLICIT_EXEC_READY")
+        for line in (b"hello", b"world"):
+            release_count = probe.data.count(b"\x1b[?1049l") + 1
+            probe.send(b"x")
+            probe.read_until_count(b"\x1b[?1049l", release_count)
+            self.assert_cooked_mode(probe)
+            child_count = probe.data.count(b"CHILD:") + 1
+            done_count = probe.data.count(b"EXPLICIT_EXEC_DONE") + 1
+            probe.send(line + b"\r")
+            probe.read_until_count(b"CHILD:", child_count)
+            self.assertIn(b"CHILD:" + line, probe.data)
+            probe.read_until_count(b"EXPLICIT_EXEC_DONE", done_count)
+        probe.send(b"q")
+        self.assert_terminal_restored(probe.finish())
+        self.assert_cooked_mode(probe)
+
+    def test_killed_suspend_run_cannot_suspend_its_replacement(self) -> None:
+        probe = self._probe("restart-suspend")
+        probe.read_until(b"SECOND_RUN_READY")
+        probe.send(b"q")
+        self.assert_terminal_restored(probe.finish())
+        self.assert_cooked_mode(probe)
+
     def test_init_command_exec_waits_for_stdin_control_startup(self) -> None:
         probe = self._probe("default-init-exec")
         probe.read_until(b"INIT_EXEC_CHILD")
