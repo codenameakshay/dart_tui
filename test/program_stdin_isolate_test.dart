@@ -51,7 +51,11 @@ void main() {
     await probe.process.stdin.flush();
     await probe.readUntil('PIPE_DONE');
     expect(await probe.waitForExit(), 0, reason: await probe.errors);
-  });
+  },
+      skip: Platform.isWindows
+          ? 'A paused Windows stdin reader keeps a blocking read pending and '
+              'takes the next input.'
+          : false);
 
   for (final interruption in ['kill', 'quit']) {
     test('overlapping inherited exec retains stdin lease after $interruption',
