@@ -20,8 +20,8 @@ final class TextAreaExampleModel extends Model {
 
   @override
   (Model, Cmd?) update(Msg msg) {
-    if (msg is KeyMsg) {
-      if (msg.key == 'ctrl+c') {
+    if (msg is KeyMsg || msg is PasteMsg) {
+      if (msg is KeyMsg && msg.key == 'ctrl+c') {
         return (this, () => quit());
       }
       final (updated, cmd) = area.update(msg);
