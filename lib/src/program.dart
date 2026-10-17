@@ -18,6 +18,7 @@ import 'windows_terminal.dart';
 typedef ProgramOption = void Function(Program program);
 
 final _SharedStdin _sharedStdin = _SharedStdin();
+final Object _commandZoneOwnerKey = Object();
 
 /// Process stdin shared by every [Program] in the main isolate that does not
 /// pass [withInput].
@@ -116,8 +117,8 @@ final class _SharedStdin {
     // Count before the first await, so a concurrent program cannot start or
     // resume a reader while another program's child owns fd 0.
     _execUsers++;
-    if (!Platform.isMacOS) {
-      _sync();
+    _sync();
+    if (!Platform.isMacOS || !stdin.hasTerminal) {
       return settle();
     }
     final setup = _execSetup;
@@ -426,12 +427,18 @@ final class Program {
   }
 
   Future<Model> run(Model initial) async {
-    final (_, model) = await _runCore(initial);
+    final runZone = Zone.current.fork(
+      zoneValues: {_commandZoneOwnerKey: null},
+    );
+    final (_, model) = await runZone.run(() => _runCore(initial));
     return model;
   }
 
   Future<T?> runForResult<T>(OutcomeModel<T> initial) async {
-    final (_, model) = await _runCore(initial);
+    final runZone = Zone.current.fork(
+      zoneValues: {_commandZoneOwnerKey: null},
+    );
+    final (_, model) = await runZone.run(() => _runCore(initial));
     if (model is OutcomeModel<T>) {
       return model.outcome;
     }
@@ -555,20 +562,38 @@ final class Program {
     // Timers that commands start end with the run, so a pending tick or delay
     // cannot keep the process alive after the program has quit.
     final commandTimers = <Timer>{};
-    final commandZone = Zone.current.fork(
+    final commandParentZone = Zone.current;
+    final commandZone = commandParentZone.fork(
+      zoneValues: {_commandZoneOwnerKey: commandTimers},
       specification: ZoneSpecification(
         createTimer: (self, parent, zone, duration, callback) {
+          if (!identical(zone[_commandZoneOwnerKey], commandTimers)) {
+            return parent.createTimer(zone, duration, callback);
+          }
           late final Timer timer;
           timer = parent.createTimer(zone, duration, () {
             commandTimers.remove(timer);
             callback();
           });
-          commandTimers.add(timer);
+          if (current()) {
+            commandTimers.removeWhere((timer) => !timer.isActive);
+            commandTimers.add(timer);
+          } else {
+            timer.cancel();
+          }
           return timer;
         },
         createPeriodicTimer: (self, parent, zone, period, callback) {
+          if (!identical(zone[_commandZoneOwnerKey], commandTimers)) {
+            return parent.createPeriodicTimer(zone, period, callback);
+          }
           final timer = parent.createPeriodicTimer(zone, period, callback);
-          commandTimers.add(timer);
+          if (current()) {
+            commandTimers.removeWhere((timer) => !timer.isActive);
+            commandTimers.add(timer);
+          } else {
+            timer.cancel();
+          }
           return timer;
         },
       ),
@@ -750,6 +775,7 @@ final class Program {
                 .timeout(const Duration(milliseconds: 250), onTimeout: () {});
             pendingReplies.clear();
           }
+          if (!current()) return false;
           // Stop reading, and wait until the stdin reader has stopped, so the
           // child gets every byte typed once the terminal is released.
           _inputSub?.pause();
@@ -888,7 +914,8 @@ final class Program {
             _loneEscTimer = null;
             for (final msg in decoder.feed(bytes)) {
               final reply = switch (msg) {
-                ModeReportMsg(:final mode) => mode,
+                ModeReportMsg(mode: 2026) => 2026,
+                ModeReportMsg(mode: 2027) => 2027,
                 BackgroundColorMsg() => 11,
                 _ => null,
               };

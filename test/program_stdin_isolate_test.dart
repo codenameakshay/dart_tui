@@ -9,6 +9,7 @@ void main() {
     final probe = await _ProbeProcess.start();
     addTearDown(probe.killIfRunning);
 
+    expect(await probe.readUntil('ROOT_ISOLATE:'), 'ROOT_ISOLATE:main');
     final refusal = await probe.readUntil('CHILD_DEFAULT:');
     expect(refusal, contains('refused'));
     expect(refusal, contains('withInput'));
@@ -33,6 +34,54 @@ void main() {
     await probe.readUntil('CONCURRENT_DONE');
     expect(await probe.waitForExit(), 0, reason: await probe.errors);
   });
+
+  test('inherited exec pauses another program reading piped stdin', () async {
+    final probe = await _ProbeProcess.start('inherited-pipe');
+    addTearDown(probe.killIfRunning);
+
+    await probe.readUntil('PIPE_READY');
+    probe.process.stdin.write('s');
+    await probe.process.stdin.flush();
+    await probe.readUntil('PIPE_CHILD_READY');
+    probe.process.stdin.writeln('child');
+    await probe.process.stdin.flush();
+    await probe.readUntil('PIPE_CHILD_GOT:child');
+    await probe.readUntil('PIPE_EXEC_DONE:0');
+    probe.process.stdin.write('q');
+    await probe.process.stdin.flush();
+    await probe.readUntil('PIPE_DONE');
+    expect(await probe.waitForExit(), 0, reason: await probe.errors);
+  });
+
+  for (final interruption in ['kill', 'quit']) {
+    test('overlapping inherited exec retains stdin lease after $interruption',
+        () async {
+      final probe =
+          await _ProbeProcess.start('inherited-overlap-$interruption');
+      addTearDown(probe.killIfRunning);
+      await probe.readUntil('PIPE_READY');
+      final child = await probe.readUntil('PIPE_WAIT_CHILD:');
+      final childPid = int.parse(child.split('PIPE_WAIT_CHILD:').last);
+      addTearDown(() => Process.killPid(childPid, ProcessSignal.sigkill));
+      probe.process.kill(ProcessSignal.sigusr1);
+      await probe.readUntil('PIPE_CHILD_READY');
+      probe.process.kill(ProcessSignal.sigusr1);
+      await probe.readUntil('PIPE_A_REQUESTED:$interruption');
+      Process.killPid(childPid, ProcessSignal.sigterm);
+      await probe.readUntil('PIPE_A_DONE');
+      probe.process.stdin.writeln('child');
+      await probe.process.stdin.flush();
+      await probe.readUntil('PIPE_CHILD_GOT:child');
+      await probe.readUntil('PIPE_EXEC_DONE:0');
+      probe.process.stdin.write('q');
+      await probe.process.stdin.flush();
+      await probe.readUntil('PIPE_DONE');
+      expect(await probe.waitForExit(), 0, reason: await probe.errors);
+    },
+        skip: Platform.isWindows
+            ? 'Uses POSIX signals to order children.'
+            : false);
+  }
 
   test('a fresh default program can quit after stdin reaches EOF', () async {
     final probe = await _ProbeProcess.start('eof');

@@ -352,6 +352,60 @@ class ProgramRuntimePtyTest(unittest.TestCase):
         self.assert_terminal_restored(probe.finish())
         self.assert_cooked_mode(probe)
 
+    def test_unrelated_mode_report_does_not_replace_background_reply(self) -> None:
+        probe = self._probe("default-init-exec-reads")
+        probe.read_until(b"\x1b]11;?\x07")
+        probe.send(b"\x1b[?2026;2$y\x1b[?2027;0$y\x1b[?11;2$y")
+        time.sleep(0.1)
+        probe.send(b"\x1b]11;rgb:0000/0000/0000\x1b\\")
+        probe.read_until(b"CHILD_GOT:")
+        line = bytes(probe.data).split(b"CHILD_GOT:", 1)[1].split(b"\r", 1)[0]
+        self.assertEqual(line.strip(), b"")
+        self.assert_terminal_restored(probe.finish())
+        self.assert_cooked_mode(probe)
+
+    def test_init_exec_consumes_bel_and_fragmented_startup_replies(self) -> None:
+        for terminator in (b"\x07", b"\x1b\\"):
+            with self.subTest(terminator=terminator):
+                probe = self._probe("default-init-exec-reads")
+                probe.read_until(b"\x1b]11;?\x07")
+                for chunk in (
+                    b"\x1b[?2026;",
+                    b"2$y\x1b[?2027;0$y\x1b]11;rgb:0000/",
+                    b"0000/0000" + terminator[:1],
+                    terminator[1:],
+                ):
+                    if chunk:
+                        probe.send(chunk)
+                        time.sleep(0.02)
+                probe.read_until(b"CHILD_GOT:")
+                line = bytes(probe.data).split(b"CHILD_GOT:", 1)[1].split(b"\r", 1)[0]
+                self.assertEqual(line.strip(), b"")
+                self.assert_terminal_restored(probe.finish())
+                self.assert_cooked_mode(probe)
+
+    def test_partial_query_reply_wait_times_out_only_once(self) -> None:
+        probe = self._probe("default-exec-chain")
+        probe.read_until(b"DEFAULT_EXEC_READY")
+        probe.send(b"\x1b[?2026;2$y")
+        started = time.monotonic()
+        probe.send(b"x")
+        probe.read_until_count(b"\x1b[?1049l", 1)
+        self.assertLess(time.monotonic() - started, 1.5)
+        probe.send(b"hello\r")
+        probe.read_until(b"EXEC_DONE:0")
+        started = time.monotonic()
+        probe.send(b"x")
+        probe.read_until_count(b"\x1b[?1049l", 2)
+        self.assertLess(time.monotonic() - started, 0.2)
+        probe.send(b"world\r")
+        probe.read_until_count(b"EXEC_DONE:0", 2)
+        probe.send(b"q")
+        probe.read_until(b"EXEC_FOLLOWUP_READY")
+        probe.send(b"q")
+        self.assert_terminal_restored(probe.finish())
+        self.assert_cooked_mode(probe)
+
     def test_sigterm_quits_and_restores_terminal(self) -> None:
         probe = self._probe("default-term")
         probe.read_until(b"DEFAULT_TERM_READY")
