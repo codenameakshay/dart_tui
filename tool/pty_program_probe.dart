@@ -61,6 +61,8 @@ const _scenarios = {
   'stdin-ctrl-c',
   'default-quit',
   'default-chain',
+  'default-keys',
+  'default-suspend',
   'default-exec',
 };
 
@@ -91,6 +93,18 @@ final class _ProbeModel implements Model {
         msg.key == 'q') {
       return (this, () => quit());
     }
+    if (scenario == 'default-keys' &&
+        msg is KeyMsg &&
+        (msg.key == 'ctrl+z' || msg.key == 'ctrl+c')) {
+      return (
+        _ProbeModel(scenario, 'KEY:${msg.key}'),
+        msg.key == 'ctrl+c' ? _delayedQuit() : null,
+      );
+    }
+    if (scenario == 'default-suspend' && msg is KeyMsg) {
+      if (msg.key == 'ctrl+z') return (this, suspend);
+      if (msg.key == 'q') return (this, () => quit());
+    }
     if (scenario == 'default-exec' && msg is KeyMsg) {
       if (msg.key == 'q') return (this, () => quit());
       if (msg.key == 'x') {
@@ -106,6 +120,9 @@ final class _ProbeModel implements Model {
     }
     if (msg is _ExecDoneMsg) {
       return (_ProbeModel(scenario, 'EXEC_DONE:${msg.code}'), null);
+    }
+    if (scenario == 'default-suspend' && msg is ResumeMsg) {
+      return (_ProbeModel(scenario, 'RESUMED'), null);
     }
     if (scenario == 'resize' &&
         msg is WindowSizeMsg &&
@@ -135,6 +152,8 @@ final class _ProbeModel implements Model {
               'default-quit' => 'DEFAULT_QUIT_READY',
               'chain-one' => 'CHAIN_ONE_READY',
               'chain-two' => 'CHAIN_TWO_READY',
+              'default-keys' => 'DEFAULT_KEYS_READY',
+              'default-suspend' => 'DEFAULT_SUSPEND_READY',
               'default-exec' => 'DEFAULT_EXEC_READY',
               _ => throw StateError('unsupported probe scenario: $scenario'),
             },

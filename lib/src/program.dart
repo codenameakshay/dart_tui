@@ -8,6 +8,7 @@ import 'cmd.dart';
 import 'input_decoder.dart';
 import 'model.dart';
 import 'msg.dart';
+import 'posix_terminal.dart';
 import 'printf_format.dart';
 import 'renderer.dart';
 import 'terminal_control.dart';
@@ -237,11 +238,14 @@ final class Program {
     }
     // On Windows, lineMode/echoMode alone leave the console in legacy input
     // mode, where arrow keys / Esc / Shift+Tab / mouse never reach the byte
-    // stream. Enable VT console input here (and restore it when leaving raw
-    // mode). No-op on other platforms.
+    // stream. On macOS/Linux they leave ISIG/IEXTEN/IXON set, so Ctrl+C/Z/\
+    // become signals. Finish raw mode here (and restore it when leaving raw
+    // mode). Each helper is a no-op on the other platforms.
     if (raw) {
       enableWindowsVtInput();
+      enablePosixRawInput();
     } else {
+      restorePosixRawInput();
       restoreWindowsVtInput();
     }
   }

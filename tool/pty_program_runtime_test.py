@@ -155,9 +155,12 @@ class ProgramRuntimePtyTest(unittest.TestCase):
         self.assertIn(b"\x1b[?2004l", output)
 
     def assert_cooked_mode(self, probe: _Probe) -> None:
-        lflag = termios.tcgetattr(probe.master)[3]
+        iflag, _, _, lflag = termios.tcgetattr(probe.master)[:4]
         self.assertTrue(lflag & termios.ECHO)
         self.assertTrue(lflag & termios.ICANON)
+        self.assertTrue(lflag & termios.ISIG)
+        self.assertTrue(lflag & termios.IEXTEN)
+        self.assertTrue(iflag & termios.IXON)
 
     def test_kill_wakes_an_idle_program_and_restores_terminal(self) -> None:
         probe = self._probe("kill")
@@ -221,6 +224,31 @@ class ProgramRuntimePtyTest(unittest.TestCase):
         probe.read_until(b"CHAIN_TWO_READY")
         probe.send(b"q")
         probe.read_until(b"CHAIN_DONE")
+        self.assert_terminal_restored(probe.finish())
+        self.assert_cooked_mode(probe)
+
+    def test_signal_keys_arrive_as_key_messages(self) -> None:
+        probe = self._probe("default-keys")
+        probe.read_until(b"DEFAULT_KEYS_READY")
+        probe.send(b"\x1a")
+        probe.read_until(b"KEY:ctrl+z")
+        probe.send(b"\x03")
+        probe.read_until(b"KEY:ctrl+c")
+        self.assert_terminal_restored(probe.finish())
+        self.assert_cooked_mode(probe)
+
+    def test_ctrl_z_suspend_releases_terminal_and_resumes_raw(self) -> None:
+        probe = self._probe("default-suspend")
+        probe.read_until(b"DEFAULT_SUSPEND_READY")
+        probe.send(b"\x1a")
+        probe.wait_for_stop()
+        self.assert_terminal_restored(bytes(probe.data))
+        self.assert_cooked_mode(probe)
+        probe.continue_process()
+        probe.read_until(b"RESUMED")
+        lflag = termios.tcgetattr(probe.master)[3]
+        self.assertFalse(lflag & (termios.ICANON | termios.ISIG))
+        probe.send(b"q")
         self.assert_terminal_restored(probe.finish())
         self.assert_cooked_mode(probe)
 
