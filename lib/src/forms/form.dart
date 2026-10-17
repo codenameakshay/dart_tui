@@ -154,14 +154,21 @@ final class Form extends Model implements OutcomeModel<FormValues> {
     return _withGroups(next);
   }
 
-  // Refresh dynamic options/selection against the current raw values.
+  // Refresh dynamic options/selection against the current raw values. Groups
+  // whose fields are unchanged are kept as-is, so a static form still observes
+  // mutations of the caller-owned field lists.
   Form _recompute() {
     final rv = _rawValues;
-    return _withGroups([
-      for (final g in groups)
-        Group([for (final f in g.fields) f.recompute(rv)],
-            title: g.title, hidden: g.hidden),
-    ]);
+    var changed = false;
+    final next = <Group>[];
+    for (final g in groups) {
+      final fields = [for (final f in g.fields) f.recompute(rv)];
+      final same = Iterable<int>.generate(fields.length)
+          .every((i) => identical(fields[i], g.fields[i]));
+      changed = changed || !same;
+      next.add(same ? g : Group(fields, title: g.title, hidden: g.hidden));
+    }
+    return changed ? _withGroups(next) : this;
   }
 
   Form _normalizeFocus() {
