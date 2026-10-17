@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'cmd.dart';
 import 'input_decoder.dart';
@@ -15,10 +16,104 @@ import 'windows_terminal.dart';
 
 typedef ProgramOption = void Function(Program program);
 
-Stream<List<int>>? _stdinBroadcastCache;
+final _SharedStdin _sharedStdin = _SharedStdin();
 
-Stream<List<int>> _stdinBroadcast() {
-  return _stdinBroadcastCache ??= stdin.asBroadcastStream();
+/// Process stdin shared by every [Program] that does not pass [withInput].
+///
+/// A helper isolate owns the stdin subscription and forwards bytes here. The
+/// receiving port keeps this isolate alive only while a program is reading, so
+/// `main` can return after the last program instead of hanging on stdin
+/// (issue #15). Between programs the reader is paused, so input stays in the
+/// terminal for the next program or for a child process.
+final class _SharedStdin {
+  final Set<StreamController<List<int>>> _readers = {};
+  RawReceivePort? _port;
+  SendPort? _control;
+  bool _reading = false;
+  bool _closed = false;
+
+  Stream<List<int>> claim() {
+    if (_closed) return const Stream<List<int>>.empty();
+    late final StreamController<List<int>> reader;
+    reader = StreamController<List<int>>(
+      onListen: () {
+        _readers.add(reader);
+        _sync();
+      },
+      onPause: _sync,
+      onResume: _sync,
+      onCancel: () {
+        _readers.remove(reader);
+        _sync();
+      },
+    );
+    return reader.stream;
+  }
+
+  void _sync() {
+    if (_closed) return;
+    final wanted = _readers.any((reader) => !reader.isPaused);
+    final port = _port ??= _spawn();
+    port.keepIsolateAlive = wanted;
+    final control = _control;
+    if (control != null && wanted != _reading) {
+      _reading = wanted;
+      control.send(wanted);
+    }
+  }
+
+  RawReceivePort _spawn() {
+    final port = RawReceivePort(_onMessage, 'dart_tui stdin');
+    unawaited(Isolate.spawn(_readStdin, port.sendPort));
+    return port;
+  }
+
+  void _onMessage(Object? message) {
+    switch (message) {
+      case SendPort():
+        _control = message;
+        // Stop the helper with this isolate (e.g. a test isolate).
+        Isolate.current.addOnExitListener(message, response: 'exit');
+        _sync();
+      case List<int>():
+        for (final reader in [..._readers]) {
+          reader.add(message);
+        }
+      case String():
+        for (final reader in [..._readers]) {
+          reader.addError(StdinException(message));
+        }
+      case null:
+        _closed = true;
+        _port?.close();
+        for (final reader in [..._readers]) {
+          unawaited(reader.close());
+        }
+    }
+  }
+}
+
+/// Helper-isolate entry point: reads stdin while told to (`true`), pauses on
+/// `false`, and forwards bytes, errors (as text) and end of input (`null`).
+void _readStdin(SendPort events) {
+  final control = RawReceivePort();
+  final subscription = stdin.listen(
+    events.send,
+    onError: (Object error) => events.send('$error'),
+    onDone: () {
+      events.send(null);
+      control.close();
+    },
+  )..pause();
+  control.handler = (Object? message) {
+    if (message == true && subscription.isPaused) subscription.resume();
+    if (message == false && !subscription.isPaused) subscription.pause();
+    if (message == 'exit') {
+      unawaited(subscription.cancel());
+      control.close();
+    }
+  };
+  events.send(control.sendPort);
 }
 
 ProgramOption withContext(Future<void> Function() cancellation) {
@@ -402,6 +497,8 @@ final class Program {
           return false;
         case ExecMsg():
           await releaseTerminal(resetRenderer: true);
+          // Stop reading so the child gets the terminal's input.
+          _inputSub?.pause();
           try {
             if (msg.inheritStdio) {
               final process = await Process.start(
@@ -428,6 +525,7 @@ final class Program {
             }
           } finally {
             await restoreTerminal();
+            _inputSub?.resume();
           }
           return true;
         default:
@@ -508,7 +606,7 @@ final class Program {
       bench('terminal_queries');
 
       if (!_disableInput) {
-        final source = _input ?? _stdinBroadcast();
+        final source = _input ?? _sharedStdin.claim();
         final decoder = TerminalInputDecoder();
         _inputSub = source.listen(
           (bytes) {

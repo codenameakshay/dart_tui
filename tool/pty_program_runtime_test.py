@@ -207,6 +207,37 @@ class ProgramRuntimePtyTest(unittest.TestCase):
         self.assertIn(b"\x1b[?1049h", bytes(probe.data)[len(released) :])
         self.assert_terminal_restored(probe.finish())
 
+    def test_default_stdin_program_exits_after_quit(self) -> None:
+        probe = self._probe("default-quit")
+        probe.read_until(b"DEFAULT_QUIT_READY")
+        probe.send(b"q")
+        self.assert_terminal_restored(probe.finish())
+        self.assert_cooked_mode(probe)
+
+    def test_sequential_default_stdin_programs_share_input_and_exit(self) -> None:
+        probe = self._probe("default-chain")
+        probe.read_until(b"CHAIN_ONE_READY")
+        probe.send(b"q")
+        probe.read_until(b"CHAIN_TWO_READY")
+        probe.send(b"q")
+        probe.read_until(b"CHAIN_DONE")
+        self.assert_terminal_restored(probe.finish())
+        self.assert_cooked_mode(probe)
+
+    def test_exec_child_receives_terminal_input(self) -> None:
+        probe = self._probe("default-exec")
+        probe.read_until(b"DEFAULT_EXEC_READY")
+        probe.send(b"x")
+        probe.read_until(b"\x1b[?1049l")
+        time.sleep(0.5)
+        probe.send(b"hello\r")
+        probe.read_until(b"CHILD:hello")
+        probe.read_until(b"EXEC_DONE:0")
+        probe.send(b"q")
+        self.assert_terminal_restored(probe.finish())
+        self.assert_cooked_mode(probe)
+
+
 
 if __name__ == "__main__":
     if os.name != "posix":

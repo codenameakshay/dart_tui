@@ -16,15 +16,28 @@ Future<void> main(List<String> arguments) async {
   }
 
   final scenario = arguments.single;
+  if (scenario == 'default-chain') {
+    // Sequential programs share the implicit process stdin.
+    for (final step in ['chain-one', 'chain-two']) {
+      await Program(options: [withAltScreen(), withHideCursor()])
+          .run(_ProbeModel(step));
+    }
+    stdout.writeln('CHAIN_DONE');
+    return;
+  }
+  // `default-*` scenarios read the implicit process stdin with the default
+  // signal handling, like a real application.
+  final usesDefaults = scenario.startsWith('default-');
   late final Program program;
   final options = <ProgramOption>[
     if ({'stdin-quit', 'stdin-ctrl-c'}.contains(scenario))
       withInput(stdin)
-    else
+    else if (!usesDefaults)
       withInput(null),
     withAltScreen(),
     withHideCursor(),
-    if (!{'resize', 'stdin-ctrl-c'}.contains(scenario)) withoutSignalHandler(),
+    if (!usesDefaults && !{'resize', 'stdin-ctrl-c'}.contains(scenario))
+      withoutSignalHandler(),
     if (scenario == 'cancel')
       withContext(
           () => Future<void>.delayed(const Duration(milliseconds: 250))),
@@ -46,6 +59,9 @@ const _scenarios = {
   'suspend',
   'stdin-quit',
   'stdin-ctrl-c',
+  'default-quit',
+  'default-chain',
+  'default-exec',
 };
 
 final class _ProbeModel implements Model {
@@ -69,6 +85,27 @@ final class _ProbeModel implements Model {
         msg is KeyMsg &&
         (msg.key == 'q' || msg.key == 'ctrl+c')) {
       return (this, () => quit());
+    }
+    if ((scenario == 'default-quit' || scenario.startsWith('chain-')) &&
+        msg is KeyMsg &&
+        msg.key == 'q') {
+      return (this, () => quit());
+    }
+    if (scenario == 'default-exec' && msg is KeyMsg) {
+      if (msg.key == 'q') return (this, () => quit());
+      if (msg.key == 'x') {
+        return (
+          this,
+          execProcess(
+            '/bin/sh',
+            ['-c', r'read line; echo "CHILD:$line"'],
+            onExit: (code) => _ExecDoneMsg(code),
+          ),
+        );
+      }
+    }
+    if (msg is _ExecDoneMsg) {
+      return (_ProbeModel(scenario, 'EXEC_DONE:${msg.code}'), null);
     }
     if (scenario == 'resize' &&
         msg is WindowSizeMsg &&
@@ -95,10 +132,19 @@ final class _ProbeModel implements Model {
               'suspend' => 'SUSPEND_READY',
               'stdin-quit' => 'STDIN_QUIT_READY',
               'stdin-ctrl-c' => 'STDIN_CTRL_C_READY',
+              'default-quit' => 'DEFAULT_QUIT_READY',
+              'chain-one' => 'CHAIN_ONE_READY',
+              'chain-two' => 'CHAIN_TWO_READY',
+              'default-exec' => 'DEFAULT_EXEC_READY',
               _ => throw StateError('unsupported probe scenario: $scenario'),
             },
         altScreen: true,
       );
+}
+
+final class _ExecDoneMsg extends Msg {
+  _ExecDoneMsg(this.code);
+  final int code;
 }
 
 Cmd _delayedQuit() => () async {
