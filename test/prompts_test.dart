@@ -103,6 +103,16 @@ void main() {
       expect(r, 'a b');
     }, timeout: _timeout);
 
+    test('accepts bracketed paste and sanitizes line breaks and controls',
+        () async {
+      final r = await promptInput('name',
+          options: _opts([
+            utf8.encode('\x1b[200~a\r\nb\tc\x00\x07\x7f\u0085d\x1b[201~'),
+            _enter,
+          ]));
+      expect(r, 'a b cd');
+    }, timeout: _timeout);
+
     test('ctrl+c cancels', () async {
       final r = await promptInput('name', options: _opts([_ctrlC]));
       expect(r, isNull);
