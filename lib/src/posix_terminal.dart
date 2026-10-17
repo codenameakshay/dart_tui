@@ -62,8 +62,8 @@ void _setRawInput(bool raw) {
       iflag &= ~ixon;
       lflag &= ~lflagBits;
     } else {
-      iflag |= _saved!.iflag;
-      lflag |= _saved!.lflag;
+      iflag = (iflag & ~ixon) | _saved!.iflag;
+      lflag = (lflag & ~lflagBits) | _saved!.lflag;
       _saved = null;
     }
     write(0, iflag);
