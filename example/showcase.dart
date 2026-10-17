@@ -73,7 +73,10 @@ final class ShowcaseModel extends Model {
 
     if (msg is KeyMsg) {
       final key = msg.key;
-      if (key == 'esc' || key == 'b' || key == 'q' || key == 'ctrl+c') {
+      final typing = screen == ShowcaseScreen.textInput;
+      if (key == 'esc' ||
+          key == 'ctrl+c' ||
+          (!typing && (key == 'b' || key == 'q'))) {
         return (
           _copyWith(screen: ShowcaseScreen.menu, clearChild: true),
           null,
@@ -327,7 +330,7 @@ ${const Style(isDim: true).render('───────────────
 
 $body
 
-${const Style(isDim: true).render('b / Esc / q / ctrl+c → back to menu')}
+${const Style(isDim: true).render(screen == ShowcaseScreen.textInput ? 'Esc / ctrl+c → back to menu' : 'b / Esc / q / ctrl+c → back to menu')}
 ''';
   }
 }
