@@ -281,6 +281,21 @@ void main() {
       expect(buf.toString(), endsWith('\x1b[2;1H'));
     });
 
+    test('a last line wider than the terminal parks on its wrapped end', () {
+      final wrapping = CellRenderer(
+        output: sink,
+        defaultAltScreen: false,
+        defaultHideCursor: false,
+        terminalColumns: () => 10,
+      );
+      wrapping.render(newView('title\n${'x' * 25}'));
+      buf.clear();
+
+      wrapping.close();
+
+      expect(buf.toString(), endsWith('\x1b[4;1H'));
+    });
+
     test('release(reset: true) clears instead of parking', () {
       renderer.render(newView('one\ntwo'));
       buf.clear();
