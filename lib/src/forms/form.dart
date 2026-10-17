@@ -33,7 +33,9 @@ final class Form extends Model implements OutcomeModel<FormValues> {
         }
       }
     }
-    return Form._(groups, styles, 0, 0, false, false)._normalizeFocus();
+    return Form._(groups, styles, 0, 0, false, false)
+        ._recompute()
+        ._normalizeFocus();
   }
 
   Form._(this.groups, this.styles, this.groupIndex, this.fieldIndex,
@@ -150,6 +152,16 @@ final class Form extends Model implements OutcomeModel<FormValues> {
     final next = [...groups];
     next[groupIndex] = Group(fields, title: g.title, hidden: g.hidden);
     return _withGroups(next);
+  }
+
+  // Refresh dynamic options/selection against the current raw values.
+  Form _recompute() {
+    final rv = _rawValues;
+    return _withGroups([
+      for (final g in groups)
+        Group([for (final f in g.fields) f.recompute(rv)],
+            title: g.title, hidden: g.hidden),
+    ]);
   }
 
   Form _normalizeFocus() {
@@ -280,7 +292,7 @@ final class Form extends Model implements OutcomeModel<FormValues> {
     final g0 = current.groups[current.groupIndex];
     final edited = [...g0.fields];
     edited[current.fieldIndex] = active.updateEditor(msg);
-    var nf = current._withGroups([
+    final nf = current._withGroups([
       for (var i = 0; i < current.groups.length; i++)
         if (i == current.groupIndex)
           Group(edited, title: g0.title, hidden: g0.hidden)
@@ -288,15 +300,7 @@ final class Form extends Model implements OutcomeModel<FormValues> {
           current.groups[i],
     ]);
 
-    // recompute dynamic options/selection against the new raw values
-    final rv = nf._rawValues;
-    nf = nf._withGroups([
-      for (final g in nf.groups)
-        Group([for (final f in g.fields) f.recompute(rv)],
-            title: g.title, hidden: g.hidden),
-    ]);
-
-    return (nf._normalizeFocus(), null);
+    return (nf._recompute()._normalizeFocus(), null);
   }
 
   @override
