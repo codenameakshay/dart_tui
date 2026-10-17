@@ -278,4 +278,61 @@ void main() {
       expect((ta.cursorRow, ta.cursorColumn), (1, 2));
     });
   });
+
+  group('TextAreaModel bracketed paste', () {
+    TextAreaModel paste(TextAreaModel ta, String content) =>
+        ta.update(PasteMsg(content)).$1 as TextAreaModel;
+
+    test('inserts multi-line text and leaves the cursor after it', () {
+      final ta = paste(
+        TextAreaModel(value: 'aZ', cursorCol: 1),
+        'x\r\ny\rz',
+      );
+      expect(ta.value, 'ax\ny\nzZ');
+      expect((ta.cursorRow, ta.cursorColumn), (2, 1));
+    });
+
+    test('turns tabs into one space', () {
+      expect(paste(TextAreaModel(), 'a\tb').value, 'a b');
+    });
+
+    test('drops control characters so ESC cannot reach the terminal', () {
+      final ta = paste(TextAreaModel(), 'a\x1b[31mb\x00\x07\x7fc');
+      expect(ta.value, 'a[31mbc');
+    });
+
+    test('merges multi-scalar graphemes into the surrounding text', () {
+      final ta = paste(
+        TextAreaModel(value: 'Z'),
+        '\u{1F468}\u200D\u{1F469}',
+      );
+      expect(ta.value, '\u{1F468}\u200D\u{1F469}Z');
+      expect(ta.cursorColumn, 1);
+      expect(ta.view, returnsNormally);
+    });
+
+    test('truncates to charLimit', () {
+      final ta = paste(
+          TextAreaModel(value: 'ab', cursorCol: 2, charLimit: 5), 'cdefgh');
+      expect(ta.value, 'abcde');
+      expect(ta.cursorColumn, 5);
+    });
+
+    test('truncates to maxContentHeight', () {
+      final ta = paste(TextAreaModel(maxContentHeight: 2), 'a\nb\nc\nd');
+      expect(ta.value, 'a\nb');
+      expect((ta.cursorRow, ta.cursorColumn), (1, 1));
+    });
+
+    test('is ignored while unfocused', () {
+      final ta = TextAreaModel(value: 'ab', focused: false);
+      expect(paste(ta, 'x'), same(ta));
+    });
+
+    test('paste start and end markers are ignored', () {
+      final ta = TextAreaModel(value: 'ab');
+      expect(ta.update(PasteStartMsg()).$1, same(ta));
+      expect(ta.update(PasteEndMsg()).$1, same(ta));
+    });
+  });
 }

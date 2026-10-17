@@ -243,8 +243,25 @@ final class TextInputModel extends Model {
     return copyWith(value: next, cursorPos: head.characters.length);
   }
 
+  /// Bracketed paste: newlines and tabs become one space each, other control
+  /// characters are dropped, and the text is cut to fit [charLimit].
+  TextInputModel _paste(String content) {
+    var text = content
+        .replaceAll(_pasteWhitespace, ' ')
+        .replaceAll(_pasteControls, '')
+        .characters;
+    if (charLimit > 0) {
+      text = text.take((charLimit - _graphemes.length).clamp(0, charLimit));
+    }
+    return text.isEmpty ? this : _insert(text.toString());
+  }
+
+  static final _pasteWhitespace = RegExp(r'\r\n|[\r\n\t]');
+  static final _pasteControls = RegExp(r'[\x00-\x1f\x7f-\x9f]');
+
   @override
   (Model, Cmd?) update(Msg msg) {
+    if (msg is PasteMsg) return (focused ? _paste(msg.content) : this, null);
     if (msg is! KeyMsg) return (this, null);
     final chars = _graphemes;
     switch (msg.key) {

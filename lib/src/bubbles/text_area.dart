@@ -282,6 +282,36 @@ final class TextAreaModel extends Model {
     )._normalized();
   }
 
+  /// Bracketed paste: line endings become `\n`, tabs become one space, other
+  /// control characters are dropped, and the text is cut to the longest prefix
+  /// that fits [charLimit] and [maxContentHeight].
+  TextAreaModel _paste(String content) {
+    final text = content
+        .replaceAll(RegExp(r'\r\n?'), '\n')
+        .replaceAll('\t', ' ')
+        .replaceAll(_pasteControls, '');
+    if (text.isEmpty) return this;
+    final whole = _insertText(text);
+    if (!identical(whole, this)) return whole;
+    final graphemes = text.characters.toList();
+    var best = this;
+    var fits = 0;
+    var tooLong = graphemes.length;
+    while (fits + 1 < tooLong) {
+      final mid = (fits + tooLong) ~/ 2;
+      final next = _insertText(graphemes.take(mid).join());
+      if (identical(next, this)) {
+        tooLong = mid;
+      } else {
+        best = next;
+        fits = mid;
+      }
+    }
+    return best;
+  }
+
+  static final _pasteControls = RegExp(r'[\x00-\x09\x0b-\x1f\x7f-\x9f]');
+
   TextAreaModel _insertNewline() {
     final currentLines = List<String>.of(_logicalLines);
     final row = cursorRow.clamp(0, currentLines.length - 1);
@@ -361,6 +391,7 @@ final class TextAreaModel extends Model {
 
   @override
   (Model, Cmd?) update(Msg msg) {
+    if (msg is PasteMsg) return (focused ? _paste(msg.content) : this, null);
     if (msg is! KeyMsg) return (this, null);
     final currentLines = _logicalLines;
     final row = cursorRow.clamp(0, currentLines.length - 1);

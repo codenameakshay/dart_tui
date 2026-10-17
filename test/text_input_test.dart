@@ -310,4 +310,55 @@ void main() {
       expect(m.value, family);
     });
   });
+
+  group('TextInputModel bracketed paste', () {
+    TextInputModel paste(TextInputModel m, String content) =>
+        m.update(PasteMsg(content)).$1 as TextInputModel;
+
+    test('inserts at the cursor and advances it', () {
+      final m = paste(TextInputModel(value: 'ab', cursorPos: 1), 'XY');
+      expect(m.value, 'aXYb');
+      expect(m.cursorPos, 3);
+    });
+
+    test('turns each newline or tab into one space', () {
+      final m = paste(TextInputModel(), 'a\r\nb\rc\nd\te');
+      expect(m.value, 'a b c d e');
+      expect(m.cursorPos, 9);
+    });
+
+    test('drops control characters so ESC cannot reach the terminal', () {
+      final m = paste(TextInputModel(), 'a\x1b[31mb\x00\x07\x7fc');
+      expect(m.value, 'a[31mbc');
+    });
+
+    test('merges multi-scalar graphemes into the surrounding text', () {
+      final m = paste(
+        TextInputModel(value: 'Z'),
+        '\u{1F468}\u200D\u{1F469}',
+      );
+      expect(m.value, '\u{1F468}\u200D\u{1F469}Z');
+      expect(m.cursorPos, 1);
+      expect(m.view, returnsNormally);
+    });
+
+    test('truncates to charLimit', () {
+      final m = paste(
+          TextInputModel(value: 'ab', cursorPos: 2, charLimit: 5), 'cdefgh');
+      expect(m.value, 'abcde');
+      expect(m.cursorPos, 5);
+      expect(paste(m, 'x').value, 'abcde');
+    });
+
+    test('is ignored while unfocused', () {
+      final m = TextInputModel(value: 'ab', focused: false);
+      expect(paste(m, 'x'), same(m));
+    });
+
+    test('paste start and end markers are ignored', () {
+      final m = TextInputModel(value: 'ab');
+      expect(m.update(PasteStartMsg()).$1, same(m));
+      expect(m.update(PasteEndMsg()).$1, same(m));
+    });
+  });
 }
