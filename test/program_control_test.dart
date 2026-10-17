@@ -406,6 +406,27 @@ void main() {
     expect((results.last as _ReadyModel).label, 'second-run-alive');
   }, timeout: const Timeout(Duration(seconds: 5)));
 
+  test('timers started by commands end with the program', () async {
+    var fired = false;
+    final ready = Completer<void>();
+    final program =
+        Program(options: [withOutput(_StringSink()), withInput(null)]);
+    final run = program.run(_ReadyModel(ready));
+    await ready.future;
+    program.send(BatchMsg([
+      () async {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        fired = true;
+        return null;
+      },
+    ]));
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    program.quit();
+    await run;
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    expect(fired, isFalse);
+  });
+
   test('leaving the alt screen does not print a blank line', () async {
     Future<String> runWith(List<ProgramOption> options) async {
       final sink = _StringSink();

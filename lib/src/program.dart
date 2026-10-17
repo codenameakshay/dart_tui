@@ -534,12 +534,34 @@ final class Program {
     // Commands from an earlier run must not reach this one.
     bool current() => _running && runId == _runs;
 
+    // Timers that commands start end with the run, so a pending tick or delay
+    // cannot keep the process alive after the program has quit.
+    final commandTimers = <Timer>{};
+    final commandZone = Zone.current.fork(
+      specification: ZoneSpecification(
+        createTimer: (self, parent, zone, duration, callback) {
+          late final Timer timer;
+          timer = parent.createTimer(zone, duration, () {
+            commandTimers.remove(timer);
+            callback();
+          });
+          commandTimers.add(timer);
+          return timer;
+        },
+        createPeriodicTimer: (self, parent, zone, period, callback) {
+          final timer = parent.createPeriodicTimer(zone, period, callback);
+          commandTimers.add(timer);
+          return timer;
+        },
+      ),
+    );
+
     // Returns whether a sequence may run its next command.
     Future<bool> runCmd(Cmd? cmd) async {
       if (cmd == null) return current();
       if (!current()) return false;
       try {
-        final msg = await Future<Msg?>.value(cmd());
+        final msg = await commandZone.run(() => Future<Msg?>.value(cmd()));
         if (!current()) return false;
         if (msg != null) enqueue(msg);
         return msg is! QuitMsg && msg is! InterruptMsg;
@@ -923,6 +945,10 @@ final class Program {
       }
     } finally {
       if (runId == _runs) _shutdown();
+      for (final timer in commandTimers) {
+        timer.cancel();
+      }
+      commandTimers.clear();
       await externalMsgSub.cancel();
       await runInputSub?.cancel();
       if (runLogSink != null) await runLogSink.done;
