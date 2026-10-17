@@ -30,12 +30,17 @@ final class FilePickerExampleModel extends Model {
       if (msg.key == 'esc') {
         if (selected != null) {
           return (
-            FilePickerExampleModel(picker: picker, selected: null),
+            FilePickerExampleModel(
+              picker: picker.copyWith(clearSelected: true),
+              selected: null,
+            ),
             null,
           );
         }
         return (this, () => quit());
       }
+      // Only esc and ctrl+c are live on the selected screen.
+      if (selected != null) return (this, null);
     }
     final (next, cmd) = picker.update(msg);
     final nextPicker = next as FilePickerModel;
