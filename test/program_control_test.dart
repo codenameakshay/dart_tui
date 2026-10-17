@@ -104,6 +104,74 @@ void main() {
     expect(log, ['key', 'slow', 'after-slow']);
   });
 
+  test('a command failure stops the remaining sequence', () async {
+    final ready = Completer<void>();
+    var laterCommandRan = false;
+    final program =
+        Program(options: [withOutput(_StringSink()), withInput(null)]);
+    final run = program.run(_ReadyModel(ready));
+    await ready.future;
+    program.send(SequenceMsg([
+      () => throw StateError('sequence failed'),
+      () {
+        laterCommandRan = true;
+        return _LabelMsg('must-not-run');
+      },
+    ]));
+    await run;
+    expect(laterCommandRan, isFalse);
+  });
+
+  test('a quit result stops the remaining sequence', () async {
+    final ready = Completer<void>();
+    var laterCommandRan = false;
+    final program =
+        Program(options: [withOutput(_StringSink()), withInput(null)]);
+    final run = program.run(_ReadyModel(ready));
+    await ready.future;
+    program.send(SequenceMsg([
+      () => QuitMsg(),
+      () {
+        laterCommandRan = true;
+        return _LabelMsg('after-quit');
+      },
+    ]));
+    await run;
+    expect(laterCommandRan, isFalse);
+  });
+
+  test('an old sequence cannot continue into a later run', () async {
+    final firstReady = Completer<void>();
+    final secondReady = Completer<void>();
+    final firstStep = Completer<Msg?>();
+    final log = <String>[];
+    var laterCommandRan = false;
+    final program =
+        Program(options: [withOutput(_StringSink()), withInput(null)]);
+    final firstRun = program.run(_ReadyModel(firstReady, log: log));
+    await firstReady.future;
+    program.send(SequenceMsg([
+      () => firstStep.future,
+      () {
+        laterCommandRan = true;
+        return null;
+      },
+    ]));
+    await Future<void>.delayed(Duration.zero);
+    program.quit();
+    await firstRun;
+
+    final secondRun = program.run(_ReadyModel(secondReady, log: log));
+    await secondReady.future;
+    firstStep.complete(_LabelMsg('stale'));
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    program.quit();
+    await secondRun;
+
+    expect(laterCommandRan, isFalse);
+    expect(log, isNot(contains('stale')));
+  });
+
   test('leaving the alt screen does not print a blank line', () async {
     Future<String> runWith(List<ProgramOption> options) async {
       final sink = _StringSink();

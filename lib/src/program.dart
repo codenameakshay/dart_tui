@@ -390,6 +390,7 @@ final class Program {
   StreamSubscription<ProcessSignal>? _sigtermSub;
   TeaRenderer? _renderer;
   bool _endedInAltScreen = false;
+  int _runs = 0;
 
   void _setRawMode(bool raw) {
     try {
@@ -472,6 +473,7 @@ final class Program {
     _running = true;
     _killed = false;
     _endedInAltScreen = false;
+    final runId = ++_runs;
     _finished = Completer<void>();
     _activityWake = null;
     _inputCancel = null;
@@ -514,17 +516,25 @@ final class Program {
       }
     }
 
-    Future<void> runCmd(Cmd? cmd) async {
-      if (cmd == null || !_running) return;
+    // Commands from an earlier run must not reach this one.
+    bool current() => _running && runId == _runs;
+
+    // Returns whether a sequence may run its next command.
+    Future<bool> runCmd(Cmd? cmd) async {
+      if (cmd == null) return current();
+      if (!current()) return false;
       try {
         final msg = await Future<Msg?>.value(cmd());
+        if (!current()) return false;
         if (msg != null) enqueue(msg);
+        return msg is! QuitMsg && msg is! InterruptMsg;
       } catch (e, st) {
         if (!_disableCatchPanics) {
           stderr.writeln('Caught command exception: $e');
           stderr.writeln(st);
         }
-        enqueue(InterruptMsg());
+        if (current()) enqueue(InterruptMsg());
+        return false;
       }
     }
 
@@ -663,7 +673,7 @@ final class Program {
           final cmds = msg.cmds;
           unawaited(() async {
             for (final c in cmds) {
-              await runCmd(c);
+              if (!await runCmd(c)) break;
             }
           }());
           return false;
