@@ -390,6 +390,7 @@ final class Program {
   StreamSubscription<ProcessSignal>? _sigtermSub;
   TeaRenderer? _renderer;
   bool _endedInAltScreen = false;
+  bool _terminalReleased = false;
   int _runs = 0;
 
   void _setRawMode(bool raw) {
@@ -442,6 +443,7 @@ final class Program {
   Future<void> releaseTerminal({bool resetRenderer = false}) async {
     if (!_running) return;
     if (_disableRenderer) return;
+    _terminalReleased = true;
     // Cook the terminal before the release sequences reach it.
     _setRawMode(false);
     _renderer?.release(reset: resetRenderer);
@@ -456,6 +458,7 @@ final class Program {
       if (_unicodeCoreSupported) _renderer?.setUnicodeCore(true);
       _renderer?.restore(m.view());
     }
+    _terminalReleased = false;
   }
 
   void println([Object? value]) => send(PrintLineMsg('${value ?? ''}'));
@@ -473,6 +476,7 @@ final class Program {
     _running = true;
     _killed = false;
     _endedInAltScreen = false;
+    _terminalReleased = false;
     final runId = ++_runs;
     _finished = Completer<void>();
     _activityWake = null;
@@ -552,7 +556,8 @@ final class Program {
           );
         }
       }
-      _renderer?.render(v);
+      // A throttled frame must not land after a release or kill.
+      if (!_killed && !_terminalReleased) _renderer?.render(v);
       lastRenderedView = v;
       lastRenderMicros = frameClock.elapsedMicroseconds;
     }
@@ -936,6 +941,7 @@ final class Program {
     if (!_disableRenderer) {
       _setRawMode(false);
     }
+    _terminalReleased = true;
     _endedInAltScreen = _renderer?.altScreenActive ?? false;
     _renderer?.close();
     _renderer = null;

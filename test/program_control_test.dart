@@ -181,6 +181,50 @@ void main() {
     expect(sink.buf.toString(), contains('\x1b[?25h'));
   });
 
+  test('a throttled frame is not written after terminal release', () async {
+    final sink = _StringSink();
+    final ready = Completer<void>();
+    final log = <String>[];
+    final program = Program(options: [
+      withOutput(sink),
+      withInput(null),
+      withFps(1),
+    ]);
+    final run = program.run(_ReadyModel(ready, log: log));
+    await ready.future;
+    program.send(_LabelMsg('released'));
+    while (!log.contains('released')) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    await program.releaseTerminal();
+    final releasedOutputLength = sink.buf.length;
+    await Future<void>.delayed(const Duration(milliseconds: 1100));
+    expect(sink.buf.length, releasedOutputLength);
+    await program.restoreTerminal();
+    program.quit();
+    await run;
+  }, timeout: const Timeout(Duration(seconds: 5)));
+
+  test('kill during a throttled frame suppresses the pending render', () async {
+    final sink = _StringSink();
+    final ready = Completer<void>();
+    final log = <String>[];
+    final program = Program(options: [
+      withOutput(sink),
+      withInput(null),
+      withFps(1),
+    ]);
+    final run = program.run(_ReadyModel(ready, log: log));
+    await ready.future;
+    program.send(_LabelMsg('killed'));
+    while (!log.contains('killed')) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    program.kill();
+    await run;
+    expect(sink.buf.toString(), isNot(contains('label=killed')));
+  }, timeout: const Timeout(Duration(seconds: 5)));
+
   test('leaving the alt screen does not print a blank line', () async {
     Future<String> runWith(List<ProgramOption> options) async {
       final sink = _StringSink();
