@@ -19,7 +19,8 @@ typedef ProgramOption = void Function(Program program);
 
 final _SharedStdin _sharedStdin = _SharedStdin();
 
-/// Process stdin shared by every [Program] that does not pass [withInput].
+/// Process stdin shared by every [Program] in the main isolate that does not
+/// pass [withInput].
 ///
 /// A helper isolate owns the stdin subscription and forwards bytes here. The
 /// receiving port keeps this isolate alive only while a program is reading, so
@@ -172,7 +173,6 @@ final class _SharedStdin {
       }
     } finally {
       if (identical(_execCancelAck, ack)) _execCancelAck = null;
-      Isolate.current.removeOnExitListener(control);
       _port?.close();
       _port = null;
       _control = null;
@@ -202,8 +202,6 @@ final class _SharedStdin {
         _control = message;
         final ready = _controlReady;
         if (ready != null && !ready.isCompleted) ready.complete();
-        // Stop the helper with this isolate (e.g. a test isolate).
-        Isolate.current.addOnExitListener(message, response: 'exit');
         _sync();
       case ('settled', final int id):
         _settling.remove(id)?.complete();
@@ -269,18 +267,6 @@ void _readStdin(SendPort events) {
     if (message == true && subscription.isPaused) subscription.resume();
     if (message == false && !subscription.isPaused) subscription.pause();
     if (message case ('settle', final int id)) events.send(('settled', id));
-    if (message == 'exit') {
-      // The owner isolate ended. Cancelling closes fd 0 for the whole
-      // process, so put it back from a duplicate (macOS/Linux). On Windows,
-      // leave the reader paused rather than close the process's stdin handle.
-      control.close();
-      if (!subscription.isPaused) subscription.pause();
-      if (Platform.isWindows) return;
-      final backup = preserveStdin();
-      unawaited(subscription.cancel().then((_) async {
-        if (backup != null) await restoreStdin(backup);
-      }));
-    }
   };
   events.send(control.sendPort);
 }
@@ -291,6 +277,11 @@ ProgramOption withContext(Future<void> Function() cancellation) {
   };
 }
 
+/// Reads input from [input] instead of the terminal, or no input when null.
+///
+/// Without this option a [Program] reads the process stdin, which only the
+/// main isolate may do; programs in other isolates must pass an input stream
+/// or null.
 ProgramOption withInput(Stream<List<int>>? input) {
   return (p) {
     p._input = input;
@@ -478,6 +469,17 @@ final class Program {
   Future<(Object?, Model)> _runCore(Model initial) async {
     if (_running) {
       throw StateError('Program is already running');
+    }
+    if (!_disableInput &&
+        (_input == null || identical(_input, stdin)) &&
+        Isolate.current.debugName != 'main') {
+      // Each isolate would start its own reader on fd 0, and readers in
+      // different isolates race for input and for the descriptor itself.
+      throw StateError(
+        'Default stdin can only be read from the main isolate. Pass '
+        'withInput(...) to a Program in another isolate, or withInput(null) '
+        'for no input.',
+      );
     }
     _running = true;
     _killed = false;

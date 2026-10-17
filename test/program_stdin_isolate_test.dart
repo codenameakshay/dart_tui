@@ -5,37 +5,21 @@ import 'dart:io';
 import 'package:test/test.dart';
 
 void main() {
-  test('default stdin readers release after immediate quits in child isolates',
-      () async {
+  test('only the main isolate reads default stdin', () async {
     final probe = await _ProbeProcess.start();
     addTearDown(probe.killIfRunning);
 
-    await probe.readUntil('ISOLATE_PROGRAMS_DONE');
-    expect(await probe.waitForExit(), 0, reason: await probe.errors);
-  });
-
-  test('explicitly exited isolates release after 32 immediate quits', () async {
-    final probe = await _ProbeProcess.start('explicit-exits');
-    addTearDown(probe.killIfRunning);
-
-    await probe.readUntil('CHILD_ISOLATES_EXITED');
-    expect(await probe.waitForExit(), 0, reason: await probe.errors);
-  });
-
-  test('a program after one in an exited isolate still reads stdin', () async {
-    final probe = await _ProbeProcess.start('isolate-then-main');
-    addTearDown(probe.killIfRunning);
-
+    final refusal = await probe.readUntil('CHILD_DEFAULT:');
+    expect(refusal, contains('refused'));
+    expect(refusal, contains('withInput'));
+    await probe.readUntil('CHILD_EXPLICIT:ok');
     await probe.readUntil('MAIN_READY');
     probe.process.stdin.write('q');
     await probe.process.stdin.flush();
 
     await probe.readUntil('MAIN_DONE');
     expect(await probe.waitForExit(), 0, reason: await probe.errors);
-  },
-      skip: Platform.isWindows
-          ? 'Windows leaves the exited isolate reader paused.'
-          : false);
+  });
 
   test('concurrent default programs both receive input and exit', () async {
     final probe = await _ProbeProcess.start('concurrent');
@@ -108,10 +92,10 @@ final class _ProbeProcess {
     return _ProbeProcess(process);
   }
 
-  Future<void> readUntil(String marker) async {
+  Future<String> readUntil(String marker) async {
     try {
       while (await lines.moveNext().timeout(const Duration(seconds: 12))) {
-        if (lines.current.contains(marker)) return;
+        if (lines.current.contains(marker)) return lines.current;
       }
     } on TimeoutException {
       process.kill(ProcessSignal.sigkill);
