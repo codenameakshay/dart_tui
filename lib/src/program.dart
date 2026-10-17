@@ -828,6 +828,13 @@ final class Program {
               });
             }
           },
+          onError: (Object error, StackTrace stackTrace) {
+            if (!_disableCatchPanics) {
+              stderr.writeln('Caught input exception: $error');
+              stderr.writeln(stackTrace);
+            }
+            enqueue(InterruptMsg());
+          },
           cancelOnError: true,
         );
       }

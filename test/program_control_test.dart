@@ -172,6 +172,15 @@ void main() {
     expect(log, isNot(contains('stale')));
   });
 
+  test('input errors quit cleanly and restore the renderer', () async {
+    final sink = _StringSink();
+    final input = Stream<List<int>>.error(const StdinException('input failed'));
+    await Program(options: [withOutput(sink), withInput(input)])
+        .run(_IdleModel(Completer<void>()))
+        .timeout(const Duration(seconds: 1));
+    expect(sink.buf.toString(), contains('\x1b[?25h'));
+  });
+
   test('leaving the alt screen does not print a blank line', () async {
     Future<String> runWith(List<ProgramOption> options) async {
       final sink = _StringSink();
