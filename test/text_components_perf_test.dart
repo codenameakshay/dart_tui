@@ -40,7 +40,7 @@ void main() {
 
   test('canvas preserves the final style across adjacent escape codes', () {
     final canvas = Canvas(1, 1);
-    canvas.paint(0, 0, '\x1b[31m' * 1000 + 'x');
+    canvas.paint(0, 0, '${'\x1b[31m' * 1000}x');
     expect(stripAnsi(canvas.render()), 'x');
   });
 }

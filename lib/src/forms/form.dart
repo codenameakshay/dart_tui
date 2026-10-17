@@ -17,11 +17,7 @@ final class Group {
 
 /// An immutable, key-based, huh-style form.
 final class Form extends Model implements OutcomeModel<FormValues> {
-  Form(this.groups, {this.styles = FormStyles.defaults})
-      : groupIndex = 0,
-        fieldIndex = 0,
-        submitted = false,
-        cancelled = false {
+  factory Form(List<Group> groups, {FormStyles styles = FormStyles.defaults}) {
     final keys = <String>{};
     if (groups.isEmpty) {
       throw ArgumentError('a Form needs at least one group');
@@ -37,6 +33,9 @@ final class Form extends Model implements OutcomeModel<FormValues> {
         }
       }
     }
+    return Form._(groups, styles, 0, 0, false, false)
+        ._recompute()
+        ._normalizeFocus();
   }
 
   Form._(this.groups, this.styles, this.groupIndex, this.fieldIndex,
@@ -155,6 +154,36 @@ final class Form extends Model implements OutcomeModel<FormValues> {
     return _withGroups(next);
   }
 
+  // Refresh dynamic options/selection against the current raw values. Groups
+  // whose fields are unchanged are kept as-is, so a static form still observes
+  // mutations of the caller-owned field lists. Later fields see selections
+  // normalized from earlier fields in declaration order.
+  Form _recompute() {
+    final rv = Map<String, Object?>.of(_rawValues.toMap());
+    var changed = false;
+    final next = <Group>[];
+    for (final g in groups) {
+      List<FormField>? updatedFields;
+      for (var i = 0; i < g.fields.length; i++) {
+        final field = (updatedFields ?? g.fields)[i];
+        final updated = field.recompute(FormValues(rv));
+        if (!identical(updated, field)) {
+          updatedFields ??= List<FormField>.of(g.fields);
+          updatedFields[i] = updated;
+        }
+        final key = updated.key;
+        if (key != null) rv[key] = updated.value;
+      }
+      if (updatedFields == null) {
+        next.add(g);
+      } else {
+        changed = true;
+        next.add(Group(updatedFields, title: g.title, hidden: g.hidden));
+      }
+    }
+    return changed ? _withGroups(next) : this;
+  }
+
   Form _normalizeFocus() {
     final values = _rawValues;
     final active = groups[groupIndex].fields[fieldIndex];
@@ -256,22 +285,24 @@ final class Form extends Model implements OutcomeModel<FormValues> {
 
   @override
   (Model, Cmd?) update(Msg msg) {
-    if (msg is! KeyMsg) return (_broadcast(msg), null);
+    // Pastes are input: they go to the active field only, like keys.
+    if (msg is! KeyMsg && msg is! PasteMsg) return (_broadcast(msg), null);
     final current = _normalizeFocus();
     final active =
         current.groups[current.groupIndex].fields[current.fieldIndex];
-    final multiline = active.isMultiline;
-    switch (msg.key) {
-      case 'esc':
-      case 'ctrl+c':
-        return (current._copy(cancelled: true), null);
-      case 'ctrl+d':
-      case 'tab':
-        return _advance();
-      case 'shift+tab':
-        return current._back();
-      case 'enter':
-        if (!multiline) return _advance();
+    if (msg is KeyMsg) {
+      switch (msg.key) {
+        case 'esc':
+        case 'ctrl+c':
+          return (current._copy(cancelled: true), null);
+        case 'ctrl+d':
+        case 'tab':
+          return _advance();
+        case 'shift+tab':
+          return current._back();
+        case 'enter':
+          if (!active.isMultiline) return _advance();
+      }
     }
     // delegate to the active field's editor, then recompute dynamics
     final values = current._rawValues;
@@ -283,7 +314,7 @@ final class Form extends Model implements OutcomeModel<FormValues> {
     final g0 = current.groups[current.groupIndex];
     final edited = [...g0.fields];
     edited[current.fieldIndex] = active.updateEditor(msg);
-    var nf = current._withGroups([
+    final nf = current._withGroups([
       for (var i = 0; i < current.groups.length; i++)
         if (i == current.groupIndex)
           Group(edited, title: g0.title, hidden: g0.hidden)
@@ -291,15 +322,7 @@ final class Form extends Model implements OutcomeModel<FormValues> {
           current.groups[i],
     ]);
 
-    // recompute dynamic options/selection against the new raw values
-    final rv = nf._rawValues;
-    nf = nf._withGroups([
-      for (final g in nf.groups)
-        Group([for (final f in g.fields) f.recompute(rv)],
-            title: g.title, hidden: g.hidden),
-    ]);
-
-    return (nf._normalizeFocus(), null);
+    return (nf._recompute()._normalizeFocus(), null);
   }
 
   @override

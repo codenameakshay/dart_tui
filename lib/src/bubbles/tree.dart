@@ -290,14 +290,15 @@ final class TreeModel extends Model {
 
   @override
   (Model, Cmd?) update(Msg msg) {
-    if (msg is MouseClickMsg) {
-      switch (msg.mouse.button) {
+    if (msg is MouseClickMsg || msg is MouseWheelMsg) {
+      final mouse = (msg as MouseMsg).mouse;
+      switch (mouse.button) {
         case MouseButton.wheelUp:
           return (_moveCursor(-1), null);
         case MouseButton.wheelDown:
           return (_moveCursor(1), null);
         case MouseButton.left:
-          final relY = msg.mouse.y - viewOffsetY;
+          final relY = mouse.y - viewOffsetY;
           final idx = scrollOffset + relY;
           if (idx >= 0 && idx < _flat.length) {
             final moved = _copyWith(
@@ -360,9 +361,12 @@ final class TreeModel extends Model {
       // Expand/collapse icon (only for non-leaf nodes)
       String icon = '';
       if (!node.isLeaf) {
-        icon = node.isExpanded
-            ? '${styles.expandedIcon.render('▾')} '
-            : '${styles.collapsedIcon.render('▸')} ';
+        // Selected rows draw the glyph inside the selected style so the
+        // highlight is not reset or overpainted mid-row.
+        final glyph = node.isExpanded ? '▾' : '▸';
+        final iconStyle =
+            node.isExpanded ? styles.expandedIcon : styles.collapsedIcon;
+        icon = '${isSelected ? glyph : iconStyle.render(glyph)} ';
       }
 
       // Label

@@ -190,7 +190,7 @@ final class TextInputModel extends Model {
   }
 
   List<String> get _graphemes =>
-      _graphemesCache ??= List<String>.unmodifiable(value.characters);
+      _graphemesCache ??= value.characters.toList(growable: false);
 
   List<String> get matchedSuggestions =>
       _matchedSuggestionsCache ??= List<String>.unmodifiable(() {
@@ -211,11 +211,11 @@ final class TextInputModel extends Model {
       : matchedSuggestions[currentSuggestionIndex];
 
   /// Cursor position as a grapheme index. Cell width is resolved by [view].
-  int get cursorColumn => cursorPos.clamp(0, value.characters.length);
+  int get cursorColumn => cursorPos.clamp(0, _graphemes.length);
 
   TextInputModel moveToStart() => copyWith(cursorPos: 0);
 
-  TextInputModel moveToEnd() => copyWith(cursorPos: value.characters.length);
+  TextInputModel moveToEnd() => copyWith(cursorPos: _graphemes.length);
 
   TextInputModel nextSuggestion() {
     if (matchedSuggestions.isEmpty) return this;
@@ -231,8 +231,90 @@ final class TextInputModel extends Model {
     );
   }
 
+  /// Inserts [text] at the cursor. Its scalars can merge into neighbouring
+  /// graphemes (combining marks, ZWJ sequences), so the new value and cursor
+  /// come from the joined string instead of counting inserted graphemes.
+  TextInputModel _insert(String text) {
+    final chars = _graphemes;
+    final at = cursorColumn;
+    final completesLeftSurrogatePair = at > 0 &&
+        chars[at - 1].codeUnitAt(chars[at - 1].length - 1) >= 0xD800 &&
+        chars[at - 1].codeUnitAt(chars[at - 1].length - 1) <= 0xDBFF &&
+        text.codeUnitAt(0) >= 0xDC00 &&
+        text.codeUnitAt(0) <= 0xDFFF;
+    final completesRightSurrogatePair = at < chars.length &&
+        text.codeUnitAt(text.length - 1) >= 0xD800 &&
+        text.codeUnitAt(text.length - 1) <= 0xDBFF &&
+        chars[at].codeUnitAt(0) >= 0xDC00 &&
+        chars[at].codeUnitAt(0) <= 0xDFFF;
+    if (completesLeftSurrogatePair || completesRightSurrogatePair) {
+      final prefix = '${chars.take(at).join()}$text';
+      final next = '$prefix${chars.skip(at).join()}';
+      final nextChars = next.characters.toList(growable: false);
+      if (charLimit > 0 && nextChars.length > charLimit) return this;
+      final cursorPrefix = completesRightSurrogatePair
+          ? '$prefix${chars[at].substring(0, 1)}'
+          : prefix;
+      return copyWith(value: next, cursorPos: cursorPrefix.characters.length)
+        .._graphemesCache = nextChars;
+    }
+    // Text only merges into the grapheme before it, and appending never moves
+    // earlier boundaries, so the cursor comes from re-segmenting just that
+    // grapheme plus the text. At the end of the value the grapheme list is
+    // reused too, which keeps typing and unbracketed pastes from re-segmenting
+    // the whole value per key.
+    final before = at == 0 ? 0 : at - 1;
+    final joined = '${at == 0 ? '' : chars[before]}$text'.characters;
+    final String next;
+    final List<String> nextChars;
+    if (at == chars.length) {
+      next = '$value$text';
+      final tail = joined.toList();
+      nextChars = List<String>.filled(before + tail.length, '')
+        ..setRange(0, before, chars)
+        ..setRange(before, before + tail.length, tail);
+    } else {
+      // Mid-value text can also join the following grapheme.
+      next = '${chars.take(at).join()}$text${chars.skip(at).join()}';
+      nextChars = next.characters.toList(growable: false);
+    }
+    if (charLimit > 0 && nextChars.length > charLimit) return this;
+    return copyWith(value: next, cursorPos: before + joined.length)
+      .._graphemesCache = nextChars;
+  }
+
+  /// Bracketed paste: newlines and tabs become one space each, other control
+  /// characters are dropped, and the text is cut to fit [charLimit].
+  TextInputModel _paste(String content) {
+    final text = content
+        .replaceAll(_pasteWhitespace, ' ')
+        .replaceAll(_pasteControls, '');
+    if (text.isEmpty) return this;
+    final whole = _insert(text);
+    if (!identical(whole, this)) return whole;
+    final graphemes = text.characters;
+    final available = charLimit - _graphemes.length;
+    var count = graphemes.length;
+    // The paste can merge at either cursor edge; a leading ZWJ can also
+    // resegment the first pasted boundary cluster after joining the left edge.
+    final maximumFittingPrefix = available + 3;
+    if (count > maximumFittingPrefix) count = maximumFittingPrefix;
+    if (count == graphemes.length) count--;
+    while (count > 0) {
+      final inserted = _insert(graphemes.take(count).join());
+      if (!identical(inserted, this)) return inserted;
+      if (count <= available) break;
+      count--;
+    }
+    return this;
+  }
+
+  static final _pasteWhitespace = RegExp(r'\r\n|[\r\n\t]');
+  static final _pasteControls = RegExp(r'[\x00-\x1f\x7f-\x9f]');
+
   @override
   (Model, Cmd?) update(Msg msg) {
+    if (msg is PasteMsg) return (focused ? _paste(msg.content) : this, null);
     if (msg is! KeyMsg) return (this, null);
     final chars = _graphemes;
     switch (msg.key) {
@@ -321,19 +403,7 @@ final class TextInputModel extends Model {
         if (ke.code == KeyCode.rune &&
             ke.text.isNotEmpty &&
             ke.modifiers.isEmpty) {
-          final inserted = ke.text.characters.toList();
-          if (charLimit > 0 && chars.length + inserted.length > charLimit) {
-            return (this, null);
-          }
-          final nextChars = List<String>.from(chars)
-            ..insertAll(cursorPos, inserted);
-          return (
-            copyWith(
-              value: nextChars.join(),
-              cursorPos: cursorPos + inserted.length,
-            ),
-            null
-          );
+          return (_insert(ke.text), null);
         }
         return (this, null);
     }

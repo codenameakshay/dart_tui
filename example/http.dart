@@ -39,6 +39,7 @@ final class HttpModel extends Model {
           client.connectionTimeout = const Duration(seconds: 10);
           final request = await client.getUrl(Uri.parse('http://example.com'));
           final response = await request.close();
+          await response.drain<void>();
           client.close();
           return _StatusMsg(response.statusCode);
         } catch (e) {

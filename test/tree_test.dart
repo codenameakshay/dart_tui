@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:dart_tui/dart_tui.dart';
+import 'package:dart_tui/src/input_decoder.dart';
 import 'package:test/test.dart';
 
 /// Helper: create a [KeyPressMsg] for a single character key.
@@ -223,5 +226,40 @@ void main() {
       final (collapsed, _) = model.update(_special(KeyCode.enter));
       expect((collapsed as TreeModel).view().content, contains('▸'));
     });
+  });
+
+  test('decoded wheel events scroll the cursor', () {
+    const root = TreeNode(label: 'r', isExpanded: true, children: [
+      TreeNode(label: 'a'),
+      TreeNode(label: 'b'),
+    ]);
+    final m = TreeModel(root: root, height: 20);
+    final down =
+        TerminalInputDecoder().feed(utf8.encode('\x1b[<65;5;6M')).single;
+    final up = TerminalInputDecoder().feed(utf8.encode('\x1b[<64;5;6M')).single;
+    final (a, _) = m.update(down);
+    expect((a as TreeModel).cursor, 1);
+    final (b, _) = a.update(up);
+    expect((b as TreeModel).cursor, 0);
+  });
+
+  test('selected branch keeps its highlight and shows the icon', () {
+    final out = TreeModel(
+      root: const TreeNode(
+        label: 'Languages',
+        isExpanded: true,
+        children: [TreeNode(label: 'Dart')],
+      ),
+      height: 5,
+    ).view().content.split('\n').first;
+    final label = out.indexOf('Languages');
+    final selectedStart = out.indexOf('\x1b[1m');
+    expect(selectedStart, greaterThanOrEqualTo(0));
+    expect(out.substring(selectedStart, label), isNot(contains('\x1b[0m')));
+    // Icon glyph must not be drawn mauve-on-mauve.
+    final icon = out.substring(0, out.indexOf('▾'));
+    final fg = RegExp(r'\x1b\[38;2;([\d;]+)m').allMatches(icon).last.group(1);
+    final bg = RegExp(r'\x1b\[48;2;([\d;]+)m').allMatches(icon).lastOrNull;
+    expect(bg?.group(1), isNot(fg));
   });
 }

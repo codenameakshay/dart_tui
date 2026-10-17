@@ -16,15 +16,77 @@ Future<void> main(List<String> arguments) async {
   }
 
   final scenario = arguments.single;
+  if (scenario == 'default-chain') {
+    // Sequential programs share the implicit process stdin.
+    for (final step in ['chain-one', 'chain-two']) {
+      await Program(options: [withAltScreen(), withHideCursor()])
+          .run(_ProbeModel(step));
+    }
+    stdout.writeln('CHAIN_DONE');
+    return;
+  }
+  if (scenario == 'default-exec-chain') {
+    final program = Program(options: [withAltScreen(), withHideCursor()]);
+    await program.run(_ProbeModel(scenario));
+    stdout.writeln('EXEC_FIRST_DONE');
+    await stdout.flush();
+    // Leave a deterministic cooked-mode observation window before the next
+    // Program enters raw mode.
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    await Program(options: [withAltScreen(), withHideCursor()])
+        .run(const _ProbeModel('exec-followup'));
+    return;
+  }
+  if (scenario == 'default-exec-concurrent') {
+    // Another program reading stdin must not take input from an exec child.
+    await Future.wait([
+      Program(options: [withAltScreen(), withHideCursor()])
+          .run(const _ProbeModel('default-exec')),
+      Program(options: [withoutRenderer()])
+          .run(const _ProbeModel('exec-bystander')),
+    ]);
+    stdout.writeln('CONCURRENT_EXEC_DONE');
+    return;
+  }
+  if (scenario == 'explicit-exec') {
+    await Program(options: [
+      withInput(stdin),
+      withAltScreen(),
+      withHideCursor(),
+    ]).run(const _ProbeModel('explicit-exec'));
+    return;
+  }
+  if (scenario == 'restart-suspend') {
+    late final Program program;
+    program = Program(options: [
+      withAltScreen(),
+      withHideCursor(),
+      withFilter((_, msg) {
+        if (msg is SuspendMsg) {
+          scheduleMicrotask(() {
+            program.kill();
+            unawaited(program.run(_RestartReadyModel()));
+          });
+        }
+        return msg;
+      }),
+    ]);
+    await program.run(const _ProbeModel('suspend'));
+    return;
+  }
+  // `default-*` scenarios read the implicit process stdin with the default
+  // signal handling, like a real application.
+  final usesDefaults = scenario.startsWith('default-');
   late final Program program;
   final options = <ProgramOption>[
     if ({'stdin-quit', 'stdin-ctrl-c'}.contains(scenario))
       withInput(stdin)
-    else
+    else if (!usesDefaults)
       withInput(null),
     withAltScreen(),
     withHideCursor(),
-    if (!{'resize', 'stdin-ctrl-c'}.contains(scenario)) withoutSignalHandler(),
+    if (!usesDefaults && !{'resize', 'stdin-ctrl-c'}.contains(scenario))
+      withoutSignalHandler(),
     if (scenario == 'cancel')
       withContext(
           () => Future<void>.delayed(const Duration(milliseconds: 250))),
@@ -46,6 +108,18 @@ const _scenarios = {
   'suspend',
   'stdin-quit',
   'stdin-ctrl-c',
+  'default-quit',
+  'default-chain',
+  'default-keys',
+  'default-suspend',
+  'default-term',
+  'default-exec',
+  'default-exec-chain',
+  'default-exec-concurrent',
+  'default-init-exec',
+  'default-init-exec-reads',
+  'explicit-exec',
+  'restart-suspend',
 };
 
 final class _ProbeModel implements Model {
@@ -56,6 +130,31 @@ final class _ProbeModel implements Model {
 
   @override
   Cmd? init() {
+    if (scenario == 'default-init-exec-reads') {
+      // The child reads its input in cbreak mode, as an editor would, and
+      // reports what it got: replies to the startup queries must not be there.
+      return execProcess(
+        'python3',
+        [
+          '-c',
+          'import os, select, termios, tty\n'
+              'old = termios.tcgetattr(0)\n'
+              'tty.setcbreak(0, termios.TCSANOW)\n'
+              'ready, _, _ = select.select([0], [], [], 0.5)\n'
+              'data = os.read(0, 256) if ready else b""\n'
+              'termios.tcsetattr(0, termios.TCSADRAIN, old)\n'
+              'print("CHILD_GOT:" + data.hex(), flush=True)\n',
+        ],
+        onExit: (_) => quit(),
+      );
+    }
+    if (scenario == 'default-init-exec') {
+      return execProcess(
+        '/bin/sh',
+        ['-c', r'printf "INIT_EXEC_CHILD\n"'],
+        onExit: (_) => quit(),
+      );
+    }
     if (scenario != 'suspend') return null;
     return () async {
       await Future<void>.delayed(const Duration(milliseconds: 150));
@@ -69,6 +168,52 @@ final class _ProbeModel implements Model {
         msg is KeyMsg &&
         (msg.key == 'q' || msg.key == 'ctrl+c')) {
       return (this, () => quit());
+    }
+    if ((scenario == 'default-quit' ||
+            scenario == 'explicit-exec' ||
+            scenario == 'exec-followup' ||
+            scenario.startsWith('chain-')) &&
+        msg is KeyMsg &&
+        msg.key == 'q') {
+      return (this, () => quit());
+    }
+    if (scenario == 'default-keys' &&
+        msg is KeyMsg &&
+        (msg.key == 'ctrl+z' || msg.key == 'ctrl+c')) {
+      return (
+        _ProbeModel(scenario, 'KEY:${msg.key}'),
+        msg.key == 'ctrl+c' ? _delayedQuit() : null,
+      );
+    }
+    if (scenario == 'exec-bystander' && msg is KeyMsg && msg.key == 'q') {
+      return (this, () => quit());
+    }
+    if (scenario == 'default-suspend' && msg is KeyMsg) {
+      if (msg.key == 'ctrl+z') return (this, suspend);
+      if (msg.key == 'q') return (this, () => quit());
+    }
+    if ((scenario == 'default-exec' ||
+            scenario == 'default-exec-chain' ||
+            scenario == 'explicit-exec') &&
+        msg is KeyMsg) {
+      if (msg.key == 'q') return (this, () => quit());
+      if (msg.key == 'x') {
+        return (
+          this,
+          execProcess(
+            '/bin/sh',
+            ['-c', r'read line; echo "CHILD:$line"'],
+            onExit: (code) => _ExecDoneMsg(code),
+          ),
+        );
+      }
+    }
+    if (msg is _ExecDoneMsg) {
+      if (scenario == 'explicit-exec') stdout.writeln('EXPLICIT_EXEC_DONE');
+      return (_ProbeModel(scenario, 'EXEC_DONE:${msg.code}'), null);
+    }
+    if (scenario == 'default-suspend' && msg is ResumeMsg) {
+      return (_ProbeModel(scenario, 'RESUMED'), null);
     }
     if (scenario == 'resize' &&
         msg is WindowSizeMsg &&
@@ -95,10 +240,43 @@ final class _ProbeModel implements Model {
               'suspend' => 'SUSPEND_READY',
               'stdin-quit' => 'STDIN_QUIT_READY',
               'stdin-ctrl-c' => 'STDIN_CTRL_C_READY',
+              'default-quit' => 'DEFAULT_QUIT_READY',
+              'chain-one' => 'CHAIN_ONE_READY',
+              'chain-two' => 'CHAIN_TWO_READY',
+              'default-keys' => 'DEFAULT_KEYS_READY',
+              'default-suspend' => 'DEFAULT_SUSPEND_READY',
+              'default-term' => 'DEFAULT_TERM_READY',
+              'default-exec' => 'DEFAULT_EXEC_READY',
+              'default-exec-chain' => 'DEFAULT_EXEC_READY',
+              'exec-bystander' => 'BYSTANDER',
+              'default-init-exec' => 'DEFAULT_INIT_EXEC_READY',
+              'default-init-exec-reads' => 'DEFAULT_INIT_EXEC_READY',
+              'explicit-exec' => 'EXPLICIT_EXEC_READY',
+              'exec-followup' => 'EXEC_FOLLOWUP_READY',
               _ => throw StateError('unsupported probe scenario: $scenario'),
             },
         altScreen: true,
       );
+}
+
+final class _ExecDoneMsg extends Msg {
+  _ExecDoneMsg(this.code);
+  final int code;
+}
+
+final class _RestartReadyModel extends Model {
+  @override
+  Cmd? init() => () {
+        stdout.writeln('SECOND_RUN_READY');
+        return null;
+      };
+
+  @override
+  (Model, Cmd?) update(Msg msg) =>
+      msg is KeyMsg && msg.key == 'q' ? (this, () => quit()) : (this, null);
+
+  @override
+  View view() => newView('Second run ready. Press q.');
 }
 
 Cmd _delayedQuit() => () async {

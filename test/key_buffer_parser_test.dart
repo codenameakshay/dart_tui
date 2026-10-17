@@ -126,4 +126,64 @@ void main() {
     final k = parseKeyFromBuffer(b)!;
     expect(k.code, KeyCode.delete);
   });
+
+  test('parseKeyFromBuffer maps ESC-prefixed runes to alt keys', () {
+    // Option-as-Meta / Esc+ terminals send Alt+key as ESC followed by the key.
+    final input = [0x1b, 0x61, 0x1b, 0x58, 0x1b, ...utf8.encode('é')];
+    final keys = <String>[];
+    while (input.isNotEmpty) {
+      keys.add(KeyPressMsg(parseKeyFromBuffer(input)!).key);
+    }
+    expect(keys, ['alt+a', 'alt+X', 'alt+é']);
+  });
+
+  test('parseKeyFromBuffer waits for a fragmented alt scalar', () {
+    final input = [0x1b, 0xc3];
+    expect(parseKeyFromBuffer(input), isNull);
+    input.add(0xa9);
+    expect(KeyPressMsg(parseKeyFromBuffer(input)!).key, 'alt+é');
+  });
+
+  test('parseKeyFromBuffer maps ESC-prefixed control keys to alt keys', () {
+    for (final (bytes, key) in [
+      ([0x1b, 0x0d], 'alt+enter'),
+      ([0x1b, 0x09], 'alt+tab'),
+      ([0x1b, 0x01], 'ctrl+alt+a'),
+    ]) {
+      expect(KeyPressMsg(parseKeyFromBuffer(bytes)!).key, key);
+    }
+  });
+
+  test('parseKeyFromBuffer names the remaining control bytes', () {
+    for (final (bytes, key) in [
+      ([0x00], 'ctrl+space'),
+      ([0x1c], 'ctrl+\\'),
+      ([0x1d], 'ctrl+]'),
+      ([0x1e], 'ctrl+^'),
+      ([0x1f], 'ctrl+_'),
+    ]) {
+      expect(KeyPressMsg(parseKeyFromBuffer(bytes)!).key, key);
+    }
+  });
+
+  test('parseKeyFromBuffer parses SS3 arrow keys', () {
+    for (final (final2, key) in [
+      (0x41, 'up'),
+      (0x42, 'down'),
+      (0x43, 'right'),
+      (0x44, 'left'),
+    ]) {
+      expect(KeyPressMsg(parseKeyFromBuffer([0x1b, 0x4f, final2])!).key, key);
+    }
+  });
+
+  test('parseKeyFromBuffer keeps legacy alt word-motion sequences', () {
+    for (final (bytes, key) in [
+      ([0x1b, 0x62], 'alt+left'),
+      ([0x1b, 0x66], 'alt+right'),
+      ([0x1b, 0x7f], 'alt+backspace'),
+    ]) {
+      expect(KeyPressMsg(parseKeyFromBuffer(bytes)!).key, key);
+    }
+  });
 }

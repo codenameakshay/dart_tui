@@ -63,8 +63,8 @@ final class TextInputsModel extends Model {
 
   @override
   (Model, Cmd?) update(Msg msg) {
-    if (msg is! KeyMsg) return (this, null);
-    switch (msg.key) {
+    if (msg is! KeyMsg && msg is! PasteMsg) return (this, null);
+    switch (msg is KeyMsg ? msg.key : null) {
       case 'ctrl+c':
         return (this, () => quit());
       case 'tab':

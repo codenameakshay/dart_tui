@@ -1,5 +1,8 @@
 // Tests for ListModel with fuzzy filtering.
+import 'dart:convert';
+
 import 'package:dart_tui/dart_tui.dart';
+import 'package:dart_tui/src/input_decoder.dart';
 import 'package:test/test.dart';
 
 // Helper to create a KeyMsg from a key string.
@@ -182,6 +185,62 @@ void main() {
       expect((next as ListModel).filter, equals(''));
     });
 
+    group('moves through matches while typing', () {
+      KeyMsg ctrl(String c) => KeyPressMsg(
+          TeaKey(code: KeyCode.rune, text: c, modifiers: {KeyMod.ctrl}));
+      ListModel send(ListModel m, KeyMsg k) => m.update(k).$1 as ListModel;
+      // 'a' matches Apple, Banana and Date.
+      ListModel typing() =>
+          ListModel(items: items, filter: 'a', filterMode: true);
+
+      test('down / ctrl+n select later matches and stay in filter mode', () {
+        final matches = typing().filteredItems;
+        expect(matches.length, greaterThanOrEqualTo(3));
+        for (final down in [_namedKey('down'), ctrl('n')]) {
+          var m = typing();
+          m = send(m, down);
+          expect(m.selected, same(matches[1]));
+          m = send(m, down);
+          expect(m.selected, same(matches[2]));
+          expect(m.filter, 'a');
+          expect(m.filterMode, isTrue);
+        }
+      });
+
+      test('up / ctrl+p move back and stop at the first match', () {
+        final matches = typing().filteredItems;
+        for (final up in [_namedKey('up'), ctrl('p')]) {
+          var m = send(send(typing(), _namedKey('down')), _namedKey('down'));
+          m = send(m, up);
+          expect(m.selected, same(matches[1]));
+          m = send(send(m, up), up);
+          expect(m.selected, same(matches[0]));
+          expect(m.filter, 'a');
+          expect(m.filterMode, isTrue);
+        }
+      });
+
+      test('down stops at the last match', () {
+        final matches = typing().filteredItems;
+        var m = typing();
+        for (var i = 0; i < matches.length + 2; i++) {
+          m = send(m, _namedKey('down'));
+        }
+        expect(m.selected, same(matches.last));
+      });
+
+      test('j and k are still typed into the filter', () {
+        final m = send(send(typing(), _key('j')), _key('k'));
+        expect(m.filter, 'ajk');
+        expect(m.filterMode, isTrue);
+      });
+
+      test('typing resets the cursor to the first match', () {
+        final m = send(send(typing(), _namedKey('down')), _key('p'));
+        expect(m.cursor, 0);
+      });
+    });
+
     test('filter resets cursor to 0', () {
       final m = ListModel(items: items, cursor: 3, filterMode: true);
       final (next, _) = m.update(_key('a'));
@@ -256,5 +315,16 @@ void main() {
       final m = ListModel(items: items, title: 'My List');
       expect(m.view().content, contains('My List'));
     });
+  });
+
+  test('decoded wheel events scroll the cursor', () {
+    final m = ListModel(items: items);
+    final down =
+        TerminalInputDecoder().feed(utf8.encode('\x1b[<65;5;6M')).single;
+    final up = TerminalInputDecoder().feed(utf8.encode('\x1b[<64;5;6M')).single;
+    final (a, _) = m.update(down);
+    expect((a as ListModel).cursor, 1);
+    final (b, _) = a.update(up);
+    expect((b as ListModel).cursor, 0);
   });
 }

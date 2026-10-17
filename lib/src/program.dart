@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'cmd.dart';
 import 'input_decoder.dart';
 import 'model.dart';
 import 'msg.dart';
+import 'posix_terminal.dart';
 import 'printf_format.dart';
 import 'renderer.dart';
 import 'terminal_control.dart';
@@ -15,10 +17,273 @@ import 'windows_terminal.dart';
 
 typedef ProgramOption = void Function(Program program);
 
-Stream<List<int>>? _stdinBroadcastCache;
+final _SharedStdin _sharedStdin = _SharedStdin();
+final Object _commandZoneOwnerKey = Object();
 
-Stream<List<int>> _stdinBroadcast() {
-  return _stdinBroadcastCache ??= stdin.asBroadcastStream();
+/// Process stdin shared by every [Program] in the main isolate that does not
+/// pass [withInput].
+///
+/// A helper isolate owns the stdin subscription and forwards bytes here. The
+/// receiving port keeps this isolate alive only while a program is reading, so
+/// `main` can return after the last program instead of hanging on stdin
+/// (issue #15). Between programs the reader is paused, so input stays in the
+/// terminal for the next program or for a child process. On macOS a paused
+/// reader can close fd 0 once an inherited child has used the terminal, so
+/// before such a child starts the helper is cancelled and fd 0 restored.
+final class _SharedStdin {
+  final Set<StreamController<List<int>>> _readers = {};
+  RawReceivePort? _port;
+  SendPort? _control;
+  bool _reading = false;
+  bool _closed = false;
+  final Map<int, Completer<void>> _settling = {};
+  int _settleId = 0;
+  Completer<void>? _controlReady;
+  Completer<void>? _readingStarted;
+  Completer<void>? _execCancelAck;
+  int _execCancelToken = 0;
+  int _execUsers = 0;
+  Completer<void>? _execSetup;
+  bool _pinHelperAlive = false;
+  bool _stdinExecResetting = false;
+
+  Stream<List<int>> claim() {
+    if (_closed) return const Stream<List<int>>.empty();
+    late final StreamController<List<int>> reader;
+    reader = StreamController<List<int>>(
+      onListen: () {
+        _readers.add(reader);
+        _sync();
+      },
+      onPause: _sync,
+      onResume: _sync,
+      onCancel: () {
+        _readers.remove(reader);
+        _sync();
+      },
+    );
+    return reader.stream;
+  }
+
+  void _sync() {
+    if (_closed) return;
+    // An inherited exec owns the terminal, even if another program reads.
+    final wanted =
+        _execUsers == 0 && _readers.any((reader) => !reader.isPaused);
+    var port = _port;
+    if (port == null) {
+      // During an inherited exec fd 0 belongs to the child: do not start a
+      // new reader until the exec ends and fd 0 has been restored.
+      if (_stdinExecResetting || _execUsers > 0 || !wanted) return;
+      port = _port = _spawn();
+    }
+    port.keepIsolateAlive = wanted ||
+        _settling.isNotEmpty ||
+        _pinHelperAlive ||
+        _execCancelAck != null;
+    final control = _control;
+    if (control != null && wanted != _reading) {
+      _reading = wanted;
+      control.send(wanted);
+      if (wanted) {
+        _readingStarted?.complete();
+        _readingStarted = null;
+      }
+    }
+  }
+
+  /// Completes once the reader has been told to read (or stdin has closed).
+  Future<void> get reading {
+    if (_reading || _closed) return Future<void>.value();
+    return (_readingStarted ??= Completer<void>()).future;
+  }
+
+  /// Completes once the helper has applied every earlier pause or resume, so
+  /// while paused it reads nothing that a child process should get.
+  Future<void> settle() {
+    final control = _control;
+    if (control == null || _closed) return Future<void>.value();
+    final settled = Completer<void>();
+    _settling[++_settleId] = settled;
+    _sync();
+    control.send(('settle', _settleId));
+    return settled.future;
+  }
+
+  /// Stops the stdin reader before a child inherits the terminal: on macOS by
+  /// detaching it, elsewhere by pausing it. Pair every call with
+  /// [endInheritedExec].
+  Future<void> beginInheritedExec() async {
+    // Count before the first await, so a concurrent program cannot start or
+    // resume a reader while another program's child owns fd 0.
+    _execUsers++;
+    _sync();
+    if (!Platform.isMacOS || !stdin.hasTerminal) {
+      return settle();
+    }
+    final setup = _execSetup;
+    if (setup != null) return setup.future;
+    final firstSetup = Completer<void>();
+    _execSetup = firstSetup;
+    try {
+      await _prepareForInheritedExec();
+      firstSetup.complete();
+    } catch (error, stackTrace) {
+      firstSetup.completeError(error, stackTrace);
+    }
+    return firstSetup.future;
+  }
+
+  void endInheritedExec() {
+    _execUsers--;
+    if (_execUsers == 0) {
+      _execSetup = null;
+      _sync();
+    }
+  }
+
+  Future<void> _prepareForInheritedExec() async {
+    if (!stdin.hasTerminal || _closed) return;
+    var control = _control;
+    if (control == null) {
+      final ready = _controlReady;
+      if (ready == null) return; // no reader was ever started
+      _pinHelperAlive = true;
+      _port?.keepIsolateAlive = true;
+      try {
+        await ready.future.timeout(const Duration(seconds: 2));
+      } on TimeoutException {
+        _pinHelperAlive = false;
+        _sync();
+        throw StateError('stdin reader did not start before exec');
+      }
+      control = _control;
+    }
+    if (control == null) {
+      _pinHelperAlive = false;
+      _sync();
+      return;
+    }
+    // Cancelling the reader closes fd 0, so keep a copy to restore.
+    final backup = preserveStdin();
+    if (backup == null) {
+      _pinHelperAlive = false;
+      _sync();
+      throw StateError('could not preserve stdin before exec');
+    }
+    final token = ++_execCancelToken;
+    final ack = Completer<void>();
+    _execCancelAck = ack;
+    _pinHelperAlive = false;
+    _stdinExecResetting = true;
+    _port?.keepIsolateAlive = true;
+    try {
+      control.send(('cancel-for-exec', token));
+      try {
+        await ack.future.timeout(const Duration(seconds: 2));
+      } on TimeoutException {
+        throw StateError('stdin reader did not stop before exec');
+      }
+    } finally {
+      if (identical(_execCancelAck, ack)) _execCancelAck = null;
+      _port?.close();
+      _port = null;
+      _control = null;
+      _controlReady = null;
+      _reading = false;
+      try {
+        if (!await restoreStdin(backup)) {
+          throw StateError('could not restore stdin before exec');
+        }
+      } finally {
+        _stdinExecResetting = false;
+        _sync();
+      }
+    }
+  }
+
+  RawReceivePort _spawn() {
+    final port = RawReceivePort(_onMessage, 'dart_tui stdin');
+    _controlReady = Completer<void>();
+    unawaited(Isolate.spawn(_readStdin, port.sendPort));
+    return port;
+  }
+
+  void _onMessage(Object? message) {
+    switch (message) {
+      case SendPort():
+        _control = message;
+        final ready = _controlReady;
+        if (ready != null && !ready.isCompleted) ready.complete();
+        _sync();
+      case ('settled', final int id):
+        _settling.remove(id)?.complete();
+        _sync();
+      case ('exec-cancelled', final int token):
+        final ack = _execCancelAck;
+        if (token == _execCancelToken && ack != null && !ack.isCompleted) {
+          ack.complete();
+        }
+      case ('exec-cancel-failed', final int token, final String error):
+        final ack = _execCancelAck;
+        if (token == _execCancelToken && ack != null && !ack.isCompleted) {
+          ack.completeError(StateError('stdin reader cancel failed: $error'));
+        }
+      case List<int>():
+        for (final reader in [..._readers]) {
+          reader.add(message);
+        }
+      case String():
+        for (final reader in [..._readers]) {
+          reader.addError(StdinException(message));
+        }
+      case null:
+        _closed = true;
+        _pinHelperAlive = false;
+        _readingStarted?.complete();
+        _readingStarted = null;
+        final ready = _controlReady;
+        if (ready != null && !ready.isCompleted) ready.complete();
+        final ack = _execCancelAck;
+        if (ack != null && !ack.isCompleted) ack.complete();
+        for (final settled in _settling.values) {
+          settled.complete();
+        }
+        _settling.clear();
+        _port?.close();
+        for (final reader in [..._readers]) {
+          unawaited(reader.close());
+        }
+    }
+  }
+}
+
+/// Helper-isolate entry point: reads stdin while told to (`true`), pauses on
+/// `false`, and forwards bytes, errors (as text) and end of input (`null`).
+void _readStdin(SendPort events) {
+  final control = RawReceivePort();
+  final subscription = stdin.listen(
+    events.send,
+    onError: (Object error) => events.send('$error'),
+    onDone: () {
+      events.send(null);
+      control.close();
+    },
+  )..pause();
+  control.handler = (Object? message) {
+    if (message case ('cancel-for-exec', final int token)) {
+      unawaited(subscription.cancel().then(
+            (_) => Isolate.exit(events, ('exec-cancelled', token)),
+            onError: (Object error) =>
+                Isolate.exit(events, ('exec-cancel-failed', token, '$error')),
+          ));
+      return;
+    }
+    if (message == true && subscription.isPaused) subscription.resume();
+    if (message == false && !subscription.isPaused) subscription.pause();
+    if (message case ('settle', final int id)) events.send(('settled', id));
+  };
+  events.send(control.sendPort);
 }
 
 ProgramOption withContext(Future<void> Function() cancellation) {
@@ -27,6 +292,11 @@ ProgramOption withContext(Future<void> Function() cancellation) {
   };
 }
 
+/// Reads input from [input] instead of the terminal, or no input when null.
+///
+/// Without this option a [Program] reads the process stdin, which only the
+/// main isolate may do; programs in other isolates must pass an input stream
+/// or null.
 ProgramOption withInput(Stream<List<int>>? input) {
   return (p) {
     p._input = input;
@@ -117,7 +387,6 @@ final class Program {
 
   File? _logFile;
   IOSink? _logSink;
-  Future<void>? _logClose;
   Model? _runningModel;
   final _msgs = StreamController<Msg>.broadcast(sync: true);
   bool _running = false;
@@ -127,11 +396,14 @@ final class Program {
   Timer? _tickTimer;
   Timer? _loneEscTimer;
   StreamSubscription<List<int>>? _inputSub;
-  Future<void>? _inputCancel;
   bool _unicodeCoreSupported = false;
   StreamSubscription<ProcessSignal>? _sigSub;
   StreamSubscription<ProcessSignal>? _sigintSub;
+  StreamSubscription<ProcessSignal>? _sigtermSub;
   TeaRenderer? _renderer;
+  bool _endedInAltScreen = false;
+  bool _terminalReleased = false;
+  int _runs = 0;
 
   void _setRawMode(bool raw) {
     try {
@@ -142,22 +414,31 @@ final class Program {
     }
     // On Windows, lineMode/echoMode alone leave the console in legacy input
     // mode, where arrow keys / Esc / Shift+Tab / mouse never reach the byte
-    // stream. Enable VT console input here (and restore it when leaving raw
-    // mode). No-op on other platforms.
+    // stream. On macOS/Linux they leave ISIG/IEXTEN/IXON set, so Ctrl+C/Z/\
+    // become signals. Finish raw mode here (and restore it when leaving raw
+    // mode). Each helper is a no-op on the other platforms.
     if (raw) {
       enableWindowsVtInput();
+      enablePosixRawInput();
     } else {
+      restorePosixRawInput();
       restoreWindowsVtInput();
     }
   }
 
   Future<Model> run(Model initial) async {
-    final (_, model) = await _runCore(initial);
+    final runZone = Zone.current.fork(
+      zoneValues: {_commandZoneOwnerKey: null},
+    );
+    final (_, model) = await runZone.run(() => _runCore(initial));
     return model;
   }
 
   Future<T?> runForResult<T>(OutcomeModel<T> initial) async {
-    final (_, model) = await _runCore(initial);
+    final runZone = Zone.current.fork(
+      zoneValues: {_commandZoneOwnerKey: null},
+    );
+    final (_, model) = await runZone.run(() => _runCore(initial));
     if (model is OutcomeModel<T>) {
       return model.outcome;
     }
@@ -180,8 +461,10 @@ final class Program {
   Future<void> releaseTerminal({bool resetRenderer = false}) async {
     if (!_running) return;
     if (_disableRenderer) return;
-    _renderer?.release(reset: resetRenderer);
+    _terminalReleased = true;
+    // Cook the terminal before the release sequences reach it.
     _setRawMode(false);
+    _renderer?.release(reset: resetRenderer);
   }
 
   Future<void> restoreTerminal() async {
@@ -193,6 +476,7 @@ final class Program {
       if (_unicodeCoreSupported) _renderer?.setUnicodeCore(true);
       _renderer?.restore(m.view());
     }
+    _terminalReleased = false;
   }
 
   void println([Object? value]) => send(PrintLineMsg('${value ?? ''}'));
@@ -207,13 +491,29 @@ final class Program {
     if (_running) {
       throw StateError('Program is already running');
     }
+    if (!_disableInput &&
+        (_input == null || identical(_input, stdin)) &&
+        Isolate.current.debugName != 'main') {
+      // Each isolate would start its own reader on fd 0, and readers in
+      // different isolates race for input and for the descriptor itself.
+      throw StateError(
+        'Default stdin can only be read from the main isolate. Pass '
+        'withInput(...) to a Program in another isolate, or withInput(null) '
+        'for no input.',
+      );
+    }
     _running = true;
     _killed = false;
+    _endedInAltScreen = false;
+    _terminalReleased = false;
+    final runId = ++_runs;
+    final usesSharedStdin = _input == null || identical(_input, stdin);
     _finished = Completer<void>();
     _activityWake = null;
-    _inputCancel = null;
     _runningModel = initial;
-    _logClose = null;
+    var runModel = initial;
+    StreamSubscription<List<int>>? runInputSub;
+    IOSink? runLogSink;
 
     // Opt-in startup phase timer: set DART_TUI_BENCH=1 to enable.
     final benchEnabled = Platform.environment['DART_TUI_BENCH'] == '1';
@@ -238,30 +538,83 @@ final class Program {
     // never reach [applyMsg].
     final StreamSubscription<Msg> externalMsgSub = _msgs.stream.listen(
       (Msg msg) {
-        if (_running) {
+        if (_running && runId == _runs) {
           enqueue(msg);
         }
       },
     );
 
     Future<void> waitForActivity() async {
-      while (_running && queue.isEmpty) {
+      while (_running && runId == _runs && queue.isEmpty) {
         _activityWake = Completer<void>();
         await _activityWake!.future;
       }
     }
 
-    Future<void> runCmd(Cmd? cmd) async {
-      if (cmd == null || !_running) return;
+    // Commands from an earlier run must not reach this one.
+    bool current() => _running && runId == _runs;
+
+    // Replies to the startup queries. An inherited exec started right away
+    // waits for them, so the child does not read them as keystrokes.
+    final pendingReplies = <int>{};
+    final repliesReceived = Completer<void>();
+
+    // Timers that commands start end with the run, so a pending tick or delay
+    // cannot keep the process alive after the program has quit.
+    final commandTimers = <Timer>{};
+    final commandParentZone = Zone.current;
+    final commandZone = commandParentZone.fork(
+      zoneValues: {_commandZoneOwnerKey: commandTimers},
+      specification: ZoneSpecification(
+        createTimer: (self, parent, zone, duration, callback) {
+          if (!identical(zone[_commandZoneOwnerKey], commandTimers)) {
+            return parent.createTimer(zone, duration, callback);
+          }
+          late final Timer timer;
+          timer = parent.createTimer(zone, duration, () {
+            commandTimers.remove(timer);
+            callback();
+          });
+          if (current()) {
+            commandTimers.removeWhere((timer) => !timer.isActive);
+            commandTimers.add(timer);
+          } else {
+            timer.cancel();
+          }
+          return timer;
+        },
+        createPeriodicTimer: (self, parent, zone, period, callback) {
+          if (!identical(zone[_commandZoneOwnerKey], commandTimers)) {
+            return parent.createPeriodicTimer(zone, period, callback);
+          }
+          final timer = parent.createPeriodicTimer(zone, period, callback);
+          if (current()) {
+            commandTimers.removeWhere((timer) => !timer.isActive);
+            commandTimers.add(timer);
+          } else {
+            timer.cancel();
+          }
+          return timer;
+        },
+      ),
+    );
+
+    // Returns whether a sequence may run its next command.
+    Future<bool> runCmd(Cmd? cmd) async {
+      if (cmd == null) return current();
+      if (!current()) return false;
       try {
-        final msg = await Future<Msg?>.value(cmd());
+        final msg = await commandZone.run(() => Future<Msg?>.value(cmd()));
+        if (!current()) return false;
         if (msg != null) enqueue(msg);
+        return msg is! QuitMsg && msg is! InterruptMsg;
       } catch (e, st) {
         if (!_disableCatchPanics) {
           stderr.writeln('Caught command exception: $e');
           stderr.writeln(st);
         }
-        enqueue(InterruptMsg());
+        if (current()) enqueue(InterruptMsg());
+        return false;
       }
     }
 
@@ -279,7 +632,10 @@ final class Program {
           );
         }
       }
-      _renderer?.render(v);
+      // A throttled frame must not land after a release or kill.
+      if (runId == _runs && !_killed && !_terminalReleased) {
+        _renderer?.render(v);
+      }
       lastRenderedView = v;
       lastRenderMicros = frameClock.elapsedMicroseconds;
     }
@@ -297,9 +653,10 @@ final class Program {
     // Does NOT call render() — the event loop renders once per drained batch.
     Future<bool> applyMsg(Msg rawMsg) async {
       var msg = rawMsg;
-      final model = _runningModel!;
+      final model = runModel;
       if (_filter != null) {
         final filtered = _filter!(model, msg);
+        if (!current()) return false;
         if (filtered == null) return false;
         msg = filtered;
       }
@@ -313,14 +670,16 @@ final class Program {
           return false;
         case SuspendMsg():
           await releaseTerminal(resetRenderer: true);
+          if (!current()) return false;
           if (!Platform.isWindows) {
             Process.killPid(pid, ProcessSignal.sigstop);
             // SIGSTOP cannot be caught or ignored. Execution continues here
             // only after an external SIGCONT resumes the process.
             await Future<void>.delayed(Duration.zero);
           }
+          if (!current()) return false;
           await restoreTerminal();
-          enqueue(ResumeMsg());
+          if (current()) enqueue(ResumeMsg());
           return false; // ResumeMsg will trigger re-render next batch
         case RequestWindowSizeMsg():
           scheduleResizeMsg();
@@ -396,13 +755,40 @@ final class Program {
           }
           return false;
         case SequenceMsg():
-          for (final c in msg.cmds) {
-            await runCmd(c);
-          }
+          // Run in order without blocking the event loop, as Bubble Tea does.
+          final cmds = msg.cmds;
+          unawaited(() async {
+            for (final c in cmds) {
+              if (!await runCmd(c)) break;
+            }
+          }());
           return false;
         case ExecMsg():
-          await releaseTerminal(resetRenderer: true);
+          if (msg.inheritStdio && pendingReplies.isNotEmpty) {
+            // Let the terminal's replies to the startup queries reach our
+            // decoder first. A terminal that never replies costs 500 ms, once.
+            if (usesSharedStdin && !_disableInput) {
+              await _sharedStdin.reading
+                  .timeout(const Duration(seconds: 1), onTimeout: () {});
+            }
+            await repliesReceived.future
+                .timeout(const Duration(milliseconds: 500), onTimeout: () {});
+            pendingReplies.clear();
+          }
+          if (!current()) return false;
+          // Stop reading, and wait until the stdin reader has stopped, so the
+          // child gets every byte typed once the terminal is released.
+          _inputSub?.pause();
+          var inheritedExecLease = false;
           try {
+            if (msg.inheritStdio) {
+              _setRawMode(false);
+              inheritedExecLease = true;
+              await _sharedStdin.beginInheritedExec();
+            }
+            if (!current()) return false;
+            await releaseTerminal(resetRenderer: true);
+            if (!current()) return false;
             if (msg.inheritStdio) {
               final process = await Process.start(
                 msg.cmd,
@@ -411,7 +797,7 @@ final class Program {
                 mode: ProcessStartMode.inheritStdio,
               );
               final exitCode = await process.exitCode;
-              if (msg.onExit != null) {
+              if (msg.onExit != null && current()) {
                 final followUp = msg.onExit!(exitCode);
                 if (followUp != null) enqueue(followUp);
               }
@@ -421,15 +807,20 @@ final class Program {
                 msg.args,
                 environment: msg.env,
               );
-              if (msg.onExit != null) {
+              if (msg.onExit != null && current()) {
                 final followUp = msg.onExit!(result.exitCode);
                 if (followUp != null) enqueue(followUp);
               }
             }
           } finally {
-            await restoreTerminal();
+            try {
+              if (runId == _runs) await restoreTerminal();
+            } finally {
+              if (runId == _runs) _inputSub?.resume();
+              if (inheritedExecLease) _sharedStdin.endInheritedExec();
+            }
           }
-          return true;
+          return current();
         default:
       }
 
@@ -459,6 +850,8 @@ final class Program {
         }
       }
       final (nextModel, cmd) = model.update(msg);
+      if (!current()) return false;
+      runModel = nextModel;
       _runningModel = nextModel;
       // Fire cmd asynchronously so its result message is queued and processed
       // in the next event-loop batch, unblocking key-event handling.
@@ -468,6 +861,7 @@ final class Program {
 
     try {
       _logSink = _logFile?.openWrite(mode: FileMode.append);
+      runLogSink = _logSink;
       _renderer = _disableRenderer
           ? NilRenderer()
           : _useCellRenderer
@@ -499,6 +893,10 @@ final class Program {
         if (!Platform.isWindows) {
           _sigSub =
               ProcessSignal.sigwinch.watch().listen((_) => scheduleResizeMsg());
+          // As in Bubble Tea, SIGTERM quits so the terminal is restored.
+          _sigtermSub = ProcessSignal.sigterm.watch().listen((_) {
+            if (_running) enqueue(QuitMsg());
+          });
         }
       }
 
@@ -508,13 +906,24 @@ final class Program {
       bench('terminal_queries');
 
       if (!_disableInput) {
-        final source = _input ?? _stdinBroadcast();
+        final source = usesSharedStdin ? _sharedStdin.claim() : _input!;
         final decoder = TerminalInputDecoder();
-        _inputSub = source.listen(
+        runInputSub = source.listen(
           (bytes) {
             _loneEscTimer?.cancel();
             _loneEscTimer = null;
             for (final msg in decoder.feed(bytes)) {
+              final reply = switch (msg) {
+                ModeReportMsg(mode: 2026) => 2026,
+                ModeReportMsg(mode: 2027) => 2027,
+                BackgroundColorMsg() => 11,
+                _ => null,
+              };
+              if (reply != null &&
+                  pendingReplies.remove(reply) &&
+                  pendingReplies.isEmpty) {
+                repliesReceived.complete();
+              }
               enqueue(msg);
             }
             if (decoder.hasPendingLoneEscape) {
@@ -527,8 +936,16 @@ final class Program {
               });
             }
           },
+          onError: (Object error, StackTrace stackTrace) {
+            if (!_disableCatchPanics) {
+              stderr.writeln('Caught input exception: $error');
+              stderr.writeln(stackTrace);
+            }
+            enqueue(InterruptMsg());
+          },
           cancelOnError: true,
         );
+        _inputSub = runInputSub;
       }
       bench('input_ready');
 
@@ -550,6 +967,7 @@ final class Program {
       // Send capability queries AFTER the first frame so the first visible
       // output reaches the terminal without being delayed by query bytes.
       if (!_disableInput) {
+        pendingReplies.addAll(const [2026, 2027, 11]);
         _output.write('\x1b[?2026\$p');
         _output.write('\x1b[?2027\$p');
         // OSC 11: auto-detect terminal background color.
@@ -564,51 +982,53 @@ final class Program {
       final externalCancellation = _externalCancellation;
       if (externalCancellation != null) {
         unawaited(externalCancellation().then((_) {
-          if (_running) {
+          if (current()) {
             enqueue(InterruptMsg());
           }
         }));
       }
 
-      while (_running) {
+      while (_running && runId == _runs) {
         // Drain all pending messages without rendering between them.
         // This ensures rapid key events are processed immediately without
         // each one incurring the FPS-throttle delay.
         var needsRender = false;
-        while (queue.isNotEmpty && _running) {
+        while (queue.isNotEmpty && _running && runId == _runs) {
           needsRender |= await applyMsg(queue.removeFirst());
-          final m = _runningModel;
+          final m = runModel;
           if (m is OutcomeModel && m.outcome != null) {
             _running = false;
             break;
           }
         }
-        // Render once for the entire drained batch.
-        if (needsRender && _running) {
-          await render(_runningModel!.view());
+        // Render once for the entire drained batch, including the batch that
+        // quit, so the final frame shows the last update (unless killed).
+        if (needsRender && !_killed && runId == _runs) {
+          await render(runModel.view());
         }
         if (_running) {
           await waitForActivity();
         }
       }
     } finally {
+      if (runId == _runs) _shutdown();
+      for (final timer in commandTimers) {
+        timer.cancel();
+      }
+      commandTimers.clear();
       await externalMsgSub.cancel();
-      _shutdown();
-      // Await stdin cancellation so the process can actually exit, but only
-      // after cooked mode has been restored. Cancelling first closes the stdin
-      // fd; later echoMode/lineMode writes fail with EBADF.
-      await _inputCancel;
-      await _logClose;
-      if (!_disableRenderer) {
-        // Move to a fresh line so the shell prompt appears cleanly after exit,
-        // then flush so all ANSI reset sequences (show cursor, exit alt-screen)
-        // actually reach the terminal before the shell gets control.
-        _output.writeln();
+      await runInputSub?.cancel();
+      if (runLogSink != null) await runLogSink.done;
+      if (runId == _runs && !_disableRenderer) {
+        // Move to a fresh line so the shell prompt appears cleanly after exit
+        // (leaving the alt screen already restores the cursor), then flush so
+        // all reset sequences reach the terminal before the shell gets control.
+        if (!_endedInAltScreen) _output.writeln();
         await _output.flush();
       }
     }
 
-    return (_killed ? StateError('program killed') : null, _runningModel!);
+    return (_killed ? StateError('program killed') : null, runModel);
   }
 
   void _shutdown() {
@@ -626,19 +1046,23 @@ final class Program {
     if (!_disableRenderer) {
       _setRawMode(false);
     }
+    _terminalReleased = true;
+    _endedInAltScreen = _renderer?.altScreenActive ?? false;
     _renderer?.close();
     _renderer = null;
     final inputSub = _inputSub;
     _inputSub = null;
-    _inputCancel ??= inputSub?.cancel();
+    if (inputSub != null) unawaited(inputSub.cancel());
     unawaited(_sigSub?.cancel());
     _sigSub = null;
     unawaited(_sigintSub?.cancel());
     _sigintSub = null;
+    unawaited(_sigtermSub?.cancel());
+    _sigtermSub = null;
     final logSink = _logSink;
     _logSink = null;
     if (logSink != null) {
-      _logClose = logSink.close();
+      unawaited(logSink.close());
     }
     _finished?.complete();
   }

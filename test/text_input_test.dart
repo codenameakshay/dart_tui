@@ -1,3 +1,4 @@
+import 'package:characters/characters.dart';
 import 'package:dart_tui/dart_tui.dart';
 import 'package:test/test.dart';
 
@@ -252,6 +253,244 @@ void main() {
       final v = TextInputModel(value: '你', cursorPos: 1, label: 'X').view();
       // label 'X' + space = width 2, plus one double-width char = 2 → x == 4
       expect(v.cursor!.x, 4);
+    });
+  });
+
+  group('TextInputModel multi-scalar graphemes', () {
+    const family = '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}';
+
+    // The parser delivers one KeyPressMsg per Unicode scalar.
+    TextInputModel typeScalars(TextInputModel m, String text) {
+      for (final rune in text.runes) {
+        m = _apply(m, _rune(String.fromCharCode(rune)));
+      }
+      return m;
+    }
+
+    test('appended scalars match a full segmentation', () {
+      // Flags pair regional indicators; typing them one by one at the end must
+      // give the same graphemes as segmenting the final value.
+      const text = '\u{1F1EE}\u{1F1F3}\u{1F1FA}\u{1F1F8}a\u0301$family';
+      var m = typeScalars(TextInputModel(), text);
+      expect(m.value, text);
+      expect(m.cursorPos, text.characters.length);
+      for (var left = text.characters.length; left > 0; left--) {
+        m = _apply(m, _k(KeyCode.backspace));
+        expect(m.value, text.characters.take(left - 1).toString());
+      }
+    });
+
+    test('completing a surrogate pair across the cursor resegments the value',
+        () {
+      for (final suffix in ['', 'Z']) {
+        final initial = TextInputModel(
+          value: '\u{1F1E6}\uD83C$suffix',
+          cursorPos: 2,
+        );
+        final next = _apply(initial, _rune('\uDDE7'));
+        final expected = '\u{1F1E6}\u{1F1E7}$suffix';
+
+        expect(next.value, expected, reason: 'suffix=$suffix');
+        expect(next.cursorPos, 1, reason: 'suffix=$suffix');
+        expect(next.cursorColumn, 1, reason: 'suffix=$suffix');
+        expect(next.view().cursor!.x, 2, reason: 'suffix=$suffix');
+        expect(
+          _apply(next.copyWith(label: 'copy'), _k(KeyCode.backspace)).value,
+          suffix,
+          reason: 'backspace must remove the completed flag as one grapheme',
+        );
+        if (suffix.isNotEmpty) {
+          final deleted = _apply(next, _k(KeyCode.delete));
+          expect(deleted.value, '\u{1F1E6}\u{1F1E7}');
+          expect(deleted.value.characters.length, 1);
+        }
+      }
+    });
+
+    test('completing a surrogate pair can fit a grapheme charLimit', () {
+      for (final viaPaste in [false, true]) {
+        final initial = TextInputModel(
+          value: '\u{1F1E6}\uD83C',
+          cursorPos: 2,
+          charLimit: 1,
+        );
+        final next = viaPaste
+            ? initial.update(PasteMsg('\uDDE7')).$1 as TextInputModel
+            : _apply(initial, _rune('\uDDE7'));
+
+        expect(next.value, '\u{1F1E6}\u{1F1E7}', reason: 'paste=$viaPaste');
+        expect(next.value.characters.length, 1, reason: 'paste=$viaPaste');
+        expect(next.cursorPos, 1, reason: 'paste=$viaPaste');
+        expect(_apply(next, _k(KeyCode.backspace)).value, '',
+            reason: 'paste=$viaPaste');
+      }
+    });
+
+    test('surrogate completion counts a supplementary combining mark', () {
+      final initial = TextInputModel(
+        value: '\u{1F1E6}\uD83CZ',
+        cursorPos: 2,
+        charLimit: 2,
+      );
+      final next = _apply(initial, _rune('\uDDE7\u{E0100}'));
+
+      expect(next.value, '\u{1F1E6}\u{1F1E7}\u{E0100}Z');
+      expect(next.value.characters.length, 2);
+      expect(next.cursorPos, 1);
+      expect(next.cursorColumn, 1);
+      expect(next.view().cursor!.x, 2);
+      expect(_apply(next, _k(KeyCode.backspace)).value, 'Z');
+    });
+
+    test('right-boundary surrogate completion keeps cursor within graphemes',
+        () {
+      final initial = TextInputModel(value: 'a\uDD65', cursorPos: 1);
+      final next = _apply(initial, _rune('\uD834'));
+
+      expect(next.value, 'a\u{1D165}');
+      expect(next.value.characters.length, 1);
+      expect(next.cursorPos, 1);
+      expect(next.cursorColumn, 1);
+      expect(next.view().cursor!.x, 1);
+      expect(_apply(next, _k(KeyCode.backspace)).value, '');
+    });
+
+    test('combining mark merges into the previous grapheme', () {
+      var m = typeScalars(TextInputModel(), 'e\u0301');
+      expect(m.value, 'e\u0301');
+      expect(m.value.length, 2);
+      expect(m.cursorPos, 1);
+      expect(m.view, returnsNormally);
+      m = _apply(m, _rune('x'));
+      expect(m.value, 'e\u0301x');
+      expect(m.cursorPos, 2);
+    });
+
+    test('backspace after a typed family removes the whole family', () {
+      var m = typeScalars(TextInputModel(), family);
+      expect(m.value, family);
+      expect(m.cursorPos, 1);
+      m = _apply(m, _k(KeyCode.backspace));
+      expect(m.value, '');
+      expect(m.cursorPos, 0);
+    });
+
+    for (final (name, cluster) in const [
+      ('family', family),
+      ('skin tone', '\u{1F44D}\u{1F3FD}'),
+      ('flag', '\u{1F1EE}\u{1F1F3}'),
+      ('variation selector', '\u2764\uFE0F'),
+    ]) {
+      test('$name typed before existing text lands after the cluster', () {
+        var m = typeScalars(TextInputModel(value: 'Z'), cluster);
+        expect(m.value, '${cluster}Z');
+        expect(m.cursorPos, 1);
+        expect(m.view, returnsNormally);
+        m = _apply(m, _rune('x'));
+        expect(m.value, '${cluster}xZ');
+        expect(m.cursorPos, 2);
+      });
+    }
+
+    test('charLimit counts graphemes, not scalars', () {
+      var m = typeScalars(TextInputModel(charLimit: 1), family);
+      expect(m.value, family);
+      m = _apply(m, _rune('x'));
+      expect(m.value, family);
+    });
+  });
+
+  group('TextInputModel bracketed paste', () {
+    TextInputModel paste(TextInputModel m, String content) =>
+        m.update(PasteMsg(content)).$1 as TextInputModel;
+
+    test('inserts at the cursor and advances it', () {
+      final m = paste(TextInputModel(value: 'ab', cursorPos: 1), 'XY');
+      expect(m.value, 'aXYb');
+      expect(m.cursorPos, 3);
+    });
+
+    test('turns each newline or tab into one space', () {
+      final m = paste(TextInputModel(), 'a\r\nb\rc\nd\te');
+      expect(m.value, 'a b c d e');
+      expect(m.cursorPos, 9);
+    });
+
+    test('drops control characters so ESC cannot reach the terminal', () {
+      final m = paste(TextInputModel(), 'a\x1b[31mb\x00\x07\x7fc');
+      expect(m.value, 'a[31mbc');
+    });
+
+    test('merges multi-scalar graphemes into the surrounding text', () {
+      final m = paste(
+        TextInputModel(value: 'Z'),
+        '\u{1F468}\u200D\u{1F469}',
+      );
+      expect(m.value, '\u{1F468}\u200D\u{1F469}Z');
+      expect(m.cursorPos, 1);
+      expect(m.view, returnsNormally);
+    });
+
+    test('truncates to charLimit', () {
+      final m = paste(
+          TextInputModel(value: 'ab', cursorPos: 2, charLimit: 5), 'cdefgh');
+      expect(m.value, 'abcde');
+      expect(m.cursorPos, 5);
+      expect(paste(m, 'x').value, 'abcde');
+    });
+
+    test('keeps a combining mark that joins at the cursor under charLimit', () {
+      final m = paste(
+        TextInputModel(value: 'aZ', cursorPos: 1, charLimit: 2),
+        '\u0301x',
+      );
+      expect(m.value, 'a\u0301Z');
+      expect(m.cursorPos, 1);
+    });
+
+    test('counts a flag merge with the original suffix when truncating', () {
+      final m = paste(
+        TextInputModel(value: '\u{1F1E7}Z', cursorPos: 0, charLimit: 3),
+        '\u{1F1E6}xy',
+      );
+      expect(m.value, '\u{1F1E6}\u{1F1E7}Z');
+      expect(m.cursorPos, 1);
+    });
+
+    test('allows a pasted ZWJ sequence to merge both cursor boundaries', () {
+      final m = paste(
+        TextInputModel(value: '\u{1F468}\u{1F467}', cursorPos: 1, charLimit: 1),
+        '\u200Dx',
+      );
+      expect(m.value, '\u{1F468}\u200D\u{1F467}');
+      expect(m.cursorPos, 1);
+    });
+
+    test('keeps the longest ZWJ prefix that merges both cursor boundaries', () {
+      final m = paste(
+        TextInputModel(value: '\u{1F468}\u{1F467}', cursorPos: 1, charLimit: 1),
+        '\u200D\u{1F469}\u200Dx',
+      );
+      expect(m.value, '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}');
+      expect(m.cursorPos, 1);
+    });
+
+    test('truncates a large paste without per-grapheme rebuilding', () {
+      const limit = 100000;
+      final m = paste(TextInputModel(charLimit: limit), 'x' * (limit + 1));
+      expect(m.value, 'x' * limit);
+      expect(m.cursorPos, limit);
+    }, timeout: const Timeout(Duration(seconds: 5)));
+
+    test('is ignored while unfocused', () {
+      final m = TextInputModel(value: 'ab', focused: false);
+      expect(paste(m, 'x'), same(m));
+    });
+
+    test('paste start and end markers are ignored', () {
+      final m = TextInputModel(value: 'ab');
+      expect(m.update(PasteStartMsg()).$1, same(m));
+      expect(m.update(PasteEndMsg()).$1, same(m));
     });
   });
 }

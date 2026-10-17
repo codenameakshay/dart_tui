@@ -1,3 +1,5 @@
+import 'package:dart_tui/dart_tui.dart' show truncate;
+
 import '../../util/theme.dart';
 import '../../util/width.dart';
 
@@ -22,7 +24,7 @@ String renderStatusBar({
     final left = prompt + searchInputView;
     final rightWidth = displayWidth(hint);
     final pad = (width - displayWidth(left) - rightWidth).clamp(0, 9999);
-    return sStatusBar.render(left + ' ' * pad + hint);
+    return truncate(sStatusBar.render(left + ' ' * pad + hint), width);
   }
 
   final badge = error != null
@@ -44,5 +46,5 @@ String renderStatusBar({
   final right = hintsStr.toString() + sStatusBar.render(' ');
   final pad = (width - displayWidth(left) - displayWidth(right)).clamp(0, 9999);
   final padded = sStatusBar.render(' ' * pad);
-  return left + padded + right;
+  return truncate(left + padded + right, width);
 }

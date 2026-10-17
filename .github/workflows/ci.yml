@@ -37,6 +37,18 @@ jobs:
       - if: runner.os != 'Windows'
         run: python3 -m unittest -v tool/bench_command_test.py
 
+  # pubspec.yaml declares sdk >=3.5.0; keep that floor tested.
+  sdk-floor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.5.4
+      - run: dart pub get
+      - run: dart analyze --fatal-infos
+      - run: dart test
+
   website:
     runs-on: ubuntu-latest
     defaults:

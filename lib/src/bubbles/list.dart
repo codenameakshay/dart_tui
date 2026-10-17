@@ -234,10 +234,11 @@ final class ListModel extends Model {
   @override
   (Model, Cmd?) update(Msg msg) {
     // Mouse scroll wheel navigation
-    if (msg is MouseClickMsg) {
+    if (msg is MouseClickMsg || msg is MouseWheelMsg) {
+      final mouse = (msg as MouseMsg).mouse;
       final fi = filteredItems;
       if (fi.isEmpty) return (this, null);
-      switch (msg.mouse.button) {
+      switch (mouse.button) {
         case MouseButton.wheelUp:
           final cur = _safeCursor;
           return (_copy(cursor: cur > 0 ? cur - 1 : 0), null);
@@ -249,7 +250,7 @@ final class ListModel extends Model {
           );
         case MouseButton.left:
           // Click-to-select: map y → item index
-          final relY = msg.mouse.y - viewOffsetY;
+          final relY = mouse.y - viewOffsetY;
           // Account for title rows above the item list
           var headerRows = 0;
           if (title.isNotEmpty) headerRows += 2; // title + blank line
@@ -345,6 +346,15 @@ final class ListModel extends Model {
         );
       case 'enter':
         return (_copy(filterMode: false), null);
+      case 'up':
+      case 'ctrl+p':
+        final cur = _safeCursor;
+        return (_copy(cursor: cur > 0 ? cur - 1 : 0), null);
+      case 'down':
+      case 'ctrl+n':
+        final cur = _safeCursor;
+        final last = filteredItems.length - 1;
+        return (_copy(cursor: cur < last ? cur + 1 : cur), null);
       default:
         // Append printable characters to filter
         final key = msg.key;

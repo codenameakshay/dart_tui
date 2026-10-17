@@ -72,7 +72,7 @@ final class IsbnFormModel extends Model {
     return (
       IsbnFormModel(
         input: next as TextInputModel,
-        errorMsg: errorMsg,
+        errorMsg: _isValidIsbn13(next.value) ? '' : errorMsg,
         result: result,
         searched: searched,
       ),

@@ -19,6 +19,18 @@ void main() {
     );
   });
 
+  test('timer validation errors show the rejected duration', () {
+    final shown = throwsA(isA<ArgumentError>().having(
+      (error) => '$error',
+      'message',
+      allOf(contains('-0:00:00.000001'), isNot(contains('Instance of'))),
+    ));
+    expect(
+        () => every(const Duration(microseconds: -1), (_) => QuitMsg()), shown);
+    expect(
+        () => tick(const Duration(microseconds: -1), (_) => QuitMsg()), shown);
+  });
+
   test('batch wraps multiple commands in BatchMsg', () async {
     final c = batch([
       () async => KeyPressMsg(const TeaKey(code: KeyCode.rune, text: 'a')),

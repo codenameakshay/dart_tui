@@ -120,8 +120,9 @@ final class TableModel extends Model {
 
   @override
   (Model, Cmd?) update(Msg msg) {
-    if (msg is MouseClickMsg) {
-      switch (msg.mouse.button) {
+    if (msg is MouseClickMsg || msg is MouseWheelMsg) {
+      final mouse = (msg as MouseMsg).mouse;
+      switch (mouse.button) {
         case MouseButton.wheelUp:
           return (_moveCursor(-1), null);
         case MouseButton.wheelDown:
@@ -129,7 +130,7 @@ final class TableModel extends Model {
         case MouseButton.left:
           // Header occupies 2 rows (header + separator line)
           const headerRows = 2;
-          final relY = msg.mouse.y - viewOffsetY - headerRows;
+          final relY = mouse.y - viewOffsetY - headerRows;
           if (relY >= 0) {
             final idx = scrollOffset + relY;
             if (idx >= 0 && idx < rows.length) {
@@ -174,11 +175,11 @@ final class TableModel extends Model {
           : c.title + ' ' * (c.width - visWidth);
       return styles.header.render(title);
     }).join(' │ ');
-    b.writeln(headerCells);
+    b.writeln('  $headerCells');
 
     // Separator
     final sepLine = columns.map((c) => '─' * c.width).join('─┼─');
-    b.writeln(styles.separator.render(sepLine));
+    b.writeln('  ${styles.separator.render(sepLine)}');
 
     // Rows
     final end = (scrollOffset + height).clamp(0, rows.length);

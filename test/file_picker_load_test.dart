@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dart_tui/dart_tui.dart';
+import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 void main() {
@@ -51,5 +52,33 @@ void main() {
     final stale = await filteredCmd();
     final (stillNewer, _) = newerSameDirectory.update(stale!);
     expect(identical(stillNewer, newerSameDirectory), isTrue);
+  });
+
+  test('keys are ignored while a directory loads', () async {
+    final root = await Directory.systemTemp.createTemp('picker_keys_');
+    addTearDown(() => root.delete(recursive: true));
+    final sub = await Directory(p.join(root.path, 'sub')).create();
+    await File('${root.path}/zfile.txt').writeAsString('x');
+    await File('${sub.path}/inner.txt').writeAsString('x');
+
+    KeyMsg key(KeyCode c) => KeyPressMsg(TeaKey(code: c));
+    var m = FilePickerModel(currentDir: root.path);
+    m = m.update((await m.init()!())!).$1 as FilePickerModel;
+    expect(m.entries.first, isA<Directory>());
+
+    final (entered, cmd) = m.update(key(KeyCode.enter));
+    var picker = entered as FilePickerModel;
+    expect(picker.currentDir, sub.path);
+    expect(picker.loading, isTrue);
+
+    picker = picker.update(key(KeyCode.down)).$1 as FilePickerModel;
+    picker = picker.update(key(KeyCode.enter)).$1 as FilePickerModel;
+    expect(picker.selected, isNull);
+    expect(picker.currentDir, sub.path);
+
+    picker = picker.update((await cmd!())!).$1 as FilePickerModel;
+    expect(picker.loading, isFalse);
+    picker = picker.update(key(KeyCode.enter)).$1 as FilePickerModel;
+    expect(picker.selected, p.join(sub.path, 'inner.txt'));
   });
 }

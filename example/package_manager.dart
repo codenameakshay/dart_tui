@@ -55,11 +55,7 @@ final class PackageManagerModel extends Model {
       }
       return (
         PackageManagerModel(currentIndex: next),
-        sequence([
-          println('  ✓ installed ${_packages[currentIndex]}'),
-          tick(const Duration(milliseconds: 120),
-              (_) => TickMsg(DateTime.now())),
-        ]),
+        tick(const Duration(milliseconds: 120), (_) => TickMsg(DateTime.now())),
       );
     }
 

@@ -28,7 +28,7 @@ final class MutationDemo extends Model {
 
   @override
   (Model, Cmd?) update(Msg msg) {
-    if (msg is KeyMsg) {
+    if (msg is KeyMsg && !list.filterMode) {
       switch (msg.key) {
         case 'a':
           final next = counter + 1;
@@ -40,9 +40,13 @@ final class MutationDemo extends Model {
             null,
           );
         case 'd':
+          // selectedIndex indexes the filtered view; removeItemAt the full list.
+          final item = list.selected;
+          if (item == null) return (this, null);
           return (
             MutationDemo(
-              list: list.removeItemAt(list.selectedIndex),
+              list: list.removeItemAt(
+                  list.items.indexWhere((i) => identical(i, item))),
               counter: counter,
             ),
             null,
@@ -52,6 +56,7 @@ final class MutationDemo extends Model {
           return (this, () => quit());
       }
     }
+    if (msg is KeyMsg && msg.key == 'ctrl+c') return (this, () => quit());
     // Delegate navigation (↑↓ / jk) to the list.
     final (next, cmd) = list.update(msg);
     return (MutationDemo(list: next as ListModel, counter: counter), cmd);

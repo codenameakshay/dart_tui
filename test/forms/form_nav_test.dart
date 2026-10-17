@@ -144,4 +144,71 @@ void main() {
     expect(
         stripAnsi(next.view().content), isNot(contains('must not validate')));
   });
+
+  group('initial focus', () {
+    String focused(Form f) {
+      final lines = stripAnsi(f.view().content)
+          .split('\n')
+          .where((l) => l.startsWith('› '));
+      expect(lines, hasLength(1), reason: 'exactly one focus marker');
+      return lines.single.substring(2);
+    }
+
+    test('a hidden first group is skipped: first Tab moves to the 2nd field',
+        () {
+      var f = Form([
+        Group([Field.input(key: 'h', title: 'H')], hidden: (_) => true),
+        Group([
+          Field.input(key: 'a', title: 'A'),
+          Field.input(key: 'b', title: 'B'),
+        ]),
+      ]);
+      expect(focused(f), 'A');
+      f = step(f, rune('x'));
+      expect(f.values.get<String>('a'), 'x');
+      f = step(f, key(KeyCode.tab));
+      expect(focused(f), 'B');
+    });
+
+    test('a hidden first field is skipped: first Tab moves to the 2nd field',
+        () {
+      var f = Form([
+        Group([
+          Field.input(key: 'h', title: 'H', hidden: (_) => true),
+          Field.input(key: 'a', title: 'A'),
+          Field.input(key: 'b', title: 'B'),
+        ]),
+      ]);
+      expect(focused(f), 'A');
+      f = step(f, key(KeyCode.tab));
+      expect(focused(f), 'B');
+    });
+
+    test('a leading note is skipped: first Enter moves to the 2nd field', () {
+      var f = Form([
+        Group([
+          Field.note(title: 'Intro'),
+          Field.input(key: 'a', title: 'A'),
+          Field.input(key: 'b', title: 'B'),
+        ]),
+      ]);
+      expect(focused(f), 'A');
+      f = step(f, key(KeyCode.enter));
+      expect(focused(f), 'B');
+      expect(f.submitted, isFalse);
+    });
+
+    test('a note-only first group does not make Enter skip the next field', () {
+      var f = Form([
+        Group([Field.note(title: 'Intro')]),
+        Group([
+          Field.input(key: 'a', title: 'A'),
+          Field.input(key: 'b', title: 'B'),
+        ]),
+      ]);
+      expect(focused(f), 'A');
+      f = step(f, key(KeyCode.enter));
+      expect(focused(f), 'B');
+    });
+  });
 }

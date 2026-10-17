@@ -17,12 +17,18 @@ final class CanvasShowcaseModel extends Model {
   CanvasShowcaseModel({this.tick = 0});
   final int tick;
 
+  // `every` fires once, so each tick re-arms the next one.
+  static Cmd _nextTick() =>
+      every(const Duration(milliseconds: 80), TickMsg.new);
+
   @override
-  Cmd? init() => every(const Duration(milliseconds: 80), TickMsg.new);
+  Cmd? init() => _nextTick();
 
   @override
   (Model, Cmd?) update(Msg msg) {
-    if (msg is TickMsg) return (CanvasShowcaseModel(tick: tick + 1), null);
+    if (msg is TickMsg) {
+      return (CanvasShowcaseModel(tick: tick + 1), _nextTick());
+    }
     if (msg is KeyMsg) {
       switch (msg.key) {
         case 'q':

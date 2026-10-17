@@ -194,6 +194,17 @@ final class _InputPromptModel extends Model implements OutcomeModel<String> {
   @override
   (Model, Cmd?) update(Msg msg) {
     if (msg is WindowSizeMsg || msg is TickMsg) return (this, null);
+    if (msg is PasteMsg) {
+      final text = msg.content
+          .replaceAll(RegExp(r'\r\n|[\r\n\t]'), ' ')
+          .replaceAll(RegExp(r'[\x00-\x1f\x7f-\x9f]'), '');
+      return text.isEmpty
+          ? (this, null)
+          : (
+              _InputPromptModel(label: label, value: value + text),
+              null,
+            );
+    }
     if (msg is! KeyMsg) return (this, null);
     switch (msg.key) {
       case 'enter':
@@ -226,11 +237,15 @@ final class _InputPromptModel extends Model implements OutcomeModel<String> {
           null,
         );
       default:
-        if (msg.key.characters.length == 1) {
+        // Insert the rune text: msg.key is 'space' for the space key.
+        final ke = msg.keyEvent;
+        if (ke.code == KeyCode.rune &&
+            ke.text.isNotEmpty &&
+            ke.modifiers.isEmpty) {
           return (
             _InputPromptModel(
               label: label,
-              value: value + msg.key,
+              value: value + ke.text,
             ),
             null,
           );

@@ -133,4 +133,76 @@ void main() {
     expect(step(f, key(KeyCode.enter)).submitted, isTrue);
     expect(step(f, key(KeyCode.escape)).cancelled, isTrue);
   });
+
+  test('optionsFor select shows its options and submits one untouched', () {
+    final f = Form([
+      Group([
+        Field.input(key: 'kind', title: 'Kind', initial: 'b'),
+        Field.selectOf<String>(
+            key: 'pick',
+            title: 'Pick',
+            optionsFor: (v) => [
+                  for (final o in ['ant', 'bee', 'cat'])
+                    if (o.startsWith(v.get<String>('kind') ?? '')) Option(o, o)
+                ]),
+      ]),
+    ]);
+    expect(stripAnsi(f.view().content), contains('(•) bee'));
+    expect(f.values.get<String>('pick'), 'bee');
+    final done = step(step(f, key(KeyCode.tab)), key(KeyCode.enter));
+    expect(done.submitted, isTrue);
+    expect(done.values.get<String>('pick'), 'bee');
+  });
+
+  test('optionsFor select keeps a still-present initial value', () {
+    final f = Form([
+      Group([
+        Field.selectOf<String>(
+            key: 'pick',
+            initial: 'cat',
+            optionsFor: (_) => [
+                  for (final o in ['ant', 'cat']) Option(o, o)
+                ]),
+      ]),
+    ]);
+    expect(f.values.get<String>('pick'), 'cat');
+  });
+
+  test('initial dynamic options observe an upstream normalized selection', () {
+    final f = Form([
+      Group([
+        Field.selectOf<String>(
+          key: 'source',
+          initial: 'stale',
+          optionsFor: (_) => [const Option('Ready', 'ready')],
+        ),
+        Field.selectOf<String>(
+          key: 'dependent',
+          optionsFor: (values) => values.get<String>('source') == 'ready'
+              ? [const Option('Child', 'child')]
+              : const [],
+        ),
+      ]),
+    ]);
+
+    expect(f.values.get<String>('source'), 'ready');
+    expect(f.values.get<String>('dependent'), 'child');
+  });
+
+  test('optionsFor multi-select lists options and keeps initial picks', () {
+    final f = Form([
+      Group([
+        Field.multiSelectOf<String>(
+            key: 'tags',
+            title: 'Tags',
+            initial: {'bee', 'zzz'},
+            optionsFor: (_) => [
+                  for (final o in ['ant', 'bee']) Option(o, o)
+                ]),
+      ]),
+    ]);
+    expect(stripAnsi(f.view().content), contains('[x] bee'));
+    expect(stripAnsi(f.view().content), contains('[ ] ant'));
+    expect(f.values.get<List<String>>('tags'), ['bee']);
+  });
 }

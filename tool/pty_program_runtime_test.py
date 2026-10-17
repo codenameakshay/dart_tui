@@ -75,6 +75,20 @@ class _Probe:
             self.fail(f"missing marker {marker!r}; output={bytes(self.data)!r}")
         return bytes(self.data)
 
+    def read_until_count(self, marker: bytes, count: int) -> bytes:
+        deadline = time.monotonic() + TIMEOUT
+        while self.data.count(marker) < count and time.monotonic() < deadline:
+            self._read_once(0.1)
+            if self._poll():
+                self._drain()
+                break
+        if self.data.count(marker) < count:
+            self.fail(
+                f"missing occurrence {count} of {marker!r}; "
+                f"output={bytes(self.data)!r}"
+            )
+        return bytes(self.data)
+
     def send(self, data: bytes) -> None:
         os.write(self.master, data)
 
@@ -155,9 +169,12 @@ class ProgramRuntimePtyTest(unittest.TestCase):
         self.assertIn(b"\x1b[?2004l", output)
 
     def assert_cooked_mode(self, probe: _Probe) -> None:
-        lflag = termios.tcgetattr(probe.master)[3]
+        iflag, _, _, lflag = termios.tcgetattr(probe.master)[:4]
         self.assertTrue(lflag & termios.ECHO)
         self.assertTrue(lflag & termios.ICANON)
+        self.assertTrue(lflag & termios.ISIG)
+        self.assertTrue(lflag & termios.IEXTEN)
+        self.assertTrue(iflag & termios.IXON)
 
     def test_kill_wakes_an_idle_program_and_restores_terminal(self) -> None:
         probe = self._probe("kill")
@@ -206,6 +223,195 @@ class ProgramRuntimePtyTest(unittest.TestCase):
         probe.read_until(b"RESUMED")
         self.assertIn(b"\x1b[?1049h", bytes(probe.data)[len(released) :])
         self.assert_terminal_restored(probe.finish())
+
+    def test_default_stdin_program_exits_after_quit(self) -> None:
+        probe = self._probe("default-quit")
+        probe.read_until(b"DEFAULT_QUIT_READY")
+        probe.send(b"q")
+        self.assert_terminal_restored(probe.finish())
+        self.assert_cooked_mode(probe)
+
+    def test_sequential_default_stdin_programs_share_input_and_exit(self) -> None:
+        probe = self._probe("default-chain")
+        probe.read_until(b"CHAIN_ONE_READY")
+        probe.send(b"q")
+        probe.read_until(b"CHAIN_TWO_READY")
+        probe.send(b"q")
+        probe.read_until(b"CHAIN_DONE")
+        self.assert_terminal_restored(probe.finish())
+        self.assert_cooked_mode(probe)
+
+    def test_signal_keys_arrive_as_key_messages(self) -> None:
+        probe = self._probe("default-keys")
+        probe.read_until(b"DEFAULT_KEYS_READY")
+        probe.send(b"\x1a")
+        probe.read_until(b"KEY:ctrl+z")
+        probe.send(b"\x03")
+        probe.read_until(b"KEY:ctrl+c")
+        self.assert_terminal_restored(probe.finish())
+        self.assert_cooked_mode(probe)
+
+    def test_ctrl_z_suspend_releases_terminal_and_resumes_raw(self) -> None:
+        probe = self._probe("default-suspend")
+        probe.read_until(b"DEFAULT_SUSPEND_READY")
+        probe.send(b"\x1a")
+        probe.wait_for_stop()
+        self.assert_terminal_restored(bytes(probe.data))
+        self.assert_cooked_mode(probe)
+        probe.continue_process()
+        probe.read_until(b"RESUMED")
+        lflag = termios.tcgetattr(probe.master)[3]
+        self.assertFalse(lflag & (termios.ICANON | termios.ISIG))
+        probe.send(b"q")
+        self.assert_terminal_restored(probe.finish())
+        self.assert_cooked_mode(probe)
+
+    def test_exec_child_receives_terminal_input(self) -> None:
+        for iteration in range(3):
+            with self.subTest(iteration=iteration + 1):
+                probe = self._probe("default-exec-chain")
+                probe.read_until(b"DEFAULT_EXEC_READY")
+                for line in (b"hello", b"world"):
+                    release_count = probe.data.count(b"\x1b[?1049l") + 1
+                    probe.send(b"x")
+                    probe.read_until_count(b"\x1b[?1049l", release_count)
+                    self.assert_cooked_mode(probe)
+                    child_count = probe.data.count(b"CHILD:") + 1
+                    done_count = probe.data.count(b"EXEC_DONE:0") + 1
+                    probe.send(line + b"\r")
+                    probe.read_until_count(b"CHILD:", child_count)
+                    self.assertIn(b"CHILD:" + line, probe.data)
+                    probe.read_until_count(b"EXEC_DONE:0", done_count)
+                probe.send(b"q")
+                probe.read_until(b"EXEC_FIRST_DONE")
+                self.assert_cooked_mode(probe)
+                probe.read_until(b"EXEC_FOLLOWUP_READY")
+                probe.send(b"q")
+                self.assert_terminal_restored(probe.finish())
+                self.assert_cooked_mode(probe)
+
+    def test_explicit_stdin_exec_child_receives_terminal_input_twice(self) -> None:
+        probe = self._probe("explicit-exec")
+        probe.read_until(b"EXPLICIT_EXEC_READY")
+        for line in (b"hello", b"world"):
+            release_count = probe.data.count(b"\x1b[?1049l") + 1
+            probe.send(b"x")
+            probe.read_until_count(b"\x1b[?1049l", release_count)
+            self.assert_cooked_mode(probe)
+            child_count = probe.data.count(b"CHILD:") + 1
+            done_count = probe.data.count(b"EXPLICIT_EXEC_DONE") + 1
+            probe.send(line + b"\r")
+            probe.read_until_count(b"CHILD:", child_count)
+            self.assertIn(b"CHILD:" + line, probe.data)
+            probe.read_until_count(b"EXPLICIT_EXEC_DONE", done_count)
+        probe.send(b"q")
+        self.assert_terminal_restored(probe.finish())
+        self.assert_cooked_mode(probe)
+
+    def test_killed_suspend_run_cannot_suspend_its_replacement(self) -> None:
+        probe = self._probe("restart-suspend")
+        probe.read_until(b"SECOND_RUN_READY")
+        probe.send(b"q")
+        self.assert_terminal_restored(probe.finish())
+        self.assert_cooked_mode(probe)
+
+    def test_exec_child_input_is_not_taken_by_another_program(self) -> None:
+        probe = self._probe("default-exec-concurrent")
+        probe.read_until(b"DEFAULT_EXEC_READY")
+        time.sleep(0.2)
+        probe.send(b"x")
+        probe.read_until(b"\x1b[?1049l")
+        probe.send(b"hello\r")
+        probe.read_until(b"CHILD:")
+        self.assertIn(b"CHILD:hello", probe.data)
+        probe.read_until(b"EXEC_DONE:0")
+        probe.send(b"q")
+        probe.read_until(b"CONCURRENT_EXEC_DONE")
+        self.assert_terminal_restored(probe.finish())
+        self.assert_cooked_mode(probe)
+
+    def test_init_command_exec_waits_for_stdin_control_startup(self) -> None:
+        probe = self._probe("default-init-exec")
+        probe.read_until(b"INIT_EXEC_CHILD")
+        self.assert_terminal_restored(probe.finish())
+        self.assert_cooked_mode(probe)
+
+    def test_init_exec_child_does_not_read_query_replies(self) -> None:
+        probe = self._probe("default-init-exec-reads")
+        # Answer the startup queries the way a slower terminal (or one over
+        # SSH) does: after the program has already started its child.
+        probe.read_until(b"\x1b]11;?\x07")
+        time.sleep(0.1)
+        probe.send(
+            b"\x1b[?2026;2$y\x1b[?2027;0$y"
+            b"\x1b]11;rgb:0000/0000/0000\x1b\\"
+        )
+        probe.read_until(b"CHILD_GOT:")
+        line = bytes(probe.data).split(b"CHILD_GOT:", 1)[1].split(b"\r", 1)[0]
+        self.assertEqual(line.strip(), b"")
+        self.assert_terminal_restored(probe.finish())
+        self.assert_cooked_mode(probe)
+
+    def test_unrelated_mode_report_does_not_replace_background_reply(self) -> None:
+        probe = self._probe("default-init-exec-reads")
+        probe.read_until(b"\x1b]11;?\x07")
+        probe.send(b"\x1b[?2026;2$y\x1b[?2027;0$y\x1b[?11;2$y")
+        time.sleep(0.1)
+        probe.send(b"\x1b]11;rgb:0000/0000/0000\x1b\\")
+        probe.read_until(b"CHILD_GOT:")
+        line = bytes(probe.data).split(b"CHILD_GOT:", 1)[1].split(b"\r", 1)[0]
+        self.assertEqual(line.strip(), b"")
+        self.assert_terminal_restored(probe.finish())
+        self.assert_cooked_mode(probe)
+
+    def test_init_exec_consumes_bel_and_fragmented_startup_replies(self) -> None:
+        for terminator in (b"\x07", b"\x1b\\"):
+            with self.subTest(terminator=terminator):
+                probe = self._probe("default-init-exec-reads")
+                probe.read_until(b"\x1b]11;?\x07")
+                for chunk in (
+                    b"\x1b[?2026;",
+                    b"2$y\x1b[?2027;0$y\x1b]11;rgb:0000/",
+                    b"0000/0000" + terminator[:1],
+                    terminator[1:],
+                ):
+                    if chunk:
+                        probe.send(chunk)
+                        time.sleep(0.02)
+                probe.read_until(b"CHILD_GOT:")
+                line = bytes(probe.data).split(b"CHILD_GOT:", 1)[1].split(b"\r", 1)[0]
+                self.assertEqual(line.strip(), b"")
+                self.assert_terminal_restored(probe.finish())
+                self.assert_cooked_mode(probe)
+
+    def test_partial_query_reply_wait_times_out_only_once(self) -> None:
+        probe = self._probe("default-exec-chain")
+        probe.read_until(b"DEFAULT_EXEC_READY")
+        probe.send(b"\x1b[?2026;2$y")
+        started = time.monotonic()
+        probe.send(b"x")
+        probe.read_until_count(b"\x1b[?1049l", 1)
+        self.assertLess(time.monotonic() - started, 1.5)
+        probe.send(b"hello\r")
+        probe.read_until(b"EXEC_DONE:0")
+        started = time.monotonic()
+        probe.send(b"x")
+        probe.read_until_count(b"\x1b[?1049l", 2)
+        self.assertLess(time.monotonic() - started, 0.2)
+        probe.send(b"world\r")
+        probe.read_until_count(b"EXEC_DONE:0", 2)
+        probe.send(b"q")
+        probe.read_until(b"EXEC_FOLLOWUP_READY")
+        probe.send(b"q")
+        self.assert_terminal_restored(probe.finish())
+        self.assert_cooked_mode(probe)
+
+    def test_sigterm_quits_and_restores_terminal(self) -> None:
+        probe = self._probe("default-term")
+        probe.read_until(b"DEFAULT_TERM_READY")
+        os.kill(probe.pid, signal.SIGTERM)
+        self.assert_terminal_restored(probe.finish())
+        self.assert_cooked_mode(probe)
 
 
 if __name__ == "__main__":

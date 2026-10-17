@@ -385,7 +385,10 @@ final class _InputField extends FormField with _FieldCommon {
     final titleStyle = active ? styles.activeTitle : styles.title;
     final marker = active ? '${styles.cursor.render('›')} ' : '  ';
     final b = StringBuffer('$marker${titleStyle.render(titleText(values))}\n');
-    b.write('    ${input.view().content}');
+    // TextInputModel only shows its placeholder when unfocused, but the form
+    // keeps it focused; render it unfocused while empty so the placeholder shows.
+    final shown = input.value.isEmpty ? input.copyWith(focused: false) : input;
+    b.write('    ${shown.view().content}');
     final d = descriptionText(values);
     if (d != null) b.write('\n    ${styles.description.render(d)}');
     if (error != null) b.write('\n    ${styles.error.render('✗ $error')}');
