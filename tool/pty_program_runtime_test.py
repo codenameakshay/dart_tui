@@ -315,6 +315,21 @@ class ProgramRuntimePtyTest(unittest.TestCase):
         self.assert_terminal_restored(probe.finish())
         self.assert_cooked_mode(probe)
 
+    def test_exec_child_input_is_not_taken_by_another_program(self) -> None:
+        probe = self._probe("default-exec-concurrent")
+        probe.read_until(b"DEFAULT_EXEC_READY")
+        time.sleep(0.2)
+        probe.send(b"x")
+        probe.read_until(b"\x1b[?1049l")
+        probe.send(b"hello\r")
+        probe.read_until(b"CHILD:")
+        self.assertIn(b"CHILD:hello", probe.data)
+        probe.read_until(b"EXEC_DONE:0")
+        probe.send(b"q")
+        probe.read_until(b"CONCURRENT_EXEC_DONE")
+        self.assert_terminal_restored(probe.finish())
+        self.assert_cooked_mode(probe)
+
     def test_init_command_exec_waits_for_stdin_control_startup(self) -> None:
         probe = self._probe("default-init-exec")
         probe.read_until(b"INIT_EXEC_CHILD")

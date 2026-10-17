@@ -65,7 +65,9 @@ final class _SharedStdin {
 
   void _sync() {
     if (_closed) return;
-    final wanted = _readers.any((reader) => !reader.isPaused);
+    // An inherited exec owns the terminal, even if another program reads.
+    final wanted =
+        _execUsers == 0 && _readers.any((reader) => !reader.isPaused);
     var port = _port;
     if (port == null) {
       // During an inherited exec fd 0 belongs to the child: do not start a
@@ -96,13 +98,17 @@ final class _SharedStdin {
     return settled.future;
   }
 
-  /// macOS only: detaches the stdin reader before a child inherits the
-  /// terminal. Pair every call with [endInheritedExec].
+  /// Stops the stdin reader before a child inherits the terminal: on macOS by
+  /// detaching it, elsewhere by pausing it. Pair every call with
+  /// [endInheritedExec].
   Future<void> beginInheritedExec() async {
-    if (!Platform.isMacOS) return;
-    // Count before the first await, so a concurrent program cannot start a
-    // reader while another program's child owns fd 0.
+    // Count before the first await, so a concurrent program cannot start or
+    // resume a reader while another program's child owns fd 0.
     _execUsers++;
+    if (!Platform.isMacOS) {
+      _sync();
+      return settle();
+    }
     final setup = _execSetup;
     if (setup != null) return setup.future;
     final firstSetup = Completer<void>();
@@ -117,7 +123,6 @@ final class _SharedStdin {
   }
 
   void endInheritedExec() {
-    if (!Platform.isMacOS) return;
     _execUsers--;
     if (_execUsers == 0) {
       _execSetup = null;
@@ -126,11 +131,7 @@ final class _SharedStdin {
   }
 
   Future<void> _prepareForInheritedExec() async {
-    if (!stdin.hasTerminal ||
-        _closed ||
-        _readers.any((reader) => !reader.isPaused)) {
-      return;
-    }
+    if (!stdin.hasTerminal || _closed) return;
     var control = _control;
     if (control == null) {
       final ready = _controlReady;
@@ -705,12 +706,8 @@ final class Program {
           try {
             if (msg.inheritStdio) {
               _setRawMode(false);
-              if (Platform.isMacOS) {
-                inheritedExecLease = true;
-                await _sharedStdin.beginInheritedExec();
-              } else if (usesSharedStdin && !_disableInput) {
-                await _sharedStdin.settle();
-              }
+              inheritedExecLease = true;
+              await _sharedStdin.beginInheritedExec();
             }
             if (!current()) return false;
             await releaseTerminal(resetRenderer: true);

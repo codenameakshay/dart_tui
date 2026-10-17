@@ -37,6 +37,17 @@ Future<void> main(List<String> arguments) async {
         .run(const _ProbeModel('exec-followup'));
     return;
   }
+  if (scenario == 'default-exec-concurrent') {
+    // Another program reading stdin must not take input from an exec child.
+    await Future.wait([
+      Program(options: [withAltScreen(), withHideCursor()])
+          .run(const _ProbeModel('default-exec')),
+      Program(options: [withoutRenderer()])
+          .run(const _ProbeModel('exec-bystander')),
+    ]);
+    stdout.writeln('CONCURRENT_EXEC_DONE');
+    return;
+  }
   if (scenario == 'explicit-exec') {
     await Program(options: [
       withInput(stdin),
@@ -104,6 +115,7 @@ const _scenarios = {
   'default-term',
   'default-exec',
   'default-exec-chain',
+  'default-exec-concurrent',
   'default-init-exec',
   'explicit-exec',
   'restart-suspend',
@@ -153,6 +165,9 @@ final class _ProbeModel implements Model {
         _ProbeModel(scenario, 'KEY:${msg.key}'),
         msg.key == 'ctrl+c' ? _delayedQuit() : null,
       );
+    }
+    if (scenario == 'exec-bystander' && msg is KeyMsg && msg.key == 'q') {
+      return (this, () => quit());
     }
     if (scenario == 'default-suspend' && msg is KeyMsg) {
       if (msg.key == 'ctrl+z') return (this, suspend);
@@ -214,6 +229,7 @@ final class _ProbeModel implements Model {
               'default-term' => 'DEFAULT_TERM_READY',
               'default-exec' => 'DEFAULT_EXEC_READY',
               'default-exec-chain' => 'DEFAULT_EXEC_READY',
+              'exec-bystander' => 'BYSTANDER',
               'default-init-exec' => 'DEFAULT_INIT_EXEC_READY',
               'explicit-exec' => 'EXPLICIT_EXEC_READY',
               'exec-followup' => 'EXEC_FOLLOWUP_READY',
