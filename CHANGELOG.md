@@ -1,5 +1,149 @@
 # Changelog
 
+## 3.0.0 - 2026-10-17
+
+This major release makes raw mode behave like Bubble Tea on macOS and Linux,
+decodes input one Unicode scalar at a time, validates timers and forms in every
+build mode, and removes two leftover APIs. It also fixes the hang that kept
+every program reading default stdin alive after it quit (#15). The full macOS
+validation is in
+[`docs/quality/2026-10-17-macos-3.0.0-validation.md`](docs/quality/2026-10-17-macos-3.0.0-validation.md).
+
+### Breaking changes
+
+- **`View.setContent` removed.** Assign the field instead:
+  `view.content = 'Hello';`.
+- **`Form.fieldIndexForTest` removed.** Test observable state instead, such as
+  `form.values` or `form.view().content`.
+- **Ctrl+C, Ctrl+Z and other control keys are key messages on macOS and
+  Linux.** Raw mode now also clears ISIG, IEXTEN and IXON. Ctrl+C no longer
+  raises SIGINT, so `Program` no longer turns it into `InterruptMsg` and quits
+  for you. Ctrl+Z no longer stops the process, which used to leave the
+  terminal broken. Handle the keys in `update`. `kill -INT` still delivers
+  `InterruptMsg`. Ctrl+\, Ctrl+S, Ctrl+Q, Ctrl+V and Ctrl+Y also arrive as keys.
+  ```dart
+  if (msg is KeyMsg) {
+    switch (msg.key) {
+      case 'ctrl+c':
+        return (this, () => quit());
+      case 'ctrl+z':
+        return (this, suspend); // optional job control
+    }
+  }
+  ```
+- **One key event per Unicode scalar.** Adjacent printable bytes are no longer
+  merged into one `KeyPressMsg`. An unbracketed paste of `hello` is five
+  events. A grapheme cluster such as 👨‍👩‍👧 or e + U+0301 arrives as several
+  events. Malformed UTF-8 produces `unknown` keys instead of stalling input.
+  Append `msg.keyEvent.text` for each event, and handle `PasteMsg` for pasted
+  text.
+- **Timer helpers validate durations when called.** `every` throws
+  `ArgumentError` for a zero or negative interval. `tick` and `tickWithId`
+  throw for a negative delay. Before, `every(Duration.zero, ...)` failed later
+  with a division by zero.
+- **Forms validate their input at construction in every build mode.** `Form`
+  throws `ArgumentError` for no groups, an empty group, or duplicate field keys
+  across groups. `Field.selectOf` and `Field.multiSelectOf` throw when given
+  both or neither of `options` / `optionsFor`. Multi-select fields throw on
+  duplicate option values. Before, only debug asserts checked some of these.
+- **Default stdin belongs to the main isolate.** A `Program` without
+  `withInput` must run in the main isolate; elsewhere `run()` throws
+  `StateError`. Readers in several isolates used to race for input and could
+  close stdin for the whole process.
+  ```dart
+  await Isolate.run(() => Program(options: [withInput(null)]).run(model));
+  ```
+- **SIGTERM quits gracefully.** It enqueues `QuitMsg`, so the terminal is
+  restored and `run()` returns. A `withFilter` that vetoes `QuitMsg` also
+  vetoes SIGTERM. Before, the process died with the terminal left in the
+  alternate screen.
+- **`meta` is no longer a dependency.** If you imported `package:meta`
+  through dart_tui, add it to your own `pubspec.yaml`.
+
+### Behavior changes
+
+- **Programs exit when `run()` returns.** A helper isolate reads default
+  stdin, so stdin no longer keeps the process alive after the last program.
+  Sequential programs (prompts, gum helpers) still share input, stdin stays
+  open afterwards, and `withInput(stdin)` uses the same shared reader.
+- **Commands end with the program.** Timers that a command starts (`tick`,
+  `every`, `Future.delayed`, ...) are cancelled when the program ends.
+- **`execProcess` owns the terminal input.** While an inherited child runs, no
+  program reads stdin. A child started right after startup no longer receives
+  the terminal's replies to the startup queries; the exec waits up to 500 ms
+  for them, once.
+- **`sequence` no longer blocks input.** Its commands still run in order, but
+  other messages are processed while a step is pending. A sequence stops after
+  a step throws or returns `QuitMsg`/`InterruptMsg`.
+- **Text widgets accept bracketed paste.** Focused `TextInputModel`,
+  `TextAreaModel` and `promptInput` insert `PasteMsg` content with control
+  characters removed. A `Form` routes the paste to the active field. Forward
+  `PasteMsg` to your widgets as well as `KeyMsg`.
+- **Multi-select and dynamic selects keep selections by value.** Values that
+  disappear from `optionsFor` are dropped, and reordered options keep the
+  selection. An untouched `optionsFor` select submits its first option, like a
+  static select, instead of `null`.
+- **Form focus skips hidden fields, hidden groups and notes,** including at the
+  start of the form, and hidden groups never receive input.
+- **More keys are named.** ESC + key arrives as `alt+<key>` (`alt+a`,
+  `alt+enter`, `ctrl+alt+a`) instead of `unknown`. NUL is `ctrl+space`;
+  0x1C–0x1F are `ctrl+\`, `ctrl+]`, `ctrl+^` and `ctrl+_`; SS3 arrows are
+  `up`/`down`/`left`/`right`; SGR wheel-left/right decode as
+  `wheelLeft`/`wheelRight`.
+- **The final frame is rendered on quit,** and leaving the alternate screen no
+  longer prints a blank line.
+- **Mouse wheel events scroll `ListModel`, `TableModel` and `TreeModel`.**
+- **`ListModel` filter mode:** Up/Down and Ctrl+P/Ctrl+N move through the
+  matches while typing, so gum `filter()` returns the highlighted match.
+- **`FilePickerModel`** shows load errors (`error`) instead of an empty list,
+  ignores keys while a directory loads, clamps `cursor`, `scrollOffset` and
+  `height`, and adds `copyWith(clearSelected: true)`.
+
+### Fixes
+
+- Inline (non-alt-screen) programs leave the shell prompt directly below the
+  view on exit. Before, it landed on the last changed row, inside the view.
+- Typing a combining mark or a multi-scalar emoji no longer crashes
+  `TextInputModel` or misplaces text in `TextAreaModel`.
+- Backspace in list filters and `promptInput` deletes a whole grapheme, and
+  `promptInput` accepts Space.
+- List mouse clicks select the right item when only some items have
+  descriptions; navigation is safe with an empty list or no filter matches.
+- `Field.input(placeholder:)` renders; `optionsFor` selects show their options
+  before the first edit.
+- Table headers align with their rows, and the selected tree branch keeps its
+  highlight.
+- Canvas layers with equal z-index keep their paint order.
+- Input stream errors quit cleanly and restore the terminal, and a throttled
+  frame is never written after the terminal is released or the program is
+  killed.
+- Timer errors show the rejected duration.
+- Fixed several examples: `shopping_list`, `showcase`, `http`,
+  `package_manager`, `cursor_model`, `gmail`, `canvas`, `isbn_form`,
+  `list_mutation` and `file_picker`.
+
+### Performance
+
+- `TextInputModel` re-segments only the end of the value when text is
+  appended: 25,000 single-character inserts take 0.95 s, down from 1.7 s in
+  2.1.0.
+
+### Tooling and docs
+
+- A new `sdk-floor` CI job runs analysis and tests on Dart 3.5.4, and the dev
+  dependency ranges now resolve there.
+- PTY smoke tests require each example to exit on its own after quit, and cover
+  paste and Space.
+- `tool/compile_examples.sh` reports failed compiles.
+- Re-recorded all 60 VHS example GIFs.
+
+### Known limitations
+
+- Inline (non-alt-screen) rendering still starts at row 1 and can overwrite
+  earlier shell output (#18).
+- On Windows, the first input meant for an `execProcess` child can reach the
+  program instead.
+
 ## 2.1.0 - 2026-09-10
 
 Performance and terminal-lifecycle follow-up to 2.0.0. No breaking API changes.

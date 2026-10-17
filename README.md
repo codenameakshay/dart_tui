@@ -40,13 +40,20 @@ Build rich, interactive CLI applications with a clean **Model–Update–View** 
 ```yaml
 # pubspec.yaml
 dependencies:
-  dart_tui: ^2.1.0
+  dart_tui: ^3.0.0
 ```
 
 ```bash
 dart pub get
 ```
 
+> **Migrating from 2.x?** Version 3.0 delivers Ctrl+C and Ctrl+Z to `update`
+> as keys instead of quitting or suspending for you, sends one key event per
+> Unicode scalar, validates timers and forms at construction, and removes
+> `View.setContent` (assign `view.content`). See the
+> [3.0.0 changelog](CHANGELOG.md#300---2026-10-17) for the complete migration
+> notes.
+>
 > **Migrating from 1.x?** Version 2.0 removes the `TeaModel`, `LegacyKeyMsg`,
 > `TuiStyle`, and `ProgramOptions` compatibility APIs. Use `Model`,
 > `KeyPressMsg`/`KeyMsg`, immutable `Style`, and a single

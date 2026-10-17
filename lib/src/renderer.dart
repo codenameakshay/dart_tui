@@ -60,6 +60,24 @@ final class NilRenderer implements TeaRenderer {
   void scroll(int n, {bool up = true}) {}
 }
 
+/// The 1-based terminal row to park the cursor on at exit: the view's last
+/// row. A trailing newline ends the last line rather than adding an empty row,
+/// and a last line wider than [columns] soft-wraps onto more rows.
+int _parkRow(int rows, int Function(int row) widthOf, int columns) {
+  var last = rows - 1;
+  if (last > 0 && widthOf(last) == 0) last--;
+  final width = widthOf(last);
+  final wrappedRows =
+      columns > 0 && width > columns ? (width - 1) ~/ columns : 0;
+  return last + 1 + wrappedRows;
+}
+
+/// The physical column count when [output] is an interactive stdout, else 0.
+int _stdoutColumns(IOSink output) =>
+    identical(output, stdout) && stdout.hasTerminal
+        ? stdout.terminalColumns
+        : 0;
+
 final class _CursorRendererState {
   CursorShape? _shape;
   bool? _blink;
@@ -108,6 +126,8 @@ final class _CursorRendererState {
 }
 
 final class AnsiRenderer implements TeaRenderer {
+  /// [terminalColumns] reports the physical width used to park the cursor
+  /// below a soft-wrapped last line on exit; it defaults to stdout's width.
   AnsiRenderer({
     required IOSink output,
     IOSink? logSink,
@@ -115,8 +135,10 @@ final class AnsiRenderer implements TeaRenderer {
     required bool defaultHideCursor,
     MouseMode defaultMouseMode = MouseMode.none,
     bool defaultReportFocus = false,
+    int Function()? terminalColumns,
   })  : _output = output,
         _logSink = logSink,
+        _terminalColumns = terminalColumns ?? (() => _stdoutColumns(output)),
         _modes = TerminalModeState(
           defaultAltScreen: defaultAltScreen,
           defaultHideCursor: defaultHideCursor,
@@ -126,6 +148,7 @@ final class AnsiRenderer implements TeaRenderer {
 
   final IOSink _output;
   final IOSink? _logSink;
+  final int Function() _terminalColumns;
   final TerminalModeState _modes;
   List<String> _lastLines = const <String>[];
   String _lastContent = '';
@@ -227,10 +250,17 @@ final class AnsiRenderer implements TeaRenderer {
 
   @override
   void release({bool reset = false}) {
+    // Park on the view's last row, not the last changed one, so the newline
+    // Program writes on exit puts the shell prompt below the view.
+    final lines = _lastLines;
+    final parkRow = !reset && _hasRenderedFrame && !_modes.altScreenEnabled
+        ? _parkRow(lines.length, (r) => getWidth(lines[r]), _terminalColumns())
+        : 0;
     setUnicodeCore(false);
     _terminalViewState.reset(_output);
     _cursorState.reset(_output);
     _modes.reset(_output);
+    if (parkRow > 0) _output.write('\x1b[$parkRow;1H');
     _lastLines = const <String>[];
     _lastContent = '';
     _hasRenderedFrame = false;
@@ -314,6 +344,7 @@ final class _Cell {
 ///
 /// Activate via [withCellRenderer] program option.
 final class CellRenderer implements TeaRenderer {
+  /// See [AnsiRenderer.new] for [terminalColumns].
   CellRenderer({
     required IOSink output,
     IOSink? logSink,
@@ -321,8 +352,10 @@ final class CellRenderer implements TeaRenderer {
     required bool defaultHideCursor,
     MouseMode defaultMouseMode = MouseMode.none,
     bool defaultReportFocus = false,
+    int Function()? terminalColumns,
   })  : _output = output,
         _logSink = logSink,
+        _terminalColumns = terminalColumns ?? (() => _stdoutColumns(output)),
         _modes = TerminalModeState(
           defaultAltScreen: defaultAltScreen,
           defaultHideCursor: defaultHideCursor,
@@ -332,6 +365,7 @@ final class CellRenderer implements TeaRenderer {
 
   final IOSink _output;
   final IOSink? _logSink;
+  final int Function() _terminalColumns;
   final TerminalModeState _modes;
   bool _unicodeCoreEnabled = false;
 
@@ -397,10 +431,16 @@ final class CellRenderer implements TeaRenderer {
 
   @override
   void release({bool reset = false}) {
+    // See AnsiRenderer.release.
+    final grid = _lastGrid;
+    final parkRow = !reset && !_modes.altScreenEnabled && grid != null
+        ? _parkRow(grid.length, (r) => grid[r].length, _terminalColumns())
+        : 0;
     setUnicodeCore(false);
     _terminalViewState.reset(_output);
     _cursorState.reset(_output);
     _modes.reset(_output);
+    if (parkRow > 0) _output.write('\x1b[$parkRow;1H');
     _lastGrid = null;
     _lastContent = null;
     if (reset) clearScreen();
