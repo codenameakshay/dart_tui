@@ -126,6 +126,21 @@ TeaKey? parseKeyFromBuffer(List<int> buffer) {
         consumed: 2
       );
     }
+    // Alt+key: Option-as-Meta / Esc+ terminals send ESC followed by the key.
+    if (b1 >= 0x20) {
+      final inner = parseKeyFromBufferAt(buffer, offset + 1);
+      if (inner == null) return null;
+      if (inner.key.code == KeyCode.rune) {
+        return (
+          key: TeaKey(
+            code: KeyCode.rune,
+            text: inner.key.text,
+            modifiers: const {KeyMod.alt},
+          ),
+          consumed: 1 + inner.consumed
+        );
+      }
+    }
 
     return (key: const TeaKey(code: KeyCode.unknown), consumed: 2);
   }
