@@ -22,12 +22,23 @@ Future<void> main(List<String> arguments) async {
     await _runIsolateThenMain();
     return;
   }
+  if (scenario == 'explicit-exits') {
+    await _runExplicitExits();
+    return;
+  }
 
   final completed = ReceivePort();
   final events = StreamIterator<Object?>(completed);
   for (var i = 0; i < 32; i++) {
-    await Isolate.spawn(_runAndQuit, completed.sendPort);
+    await Isolate.spawn(
+      _runAndQuit,
+      completed.sendPort,
+      onError: completed.sendPort,
+    );
     await events.moveNext();
+    if (events.current != null) {
+      throw StateError('child isolate $i failed: ${events.current}');
+    }
   }
   await events.cancel();
   completed.close();
@@ -50,7 +61,9 @@ Future<void> _runConcurrentPrograms() async {
 
 Future<void> _runIsolateThenMain() async {
   // A program in a short-lived isolate must not take stdin away from a later
-  // program in this isolate.
+  // program in this isolate. The pause lets the exited isolate's reader put
+  // fd 0 back; programs that read stdin while another isolate's reader is
+  // being released are not supported yet.
   final completed = ReceivePort();
   await Isolate.spawn(_runAndQuit, completed.sendPort);
   await completed.first;
@@ -59,6 +72,33 @@ Future<void> _runIsolateThenMain() async {
     () => stdout.writeln('MAIN_READY'),
   ));
   stdout.writeln('MAIN_DONE');
+}
+
+Future<void> _runExplicitExits() async {
+  final exited = ReceivePort();
+  final events = StreamIterator<Object?>(exited);
+  await _exitChildPrograms(events, exited);
+  await events.cancel();
+  exited.close();
+}
+
+Future<void> _exitChildPrograms(
+  StreamIterator<Object?> events,
+  ReceivePort exited,
+) async {
+  for (var i = 0; i < 32; i++) {
+    await Isolate.spawn(
+      _runAndExit,
+      null,
+      onExit: exited.sendPort,
+      onError: exited.sendPort,
+    );
+    await events.moveNext();
+    if (events.current != null) {
+      throw StateError('child isolate $i failed: ${events.current}');
+    }
+  }
+  stdout.writeln('CHILD_ISOLATES_EXITED');
 }
 
 Future<void> _runAfterEof() async {
@@ -92,6 +132,11 @@ Future<void> _runSignalLifecycle() async {
 Future<void> _runAndQuit(SendPort completed) async {
   await Program(options: [withoutRenderer()]).run(_QuitImmediately());
   completed.send(null);
+}
+
+Future<void> _runAndExit(Object? _) async {
+  await Program(options: [withoutRenderer()]).run(_QuitImmediately());
+  Isolate.exit();
 }
 
 final class _QuitImmediately extends Model {

@@ -14,9 +14,15 @@ void main() {
     expect(await probe.waitForExit(), 0, reason: await probe.errors);
   });
 
+  test('explicitly exited isolates release after 32 immediate quits', () async {
+    final probe = await _ProbeProcess.start('explicit-exits');
+    addTearDown(probe.killIfRunning);
+
+    await probe.readUntil('CHILD_ISOLATES_EXITED');
+    expect(await probe.waitForExit(), 0, reason: await probe.errors);
+  });
+
   test('a program after one in an exited isolate still reads stdin', () async {
-    // Windows leaves the exited isolate's paused reader in place.
-    if (Platform.isWindows) return;
     final probe = await _ProbeProcess.start('isolate-then-main');
     addTearDown(probe.killIfRunning);
 
@@ -26,7 +32,10 @@ void main() {
 
     await probe.readUntil('MAIN_DONE');
     expect(await probe.waitForExit(), 0, reason: await probe.errors);
-  });
+  },
+      skip: Platform.isWindows
+          ? 'Windows leaves the exited isolate reader paused.'
+          : false);
 
   test('concurrent default programs both receive input and exit', () async {
     final probe = await _ProbeProcess.start('concurrent');
@@ -100,8 +109,15 @@ final class _ProbeProcess {
   }
 
   Future<void> readUntil(String marker) async {
-    while (await lines.moveNext().timeout(const Duration(seconds: 12))) {
-      if (lines.current.contains(marker)) return;
+    try {
+      while (await lines.moveNext().timeout(const Duration(seconds: 12))) {
+        if (lines.current.contains(marker)) return;
+      }
+    } on TimeoutException {
+      process.kill(ProcessSignal.sigkill);
+      final code = await process.exitCode.timeout(const Duration(seconds: 2));
+      fail(
+          'timed out waiting for $marker; exitCode=$code; stderr=${await errors}');
     }
     final code = await process.exitCode.timeout(
       const Duration(seconds: 2),
