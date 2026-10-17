@@ -51,7 +51,7 @@ final class ShoppingModel extends Model {
           null,
         );
       case 'enter':
-      case ' ':
+      case 'space':
         final next = Set<int>.from(selected);
         if (next.contains(cursor)) {
           next.remove(cursor);
