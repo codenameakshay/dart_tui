@@ -315,4 +315,73 @@ void main() {
       expect(output, contains('\x1b[u')); // restore cursor
     });
   });
+
+  group('cursor parking on exit', () {
+    late StringBuffer buf;
+    late AnsiRenderer renderer;
+
+    setUp(() {
+      buf = StringBuffer();
+      renderer = AnsiRenderer(
+        output: _StringSink(buf),
+        defaultAltScreen: false,
+        defaultHideCursor: false,
+      );
+    });
+
+    test('close parks on the last row after a partial update', () {
+      renderer.render(newView('one\ntwo\nthree'));
+      renderer.render(newView('ONE\ntwo\nthree'));
+      buf.clear();
+
+      renderer.close();
+
+      expect(buf.toString(), endsWith('\x1b[3;1H'));
+    });
+
+    test('parking follows a view that shrinks', () {
+      renderer.render(newView('one\ntwo\nthree'));
+      renderer.render(newView('one'));
+      buf.clear();
+
+      renderer.close();
+
+      expect(buf.toString(), endsWith('\x1b[1;1H'));
+    });
+
+    test('a trailing newline ends the last row instead of adding one', () {
+      renderer.render(newView('one\ntwo\n'));
+      buf.clear();
+
+      renderer.close();
+
+      expect(buf.toString(), endsWith('\x1b[2;1H'));
+    });
+
+    test('release(reset: true) clears instead of parking', () {
+      renderer.render(newView('one\ntwo'));
+      buf.clear();
+
+      renderer.release(reset: true);
+
+      expect(buf.toString(), isNot(contains('\x1b[2;1H')));
+      expect(buf.toString(), endsWith('\x1b[H\x1b[2J'));
+    });
+
+    test('close does not park in the alternate screen', () {
+      renderer.render(View(content: 'alt\nscreen', altScreen: true));
+      buf.clear();
+
+      renderer.close();
+
+      expect(buf.toString(), contains('\x1b[?1049l'));
+      expect(buf.toString(), isNot(contains(';1H')));
+    });
+
+    test('close does not park before the first frame', () {
+      renderer.close();
+
+      expect(buf.toString(), isNot(contains(';1H')));
+    });
+  });
 }

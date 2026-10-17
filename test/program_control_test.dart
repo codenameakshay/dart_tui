@@ -439,6 +439,19 @@ void main() {
     expect(await runWith(const []), endsWith('\n'));
   });
 
+  test('an inline program leaves the prompt below its last row', () async {
+    for (final options in [
+      const <ProgramOption>[],
+      [withCellRenderer()],
+    ]) {
+      final sink = _StringSink();
+      await Program(options: [withOutput(sink), withInput(null), ...options])
+          .run(_DriverModel(const []));
+
+      expect(sink.buf.toString(), endsWith('\x1b[1;1H\n'));
+    }
+  });
+
   test('kill wakes a program waiting without queued messages', () async {
     final ready = Completer<void>();
     final program = Program(options: [

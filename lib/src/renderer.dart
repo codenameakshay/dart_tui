@@ -60,6 +60,11 @@ final class NilRenderer implements TeaRenderer {
   void scroll(int n, {bool up = true}) {}
 }
 
+/// The 1-based row to park the cursor on at exit. A trailing newline ends the
+/// view's last line rather than adding an empty row below it.
+int _parkRow(int rows, {required bool lastRowEmpty}) =>
+    rows > 1 && lastRowEmpty ? rows - 1 : rows;
+
 final class _CursorRendererState {
   CursorShape? _shape;
   bool? _blink;
@@ -227,10 +232,16 @@ final class AnsiRenderer implements TeaRenderer {
 
   @override
   void release({bool reset = false}) {
+    // Park on the view's last row, not the last changed one, so the newline
+    // Program writes on exit puts the shell prompt below the view.
+    final parkRow = !reset && _hasRenderedFrame && !_modes.altScreenEnabled
+        ? _parkRow(_lastLines.length, lastRowEmpty: _lastLines.last.isEmpty)
+        : 0;
     setUnicodeCore(false);
     _terminalViewState.reset(_output);
     _cursorState.reset(_output);
     _modes.reset(_output);
+    if (parkRow > 0) _output.write('\x1b[$parkRow;1H');
     _lastLines = const <String>[];
     _lastContent = '';
     _hasRenderedFrame = false;
@@ -397,10 +408,16 @@ final class CellRenderer implements TeaRenderer {
 
   @override
   void release({bool reset = false}) {
+    // See AnsiRenderer.release.
+    final grid = _lastGrid;
+    final parkRow = !reset && !_modes.altScreenEnabled && grid != null
+        ? _parkRow(grid.length, lastRowEmpty: grid.last.isEmpty)
+        : 0;
     setUnicodeCore(false);
     _terminalViewState.reset(_output);
     _cursorState.reset(_output);
     _modes.reset(_output);
+    if (parkRow > 0) _output.write('\x1b[$parkRow;1H');
     _lastGrid = null;
     _lastContent = null;
     if (reset) clearScreen();
