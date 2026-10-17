@@ -38,6 +38,7 @@ final class _SharedStdin {
   final Map<int, Completer<void>> _settling = {};
   int _settleId = 0;
   Completer<void>? _controlReady;
+  Completer<void>? _readingStarted;
   Completer<void>? _execCancelAck;
   int _execCancelToken = 0;
   int _execUsers = 0;
@@ -83,7 +84,17 @@ final class _SharedStdin {
     if (control != null && wanted != _reading) {
       _reading = wanted;
       control.send(wanted);
+      if (wanted) {
+        _readingStarted?.complete();
+        _readingStarted = null;
+      }
     }
+  }
+
+  /// Completes once the reader has been told to read (or stdin has closed).
+  Future<void> get reading {
+    if (_reading || _closed) return Future<void>.value();
+    return (_readingStarted ??= Completer<void>()).future;
   }
 
   /// Completes once the helper has applied every earlier pause or resume, so
@@ -228,6 +239,8 @@ final class _SharedStdin {
       case null:
         _closed = true;
         _pinHelperAlive = false;
+        _readingStarted?.complete();
+        _readingStarted = null;
         final ready = _controlReady;
         if (ready != null && !ready.isCompleted) ready.complete();
         final ack = _execCancelAck;
@@ -534,6 +547,11 @@ final class Program {
     // Commands from an earlier run must not reach this one.
     bool current() => _running && runId == _runs;
 
+    // Replies to the startup queries. An inherited exec started right away
+    // waits for them, so the child does not read them as keystrokes.
+    final pendingReplies = <int>{};
+    final repliesReceived = Completer<void>();
+
     // Timers that commands start end with the run, so a pending tick or delay
     // cannot keep the process alive after the program has quit.
     final commandTimers = <Timer>{};
@@ -721,6 +739,17 @@ final class Program {
           }());
           return false;
         case ExecMsg():
+          if (msg.inheritStdio && pendingReplies.isNotEmpty) {
+            // Let the terminal's replies to the startup queries reach our
+            // decoder first. A terminal that never replies costs 250 ms, once.
+            if (usesSharedStdin && !_disableInput) {
+              await _sharedStdin.reading
+                  .timeout(const Duration(seconds: 1), onTimeout: () {});
+            }
+            await repliesReceived.future
+                .timeout(const Duration(milliseconds: 250), onTimeout: () {});
+            pendingReplies.clear();
+          }
           // Stop reading, and wait until the stdin reader has stopped, so the
           // child gets every byte typed once the terminal is released.
           _inputSub?.pause();
@@ -858,6 +887,16 @@ final class Program {
             _loneEscTimer?.cancel();
             _loneEscTimer = null;
             for (final msg in decoder.feed(bytes)) {
+              final reply = switch (msg) {
+                ModeReportMsg(:final mode) => mode,
+                BackgroundColorMsg() => 11,
+                _ => null,
+              };
+              if (reply != null &&
+                  pendingReplies.remove(reply) &&
+                  pendingReplies.isEmpty) {
+                repliesReceived.complete();
+              }
               enqueue(msg);
             }
             if (decoder.hasPendingLoneEscape) {
@@ -901,6 +940,7 @@ final class Program {
       // Send capability queries AFTER the first frame so the first visible
       // output reaches the terminal without being delayed by query bytes.
       if (!_disableInput) {
+        pendingReplies.addAll(const [2026, 2027, 11]);
         _output.write('\x1b[?2026\$p');
         _output.write('\x1b[?2027\$p');
         // OSC 11: auto-detect terminal background color.

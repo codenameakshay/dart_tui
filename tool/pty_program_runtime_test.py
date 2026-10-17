@@ -336,6 +336,22 @@ class ProgramRuntimePtyTest(unittest.TestCase):
         self.assert_terminal_restored(probe.finish())
         self.assert_cooked_mode(probe)
 
+    def test_init_exec_child_does_not_read_query_replies(self) -> None:
+        probe = self._probe("default-init-exec-reads")
+        # Answer the startup queries the way a slower terminal (or one over
+        # SSH) does: after the program has already started its child.
+        probe.read_until(b"\x1b]11;?\x07")
+        time.sleep(0.1)
+        probe.send(
+            b"\x1b[?2026;2$y\x1b[?2027;0$y"
+            b"\x1b]11;rgb:0000/0000/0000\x1b\\"
+        )
+        probe.read_until(b"CHILD_GOT:")
+        line = bytes(probe.data).split(b"CHILD_GOT:", 1)[1].split(b"\r", 1)[0]
+        self.assertEqual(line.strip(), b"")
+        self.assert_terminal_restored(probe.finish())
+        self.assert_cooked_mode(probe)
+
     def test_sigterm_quits_and_restores_terminal(self) -> None:
         probe = self._probe("default-term")
         probe.read_until(b"DEFAULT_TERM_READY")

@@ -117,6 +117,7 @@ const _scenarios = {
   'default-exec-chain',
   'default-exec-concurrent',
   'default-init-exec',
+  'default-init-exec-reads',
   'explicit-exec',
   'restart-suspend',
 };
@@ -129,6 +130,24 @@ final class _ProbeModel implements Model {
 
   @override
   Cmd? init() {
+    if (scenario == 'default-init-exec-reads') {
+      // The child reads its input in cbreak mode, as an editor would, and
+      // reports what it got: replies to the startup queries must not be there.
+      return execProcess(
+        'python3',
+        [
+          '-c',
+          'import os, select, termios, tty\n'
+              'old = termios.tcgetattr(0)\n'
+              'tty.setcbreak(0, termios.TCSANOW)\n'
+              'ready, _, _ = select.select([0], [], [], 0.5)\n'
+              'data = os.read(0, 256) if ready else b""\n'
+              'termios.tcsetattr(0, termios.TCSADRAIN, old)\n'
+              'print("CHILD_GOT:" + data.hex(), flush=True)\n',
+        ],
+        onExit: (_) => quit(),
+      );
+    }
     if (scenario == 'default-init-exec') {
       return execProcess(
         '/bin/sh',
@@ -231,6 +250,7 @@ final class _ProbeModel implements Model {
               'default-exec-chain' => 'DEFAULT_EXEC_READY',
               'exec-bystander' => 'BYSTANDER',
               'default-init-exec' => 'DEFAULT_INIT_EXEC_READY',
+              'default-init-exec-reads' => 'DEFAULT_INIT_EXEC_READY',
               'explicit-exec' => 'EXPLICIT_EXEC_READY',
               'exec-followup' => 'EXEC_FOLLOWUP_READY',
               _ => throw StateError('unsupported probe scenario: $scenario'),
