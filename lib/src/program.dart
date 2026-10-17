@@ -690,8 +690,9 @@ final class Program {
             break;
           }
         }
-        // Render once for the entire drained batch.
-        if (needsRender && _running) {
+        // Render once for the entire drained batch, including the batch that
+        // quit, so the final frame shows the last update (unless killed).
+        if (needsRender && !_killed) {
           await render(_runningModel!.view());
         }
         if (_running) {

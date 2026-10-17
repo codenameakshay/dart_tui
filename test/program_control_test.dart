@@ -67,6 +67,19 @@ void main() {
     expect(output, isNot(contains('\x1b]2;owned')));
   });
 
+  test('the frame for the update before quit is rendered', () async {
+    final sink = _StringSink();
+    final ready = Completer<void>();
+    final program = Program(options: [withOutput(sink), withInput(null)]);
+    final run = program.run(_ReadyModel(ready));
+    await ready.future;
+    program
+      ..send(_LabelMsg('final'))
+      ..send(QuitMsg());
+    await run;
+    expect(sink.buf.toString(), contains('label=final'));
+  });
+
   test('kill wakes a program waiting without queued messages', () async {
     final ready = Completer<void>();
     final program = Program(options: [
@@ -175,6 +188,36 @@ void main() {
     ]).run(model).timeout(const Duration(seconds: 10));
     expect(model.exitCode, 0);
   }, timeout: const Timeout(Duration(seconds: 15)));
+}
+
+final class _ReadyModel extends Model {
+  _ReadyModel(this.ready, {this.label = 'start', this.log});
+  final Completer<void> ready;
+  final String label;
+  final List<String>? log;
+
+  @override
+  Cmd? init() => () {
+        if (!ready.isCompleted) ready.complete();
+        return null;
+      };
+
+  @override
+  (Model, Cmd?) update(Msg msg) {
+    if (msg is _LabelMsg) {
+      log?.add(msg.label);
+      return (_ReadyModel(ready, label: msg.label, log: log), null);
+    }
+    return (this, null);
+  }
+
+  @override
+  View view() => newView('label=$label');
+}
+
+final class _LabelMsg extends Msg {
+  _LabelMsg(this.label);
+  final String label;
 }
 
 final class _IdleModel extends Model {
