@@ -104,6 +104,18 @@ void main() {
     expect(log, ['key', 'slow', 'after-slow']);
   });
 
+  test('leaving the alt screen does not print a blank line', () async {
+    Future<String> runWith(List<ProgramOption> options) async {
+      final sink = _StringSink();
+      await Program(options: [withOutput(sink), withInput(null), ...options])
+          .run(_DriverModel(const []));
+      return sink.buf.toString();
+    }
+
+    expect(await runWith([withAltScreen()]), isNot(endsWith('\n')));
+    expect(await runWith(const []), endsWith('\n'));
+  });
+
   test('kill wakes a program waiting without queued messages', () async {
     final ready = Completer<void>();
     final program = Program(options: [

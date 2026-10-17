@@ -229,6 +229,7 @@ final class Program {
   StreamSubscription<ProcessSignal>? _sigintSub;
   StreamSubscription<ProcessSignal>? _sigtermSub;
   TeaRenderer? _renderer;
+  bool _endedInAltScreen = false;
 
   void _setRawMode(bool raw) {
     try {
@@ -309,6 +310,7 @@ final class Program {
     }
     _running = true;
     _killed = false;
+    _endedInAltScreen = false;
     _finished = Completer<void>();
     _activityWake = null;
     _inputCancel = null;
@@ -712,10 +714,11 @@ final class Program {
       await _inputCancel;
       await _logClose;
       if (!_disableRenderer) {
-        // Move to a fresh line so the shell prompt appears cleanly after exit,
-        // then flush so all ANSI reset sequences (show cursor, exit alt-screen)
-        // actually reach the terminal before the shell gets control.
-        _output.writeln();
+        // Move to a fresh line so the shell prompt appears cleanly after exit
+        // (leaving the alt screen already restores the cursor), then flush so
+        // all ANSI reset sequences (show cursor, exit alt-screen) actually
+        // reach the terminal before the shell gets control.
+        if (!_endedInAltScreen) _output.writeln();
         await _output.flush();
       }
     }
@@ -738,6 +741,7 @@ final class Program {
     if (!_disableRenderer) {
       _setRawMode(false);
     }
+    _endedInAltScreen = _renderer?.altScreenActive ?? false;
     _renderer?.close();
     _renderer = null;
     final inputSub = _inputSub;

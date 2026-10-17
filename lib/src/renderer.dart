@@ -23,6 +23,9 @@ abstract interface class TeaRenderer {
   /// Imperatively enter or exit the alternate screen buffer.
   void setAltScreen(bool enabled);
 
+  /// Whether the alternate screen buffer is currently active.
+  bool get altScreenActive;
+
   /// Imperatively hide or show the cursor.
   void setCursorVisibility(bool visible);
 
@@ -31,6 +34,8 @@ abstract interface class TeaRenderer {
 }
 
 final class NilRenderer implements TeaRenderer {
+  @override
+  bool get altScreenActive => false;
   @override
   void clearScreen() {}
   @override
@@ -245,6 +250,9 @@ final class AnsiRenderer implements TeaRenderer {
   }
 
   @override
+  bool get altScreenActive => _modes.altScreenEnabled;
+
+  @override
   void setAltScreen(bool enabled) {
     _terminalViewState.beforeScreenChange(_output, enabled);
     if (!_modes.setAltScreen(_output, enabled)) return;
@@ -413,6 +421,9 @@ final class CellRenderer implements TeaRenderer {
     _output.write(enabled ? '\x1b[?2027h' : '\x1b[?2027l');
     _unicodeCoreEnabled = enabled;
   }
+
+  @override
+  bool get altScreenActive => _modes.altScreenEnabled;
 
   @override
   void setAltScreen(bool enabled) {
