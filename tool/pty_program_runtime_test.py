@@ -265,6 +265,12 @@ class ProgramRuntimePtyTest(unittest.TestCase):
         self.assert_terminal_restored(probe.finish())
         self.assert_cooked_mode(probe)
 
+    def test_sigterm_quits_and_restores_terminal(self) -> None:
+        probe = self._probe("default-term")
+        probe.read_until(b"DEFAULT_TERM_READY")
+        os.kill(probe.pid, signal.SIGTERM)
+        self.assert_terminal_restored(probe.finish())
+        self.assert_cooked_mode(probe)
 
 
 if __name__ == "__main__":

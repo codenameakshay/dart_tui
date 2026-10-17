@@ -63,6 +63,7 @@ const _scenarios = {
   'default-chain',
   'default-keys',
   'default-suspend',
+  'default-term',
   'default-exec',
 };
 
@@ -154,6 +155,7 @@ final class _ProbeModel implements Model {
               'chain-two' => 'CHAIN_TWO_READY',
               'default-keys' => 'DEFAULT_KEYS_READY',
               'default-suspend' => 'DEFAULT_SUSPEND_READY',
+              'default-term' => 'DEFAULT_TERM_READY',
               'default-exec' => 'DEFAULT_EXEC_READY',
               _ => throw StateError('unsupported probe scenario: $scenario'),
             },

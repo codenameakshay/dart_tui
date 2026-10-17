@@ -227,6 +227,7 @@ final class Program {
   bool _unicodeCoreSupported = false;
   StreamSubscription<ProcessSignal>? _sigSub;
   StreamSubscription<ProcessSignal>? _sigintSub;
+  StreamSubscription<ProcessSignal>? _sigtermSub;
   TeaRenderer? _renderer;
 
   void _setRawMode(bool raw) {
@@ -601,6 +602,10 @@ final class Program {
         if (!Platform.isWindows) {
           _sigSub =
               ProcessSignal.sigwinch.watch().listen((_) => scheduleResizeMsg());
+          // As in Bubble Tea, SIGTERM quits so the terminal is restored.
+          _sigtermSub = ProcessSignal.sigterm.watch().listen((_) {
+            if (_running) enqueue(QuitMsg());
+          });
         }
       }
 
@@ -737,6 +742,8 @@ final class Program {
     _sigSub = null;
     unawaited(_sigintSub?.cancel());
     _sigintSub = null;
+    unawaited(_sigtermSub?.cancel());
+    _sigtermSub = null;
     final logSink = _logSink;
     _logSink = null;
     if (logSink != null) {
