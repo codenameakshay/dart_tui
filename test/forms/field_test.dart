@@ -21,6 +21,18 @@ void main() {
       expect(f.key, 'name');
     });
 
+    test('placeholder renders while the input is empty', () {
+      var f = Field.input(key: 'q', title: 'Q', placeholder: 'type here');
+      for (final active in [true, false]) {
+        final out = f.render(active, FormStyles.defaults, FormValues.empty);
+        expect(stripAnsi(out), contains('type here'));
+      }
+      f = f.updateEditor(rune('a'));
+      final typed = f.render(true, FormStyles.defaults, FormValues.empty);
+      expect(stripAnsi(typed), isNot(contains('type here')));
+      expect(stripAnsi(typed), contains('a'));
+    });
+
     test('password renders bullets', () {
       final f = Field.password(key: 'pw', title: 'Pw').updateEditor(rune('x'));
       final out = f.render(true, FormStyles.defaults, FormValues.empty);
