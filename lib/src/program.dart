@@ -766,13 +766,13 @@ final class Program {
         case ExecMsg():
           if (msg.inheritStdio && pendingReplies.isNotEmpty) {
             // Let the terminal's replies to the startup queries reach our
-            // decoder first. A terminal that never replies costs 250 ms, once.
+            // decoder first. A terminal that never replies costs 500 ms, once.
             if (usesSharedStdin && !_disableInput) {
               await _sharedStdin.reading
                   .timeout(const Duration(seconds: 1), onTimeout: () {});
             }
             await repliesReceived.future
-                .timeout(const Duration(milliseconds: 250), onTimeout: () {});
+                .timeout(const Duration(milliseconds: 500), onTimeout: () {});
             pendingReplies.clear();
           }
           if (!current()) return false;
