@@ -17,11 +17,7 @@ final class Group {
 
 /// An immutable, key-based, huh-style form.
 final class Form extends Model implements OutcomeModel<FormValues> {
-  Form(this.groups, {this.styles = FormStyles.defaults})
-      : groupIndex = 0,
-        fieldIndex = 0,
-        submitted = false,
-        cancelled = false {
+  factory Form(List<Group> groups, {FormStyles styles = FormStyles.defaults}) {
     final keys = <String>{};
     if (groups.isEmpty) {
       throw ArgumentError('a Form needs at least one group');
@@ -37,6 +33,7 @@ final class Form extends Model implements OutcomeModel<FormValues> {
         }
       }
     }
+    return Form._(groups, styles, 0, 0, false, false)._normalizeFocus();
   }
 
   Form._(this.groups, this.styles, this.groupIndex, this.fieldIndex,
