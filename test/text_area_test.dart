@@ -318,6 +318,22 @@ void main() {
       expect(ta.cursorColumn, 5);
     });
 
+    test('keeps a combining mark that joins at the cursor under charLimit', () {
+      final ta = paste(
+        TextAreaModel(value: 'aZ', cursorCol: 1, charLimit: 2),
+        '\u0301x',
+      );
+      expect(ta.value, 'a\u0301Z');
+      expect(ta.cursorColumn, 1);
+    });
+
+    test('keeps a fitting first grapheme when the full paste exceeds charLimit',
+        () {
+      final ta = paste(TextAreaModel(charLimit: 1), 'ab');
+      expect(ta.value, 'a');
+      expect(ta.cursorColumn, 1);
+    });
+
     test('truncates to maxContentHeight', () {
       final ta = paste(TextAreaModel(maxContentHeight: 2), 'a\nb\nc\nd');
       expect(ta.value, 'a\nb');

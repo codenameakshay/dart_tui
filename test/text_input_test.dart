@@ -350,6 +350,49 @@ void main() {
       expect(paste(m, 'x').value, 'abcde');
     });
 
+    test('keeps a combining mark that joins at the cursor under charLimit', () {
+      final m = paste(
+        TextInputModel(value: 'aZ', cursorPos: 1, charLimit: 2),
+        '\u0301x',
+      );
+      expect(m.value, 'a\u0301Z');
+      expect(m.cursorPos, 1);
+    });
+
+    test('counts a flag merge with the original suffix when truncating', () {
+      final m = paste(
+        TextInputModel(value: '\u{1F1E7}Z', cursorPos: 0, charLimit: 3),
+        '\u{1F1E6}xy',
+      );
+      expect(m.value, '\u{1F1E6}\u{1F1E7}Z');
+      expect(m.cursorPos, 1);
+    });
+
+    test('allows a pasted ZWJ sequence to merge both cursor boundaries', () {
+      final m = paste(
+        TextInputModel(value: '\u{1F468}\u{1F467}', cursorPos: 1, charLimit: 1),
+        '\u200Dx',
+      );
+      expect(m.value, '\u{1F468}\u200D\u{1F467}');
+      expect(m.cursorPos, 1);
+    });
+
+    test('keeps the longest ZWJ prefix that merges both cursor boundaries', () {
+      final m = paste(
+        TextInputModel(value: '\u{1F468}\u{1F467}', cursorPos: 1, charLimit: 1),
+        '\u200D\u{1F469}\u200Dx',
+      );
+      expect(m.value, '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}');
+      expect(m.cursorPos, 1);
+    });
+
+    test('truncates a large paste without per-grapheme rebuilding', () {
+      const limit = 100000;
+      final m = paste(TextInputModel(charLimit: limit), 'x' * (limit + 1));
+      expect(m.value, 'x' * limit);
+      expect(m.cursorPos, limit);
+    }, timeout: const Timeout(Duration(seconds: 5)));
+
     test('is ignored while unfocused', () {
       final m = TextInputModel(value: 'ab', focused: false);
       expect(paste(m, 'x'), same(m));

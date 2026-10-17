@@ -246,14 +246,27 @@ final class TextInputModel extends Model {
   /// Bracketed paste: newlines and tabs become one space each, other control
   /// characters are dropped, and the text is cut to fit [charLimit].
   TextInputModel _paste(String content) {
-    var text = content
+    final text = content
         .replaceAll(_pasteWhitespace, ' ')
-        .replaceAll(_pasteControls, '')
-        .characters;
-    if (charLimit > 0) {
-      text = text.take((charLimit - _graphemes.length).clamp(0, charLimit));
+        .replaceAll(_pasteControls, '');
+    if (text.isEmpty) return this;
+    final whole = _insert(text);
+    if (!identical(whole, this)) return whole;
+    final graphemes = text.characters;
+    final available = charLimit - _graphemes.length;
+    var count = graphemes.length;
+    // The paste can merge at either cursor edge; a leading ZWJ can also
+    // resegment the first pasted boundary cluster after joining the left edge.
+    final maximumFittingPrefix = available + 3;
+    if (count > maximumFittingPrefix) count = maximumFittingPrefix;
+    if (count == graphemes.length) count--;
+    while (count > 0) {
+      final inserted = _insert(graphemes.take(count).join());
+      if (!identical(inserted, this)) return inserted;
+      if (count <= available) break;
+      count--;
     }
-    return text.isEmpty ? this : _insert(text.toString());
+    return this;
   }
 
   static final _pasteWhitespace = RegExp(r'\r\n|[\r\n\t]');
