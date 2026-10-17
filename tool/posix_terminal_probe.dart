@@ -95,8 +95,8 @@ Future<void> main(List<String> args) async {
     );
     check((read(3) & echo) == childEcho, 'unrelated ECHO change was lost');
 
-    if (macOS) {
-      final savedStdin = preserveMacOSStdin();
+    if (macOS || Platform.isLinux) {
+      final savedStdin = preserveStdin();
       if (savedStdin == null) throw StateError('could not preserve stdin');
       check(close(0) == 0, 'could not simulate stdin reader cancellation');
       final nullPath = '/dev/null'.toNativeUtf8();
@@ -110,12 +110,12 @@ Future<void> main(List<String> args) async {
       final releaseBlocker = Future<void>.delayed(Duration.zero, () {
         check(close(blocker) == 0, 'could not release fd 0');
       });
-      check(await restoreMacOSStdin(savedStdin), 'could not restore fd 0');
+      check(await restoreStdin(savedStdin), 'could not restore fd 0');
       await releaseBlocker;
       check(tcgetattr(0, termios) == 0, 'restored fd 0 is not the PTY');
 
-      final timedOutBackup = preserveMacOSStdin();
-      final recoveryBackup = preserveMacOSStdin();
+      final timedOutBackup = preserveStdin();
+      final recoveryBackup = preserveStdin();
       if (timedOutBackup == null || recoveryBackup == null) {
         throw StateError('could not preserve stdin for timeout test');
       }
@@ -129,7 +129,7 @@ Future<void> main(List<String> args) async {
       }
       check(occupiedStdin == 0, 'could not occupy fd 0 for timeout test');
       check(
-        !await restoreMacOSStdin(timedOutBackup),
+        !await restoreStdin(timedOutBackup),
         'restore succeeded while fd 0 stayed occupied',
       );
       check(
@@ -137,7 +137,7 @@ Future<void> main(List<String> args) async {
         'timed-out restore leaked its saved descriptor',
       );
       check(close(occupiedStdin) == 0, 'could not release occupied fd 0');
-      check(await restoreMacOSStdin(recoveryBackup), 'could not recover fd 0');
+      check(await restoreStdin(recoveryBackup), 'could not recover fd 0');
       check(tcgetattr(0, termios) == 0, 'recovered fd 0 is not the PTY');
     }
     print('POSIX raw mode PTY probe passed');

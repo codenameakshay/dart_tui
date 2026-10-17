@@ -151,7 +151,7 @@ final class _SharedStdin {
       return;
     }
     // Cancelling the reader closes fd 0, so keep a copy to restore.
-    final backup = preserveMacOSStdin();
+    final backup = preserveStdin();
     if (backup == null) {
       _pinHelperAlive = false;
       _sync();
@@ -179,7 +179,7 @@ final class _SharedStdin {
       _controlReady = null;
       _reading = false;
       try {
-        if (!await restoreMacOSStdin(backup)) {
+        if (!await restoreStdin(backup)) {
           throw StateError('could not restore stdin before exec');
         }
       } finally {
@@ -270,8 +270,16 @@ void _readStdin(SendPort events) {
     if (message == false && !subscription.isPaused) subscription.pause();
     if (message case ('settle', final int id)) events.send(('settled', id));
     if (message == 'exit') {
-      unawaited(subscription.cancel());
+      // The owner isolate ended. Cancelling closes fd 0 for the whole
+      // process, so put it back from a duplicate (macOS/Linux). On Windows,
+      // leave the reader paused rather than close the process's stdin handle.
       control.close();
+      if (!subscription.isPaused) subscription.pause();
+      if (Platform.isWindows) return;
+      final backup = preserveStdin();
+      unawaited(subscription.cancel().then((_) async {
+        if (backup != null) await restoreStdin(backup);
+      }));
     }
   };
   events.send(control.sendPort);

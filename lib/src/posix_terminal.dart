@@ -39,25 +39,25 @@ void enablePosixRawInput() => _setRawInput(true);
 /// not active.
 void restorePosixRawInput() => _setRawInput(false);
 
-/// Keeps macOS stdin open while a Dart stdin reader is cancelled.
+/// Keeps stdin open while a Dart stdin reader is cancelled, which closes fd 0.
 ///
-/// Pass the returned descriptor to [restoreMacOSStdin] after cancelling the
-/// reader. Returns null off macOS or when stdin cannot be duplicated.
-int? preserveMacOSStdin() {
-  if (!Platform.isMacOS) return null;
+/// Pass the returned descriptor to [restoreStdin] after cancelling the
+/// reader. Returns null off macOS/Linux or when stdin cannot be duplicated.
+int? preserveStdin() {
+  if (!Platform.isMacOS && !Platform.isLinux) return null;
   final dup = DynamicLibrary.process().lookupFunction<_DupC, _DupD>('dup');
   final saved = dup(0);
   return saved < 0 ? null : saved;
 }
 
-/// Reclaims fd 0 from [savedFd] after a macOS stdin reader closes it.
+/// Reclaims fd 0 from [savedFd] after a Dart stdin reader closes it.
 ///
 /// Each `dup` atomically chooses the lowest unused descriptor. If fd 0 is
 /// still occupied, only the descriptor allocated by that attempt is closed
 /// before yielding and retrying. The saved descriptor is closed on every exit.
-Future<bool> restoreMacOSStdin(int savedFd) async {
-  if (!Platform.isMacOS) {
-    throw UnsupportedError('restoreMacOSStdin is only available on macOS');
+Future<bool> restoreStdin(int savedFd) async {
+  if (!Platform.isMacOS && !Platform.isLinux) {
+    throw UnsupportedError('restoreStdin is only available on macOS/Linux');
   }
   final libc = DynamicLibrary.process();
   final dup = libc.lookupFunction<_DupC, _DupD>('dup');

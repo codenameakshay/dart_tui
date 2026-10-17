@@ -14,6 +14,20 @@ void main() {
     expect(await probe.waitForExit(), 0, reason: await probe.errors);
   });
 
+  test('a program after one in an exited isolate still reads stdin', () async {
+    // Windows leaves the exited isolate's paused reader in place.
+    if (Platform.isWindows) return;
+    final probe = await _ProbeProcess.start('isolate-then-main');
+    addTearDown(probe.killIfRunning);
+
+    await probe.readUntil('MAIN_READY');
+    probe.process.stdin.write('q');
+    await probe.process.stdin.flush();
+
+    await probe.readUntil('MAIN_DONE');
+    expect(await probe.waitForExit(), 0, reason: await probe.errors);
+  });
+
   test('concurrent default programs both receive input and exit', () async {
     final probe = await _ProbeProcess.start('concurrent');
     addTearDown(probe.killIfRunning);
@@ -89,7 +103,11 @@ final class _ProbeProcess {
     while (await lines.moveNext().timeout(const Duration(seconds: 12))) {
       if (lines.current.contains(marker)) return;
     }
-    fail('child exited before $marker; stderr=${await errors}');
+    final code = await process.exitCode.timeout(
+      const Duration(seconds: 2),
+      onTimeout: () => -1,
+    );
+    fail('child exited before $marker; exitCode=$code; stderr=${await errors}');
   }
 
   Future<int> waitForExit() => process.exitCode.timeout(

@@ -18,6 +18,10 @@ Future<void> main(List<String> arguments) async {
     await _runSignalLifecycle();
     return;
   }
+  if (scenario == 'isolate-then-main') {
+    await _runIsolateThenMain();
+    return;
+  }
 
   final completed = ReceivePort();
   final events = StreamIterator<Object?>(completed);
@@ -42,6 +46,19 @@ Future<void> _runConcurrentPrograms() async {
     Program(options: [withoutRenderer()]).run(_QuitOnKey(ready)),
   ]);
   stdout.writeln('CONCURRENT_DONE');
+}
+
+Future<void> _runIsolateThenMain() async {
+  // A program in a short-lived isolate must not take stdin away from a later
+  // program in this isolate.
+  final completed = ReceivePort();
+  await Isolate.spawn(_runAndQuit, completed.sendPort);
+  await completed.first;
+  await Future<void>.delayed(const Duration(milliseconds: 200));
+  await Program(options: [withoutRenderer()]).run(_QuitOnKey(
+    () => stdout.writeln('MAIN_READY'),
+  ));
+  stdout.writeln('MAIN_DONE');
 }
 
 Future<void> _runAfterEof() async {
