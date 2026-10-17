@@ -369,6 +369,15 @@ void main() {
       expect((msgs[0] as MouseWheelMsg).mouse.button, MouseButton.wheelDown);
     });
 
+    test('wheel left and right (cb=66, cb=67)', () {
+      final d = TerminalInputDecoder();
+      final msgs = d.feed([...sgr(66, 1, 1), ...sgr(67, 1, 1)]);
+      expect(
+        msgs.map((m) => (m as MouseWheelMsg).mouse.button),
+        [MouseButton.wheelLeft, MouseButton.wheelRight],
+      );
+    });
+
     test('shift modifier (cb=4)', () {
       final d = TerminalInputDecoder();
       final msgs = d.feed(sgr(4, 1, 1));

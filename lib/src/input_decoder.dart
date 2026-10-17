@@ -463,7 +463,8 @@ MouseButton _mouseButtonFromCb(int cb) {
     return switch (value) {
       0 => MouseButton.wheelUp,
       1 => MouseButton.wheelDown,
-      _ => MouseButton.none,
+      2 => MouseButton.wheelLeft,
+      _ => MouseButton.wheelRight,
     };
   }
   return switch (value) {
