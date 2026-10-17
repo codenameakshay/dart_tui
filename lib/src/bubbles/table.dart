@@ -175,11 +175,11 @@ final class TableModel extends Model {
           : c.title + ' ' * (c.width - visWidth);
       return styles.header.render(title);
     }).join(' │ ');
-    b.writeln(headerCells);
+    b.writeln('  $headerCells');
 
     // Separator
     final sepLine = columns.map((c) => '─' * c.width).join('─┼─');
-    b.writeln(styles.separator.render(sepLine));
+    b.writeln('  ${styles.separator.render(sepLine)}');
 
     // Rows
     final end = (scrollOffset + height).clamp(0, rows.length);

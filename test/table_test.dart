@@ -66,4 +66,16 @@ void main() {
     final (b, _) = a.update(up);
     expect((b as TableModel).cursor, 0);
   });
+
+  test('header and separator align with data rows', () {
+    final lines = TableModel(columns: cols, rows: rows)
+        .view()
+        .content
+        .split('\n')
+        .map(stripAnsi)
+        .toList();
+    expect(lines[0].indexOf('│'), lines[2].indexOf('│'));
+    expect(lines[1].indexOf('┼'), lines[2].indexOf('│'));
+    expect(lines[1].length, lines[2].length);
+  });
 }
