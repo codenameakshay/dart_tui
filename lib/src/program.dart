@@ -496,9 +496,13 @@ final class Program {
           }
           return false;
         case SequenceMsg():
-          for (final c in msg.cmds) {
-            await runCmd(c);
-          }
+          // Run in order without blocking the event loop, as Bubble Tea does.
+          final cmds = msg.cmds;
+          unawaited(() async {
+            for (final c in cmds) {
+              await runCmd(c);
+            }
+          }());
           return false;
         case ExecMsg():
           // Stop reading first so the child gets the terminal's input.

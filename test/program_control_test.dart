@@ -80,6 +80,30 @@ void main() {
     expect(sink.buf.toString(), contains('label=final'));
   });
 
+  test('a running sequence does not block other messages', () async {
+    final log = <String>[];
+    final ready = Completer<void>();
+    final program =
+        Program(options: [withOutput(_StringSink()), withInput(null)]);
+    final run = program.run(_ReadyModel(ready, log: log));
+    await ready.future;
+    program.send(SequenceMsg([
+      () async {
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+        return _LabelMsg('slow');
+      },
+      () => _LabelMsg('after-slow'),
+    ]));
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    program.send(_LabelMsg('key'));
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(log, ['key']);
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    program.quit();
+    await run;
+    expect(log, ['key', 'slow', 'after-slow']);
+  });
+
   test('kill wakes a program waiting without queued messages', () async {
     final ready = Completer<void>();
     final program = Program(options: [
