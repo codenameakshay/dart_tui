@@ -290,14 +290,15 @@ final class TreeModel extends Model {
 
   @override
   (Model, Cmd?) update(Msg msg) {
-    if (msg is MouseClickMsg) {
-      switch (msg.mouse.button) {
+    if (msg is MouseClickMsg || msg is MouseWheelMsg) {
+      final mouse = (msg as MouseMsg).mouse;
+      switch (mouse.button) {
         case MouseButton.wheelUp:
           return (_moveCursor(-1), null);
         case MouseButton.wheelDown:
           return (_moveCursor(1), null);
         case MouseButton.left:
-          final relY = msg.mouse.y - viewOffsetY;
+          final relY = mouse.y - viewOffsetY;
           final idx = scrollOffset + relY;
           if (idx >= 0 && idx < _flat.length) {
             final moved = _copyWith(

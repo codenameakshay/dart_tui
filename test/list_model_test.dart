@@ -1,5 +1,8 @@
 // Tests for ListModel with fuzzy filtering.
+import 'dart:convert';
+
 import 'package:dart_tui/dart_tui.dart';
+import 'package:dart_tui/src/input_decoder.dart';
 import 'package:test/test.dart';
 
 // Helper to create a KeyMsg from a key string.
@@ -256,5 +259,16 @@ void main() {
       final m = ListModel(items: items, title: 'My List');
       expect(m.view().content, contains('My List'));
     });
+  });
+
+  test('decoded wheel events scroll the cursor', () {
+    final m = ListModel(items: items);
+    final down =
+        TerminalInputDecoder().feed(utf8.encode('\x1b[<65;5;6M')).single;
+    final up = TerminalInputDecoder().feed(utf8.encode('\x1b[<64;5;6M')).single;
+    final (a, _) = m.update(down);
+    expect((a as ListModel).cursor, 1);
+    final (b, _) = a.update(up);
+    expect((b as ListModel).cursor, 0);
   });
 }

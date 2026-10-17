@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:dart_tui/dart_tui.dart';
+import 'package:dart_tui/src/input_decoder.dart';
 import 'package:test/test.dart';
 
 /// Helper: create a [KeyPressMsg] for a single printable character.
@@ -51,5 +54,16 @@ void main() {
       final t = TableModel(columns: cols, rows: rows);
       expect(t.view().content, contains('─'));
     });
+  });
+
+  test('decoded wheel events scroll the cursor', () {
+    final t = TableModel(columns: cols, rows: rows);
+    final down =
+        TerminalInputDecoder().feed(utf8.encode('\x1b[<65;5;6M')).single;
+    final up = TerminalInputDecoder().feed(utf8.encode('\x1b[<64;5;6M')).single;
+    final (a, _) = t.update(down);
+    expect((a as TableModel).cursor, 1);
+    final (b, _) = a.update(up);
+    expect((b as TableModel).cursor, 0);
   });
 }

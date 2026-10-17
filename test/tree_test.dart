@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:dart_tui/dart_tui.dart';
+import 'package:dart_tui/src/input_decoder.dart';
 import 'package:test/test.dart';
 
 /// Helper: create a [KeyPressMsg] for a single character key.
@@ -223,5 +226,20 @@ void main() {
       final (collapsed, _) = model.update(_special(KeyCode.enter));
       expect((collapsed as TreeModel).view().content, contains('▸'));
     });
+  });
+
+  test('decoded wheel events scroll the cursor', () {
+    const root = TreeNode(label: 'r', isExpanded: true, children: [
+      TreeNode(label: 'a'),
+      TreeNode(label: 'b'),
+    ]);
+    final m = TreeModel(root: root, height: 20);
+    final down =
+        TerminalInputDecoder().feed(utf8.encode('\x1b[<65;5;6M')).single;
+    final up = TerminalInputDecoder().feed(utf8.encode('\x1b[<64;5;6M')).single;
+    final (a, _) = m.update(down);
+    expect((a as TreeModel).cursor, 1);
+    final (b, _) = a.update(up);
+    expect((b as TreeModel).cursor, 0);
   });
 }
