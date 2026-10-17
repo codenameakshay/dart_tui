@@ -25,6 +25,18 @@ Future<void> main(List<String> arguments) async {
     stdout.writeln('CHAIN_DONE');
     return;
   }
+  if (scenario == 'default-exec-chain') {
+    final program = Program(options: [withAltScreen(), withHideCursor()]);
+    await program.run(_ProbeModel(scenario));
+    stdout.writeln('EXEC_FIRST_DONE');
+    await stdout.flush();
+    // Leave a deterministic cooked-mode observation window before the next
+    // Program enters raw mode.
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    await Program(options: [withAltScreen(), withHideCursor()])
+        .run(const _ProbeModel('exec-followup'));
+    return;
+  }
   // `default-*` scenarios read the implicit process stdin with the default
   // signal handling, like a real application.
   final usesDefaults = scenario.startsWith('default-');
@@ -65,6 +77,8 @@ const _scenarios = {
   'default-suspend',
   'default-term',
   'default-exec',
+  'default-exec-chain',
+  'default-init-exec',
 };
 
 final class _ProbeModel implements Model {
@@ -75,6 +89,13 @@ final class _ProbeModel implements Model {
 
   @override
   Cmd? init() {
+    if (scenario == 'default-init-exec') {
+      return execProcess(
+        '/bin/sh',
+        ['-c', r'printf "INIT_EXEC_CHILD\n"'],
+        onExit: (_) => quit(),
+      );
+    }
     if (scenario != 'suspend') return null;
     return () async {
       await Future<void>.delayed(const Duration(milliseconds: 150));
@@ -89,7 +110,9 @@ final class _ProbeModel implements Model {
         (msg.key == 'q' || msg.key == 'ctrl+c')) {
       return (this, () => quit());
     }
-    if ((scenario == 'default-quit' || scenario.startsWith('chain-')) &&
+    if ((scenario == 'default-quit' ||
+            scenario == 'exec-followup' ||
+            scenario.startsWith('chain-')) &&
         msg is KeyMsg &&
         msg.key == 'q') {
       return (this, () => quit());
@@ -106,7 +129,8 @@ final class _ProbeModel implements Model {
       if (msg.key == 'ctrl+z') return (this, suspend);
       if (msg.key == 'q') return (this, () => quit());
     }
-    if (scenario == 'default-exec' && msg is KeyMsg) {
+    if ((scenario == 'default-exec' || scenario == 'default-exec-chain') &&
+        msg is KeyMsg) {
       if (msg.key == 'q') return (this, () => quit());
       if (msg.key == 'x') {
         return (
@@ -157,6 +181,9 @@ final class _ProbeModel implements Model {
               'default-suspend' => 'DEFAULT_SUSPEND_READY',
               'default-term' => 'DEFAULT_TERM_READY',
               'default-exec' => 'DEFAULT_EXEC_READY',
+              'default-exec-chain' => 'DEFAULT_EXEC_READY',
+              'default-init-exec' => 'DEFAULT_INIT_EXEC_READY',
+              'exec-followup' => 'EXEC_FOLLOWUP_READY',
               _ => throw StateError('unsupported probe scenario: $scenario'),
             },
         altScreen: true,

@@ -75,6 +75,20 @@ class _Probe:
             self.fail(f"missing marker {marker!r}; output={bytes(self.data)!r}")
         return bytes(self.data)
 
+    def read_until_count(self, marker: bytes, count: int) -> bytes:
+        deadline = time.monotonic() + TIMEOUT
+        while self.data.count(marker) < count and time.monotonic() < deadline:
+            self._read_once(0.1)
+            if self._poll():
+                self._drain()
+                break
+        if self.data.count(marker) < count:
+            self.fail(
+                f"missing occurrence {count} of {marker!r}; "
+                f"output={bytes(self.data)!r}"
+            )
+        return bytes(self.data)
+
     def send(self, data: bytes) -> None:
         os.write(self.master, data)
 
@@ -253,15 +267,32 @@ class ProgramRuntimePtyTest(unittest.TestCase):
         self.assert_cooked_mode(probe)
 
     def test_exec_child_receives_terminal_input(self) -> None:
-        probe = self._probe("default-exec")
-        probe.read_until(b"DEFAULT_EXEC_READY")
-        probe.send(b"x")
-        probe.read_until(b"\x1b[?1049l")
-        time.sleep(0.5)
-        probe.send(b"hello\r")
-        probe.read_until(b"CHILD:hello")
-        probe.read_until(b"EXEC_DONE:0")
-        probe.send(b"q")
+        for iteration in range(3):
+            with self.subTest(iteration=iteration + 1):
+                probe = self._probe("default-exec-chain")
+                probe.read_until(b"DEFAULT_EXEC_READY")
+                for line in (b"hello", b"world"):
+                    release_count = probe.data.count(b"\x1b[?1049l") + 1
+                    probe.send(b"x")
+                    probe.read_until_count(b"\x1b[?1049l", release_count)
+                    self.assert_cooked_mode(probe)
+                    child_count = probe.data.count(b"CHILD:") + 1
+                    done_count = probe.data.count(b"EXEC_DONE:0") + 1
+                    probe.send(line + b"\r")
+                    probe.read_until_count(b"CHILD:", child_count)
+                    self.assertIn(b"CHILD:" + line, probe.data)
+                    probe.read_until_count(b"EXEC_DONE:0", done_count)
+                probe.send(b"q")
+                probe.read_until(b"EXEC_FIRST_DONE")
+                self.assert_cooked_mode(probe)
+                probe.read_until(b"EXEC_FOLLOWUP_READY")
+                probe.send(b"q")
+                self.assert_terminal_restored(probe.finish())
+                self.assert_cooked_mode(probe)
+
+    def test_init_command_exec_waits_for_stdin_control_startup(self) -> None:
+        probe = self._probe("default-init-exec")
+        probe.read_until(b"INIT_EXEC_CHILD")
         self.assert_terminal_restored(probe.finish())
         self.assert_cooked_mode(probe)
 

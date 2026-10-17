@@ -9,8 +9,14 @@ typedef _TcGetAttrC = Int32 Function(Int32, Pointer<Uint8>);
 typedef _TcGetAttrD = int Function(int, Pointer<Uint8>);
 typedef _TcSetAttrC = Int32 Function(Int32, Int32, Pointer<Uint8>);
 typedef _TcSetAttrD = int Function(int, int, Pointer<Uint8>);
+typedef _CloseC = Int32 Function(Int32);
+typedef _CloseD = int Function(int);
+typedef _OpenC = Int32 Function(Pointer<Utf8>, Int32);
+typedef _OpenD = int Function(Pointer<Utf8>, int);
+typedef _FcntlC = Int32 Function(Int32, Int32);
+typedef _FcntlD = int Function(int, int);
 
-void main(List<String> args) {
+Future<void> main(List<String> args) async {
   if (args.contains('--non-tty')) {
     enablePosixRawInput();
     restorePosixRawInput();
@@ -19,6 +25,9 @@ void main(List<String> args) {
   }
 
   final libc = DynamicLibrary.process();
+  final close = libc.lookupFunction<_CloseC, _CloseD>('close');
+  final open = libc.lookupFunction<_OpenC, _OpenD>('open');
+  final fcntl = libc.lookupFunction<_FcntlC, _FcntlD>('fcntl');
   final tcgetattr = libc.lookupFunction<_TcGetAttrC, _TcGetAttrD>('tcgetattr');
   final tcsetattr = libc.lookupFunction<_TcSetAttrC, _TcSetAttrD>('tcsetattr');
   final termios = calloc<Uint8>(256);
@@ -85,6 +94,52 @@ void main(List<String> args) {
       'ISIG/IEXTEN were not restored',
     );
     check((read(3) & echo) == childEcho, 'unrelated ECHO change was lost');
+
+    if (macOS) {
+      final savedStdin = preserveMacOSStdin();
+      if (savedStdin == null) throw StateError('could not preserve stdin');
+      check(close(0) == 0, 'could not simulate stdin reader cancellation');
+      final nullPath = '/dev/null'.toNativeUtf8();
+      late final int blocker;
+      try {
+        blocker = open(nullPath, 0);
+      } finally {
+        calloc.free(nullPath);
+      }
+      check(blocker == 0, 'could not occupy fd 0 for retry test');
+      final releaseBlocker = Future<void>.delayed(Duration.zero, () {
+        check(close(blocker) == 0, 'could not release fd 0');
+      });
+      check(await restoreMacOSStdin(savedStdin), 'could not restore fd 0');
+      await releaseBlocker;
+      check(tcgetattr(0, termios) == 0, 'restored fd 0 is not the PTY');
+
+      final timedOutBackup = preserveMacOSStdin();
+      final recoveryBackup = preserveMacOSStdin();
+      if (timedOutBackup == null || recoveryBackup == null) {
+        throw StateError('could not preserve stdin for timeout test');
+      }
+      check(close(0) == 0, 'could not close fd 0 for timeout test');
+      final occupiedPath = '/dev/null'.toNativeUtf8();
+      late final int occupiedStdin;
+      try {
+        occupiedStdin = open(occupiedPath, 0);
+      } finally {
+        calloc.free(occupiedPath);
+      }
+      check(occupiedStdin == 0, 'could not occupy fd 0 for timeout test');
+      check(
+        !await restoreMacOSStdin(timedOutBackup),
+        'restore succeeded while fd 0 stayed occupied',
+      );
+      check(
+        fcntl(timedOutBackup, 1) == -1,
+        'timed-out restore leaked its saved descriptor',
+      );
+      check(close(occupiedStdin) == 0, 'could not release occupied fd 0');
+      check(await restoreMacOSStdin(recoveryBackup), 'could not recover fd 0');
+      check(tcgetattr(0, termios) == 0, 'recovered fd 0 is not the PTY');
+    }
     print('POSIX raw mode PTY probe passed');
   } finally {
     restorePosixRawInput();

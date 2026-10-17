@@ -25,13 +25,24 @@ final _SharedStdin _sharedStdin = _SharedStdin();
 /// receiving port keeps this isolate alive only while a program is reading, so
 /// `main` can return after the last program instead of hanging on stdin
 /// (issue #15). Between programs the reader is paused, so input stays in the
-/// terminal for the next program or for a child process.
+/// terminal for the next program or for a child process. On macOS a paused
+/// reader can close fd 0 once an inherited child has used the terminal, so
+/// before such a child starts the helper is cancelled and fd 0 restored.
 final class _SharedStdin {
   final Set<StreamController<List<int>>> _readers = {};
   RawReceivePort? _port;
   SendPort? _control;
   bool _reading = false;
   bool _closed = false;
+  final Map<int, Completer<void>> _settling = {};
+  int _settleId = 0;
+  Completer<void>? _controlReady;
+  Completer<void>? _execCancelAck;
+  int _execCancelToken = 0;
+  int _execUsers = 0;
+  Completer<void>? _execSetup;
+  bool _pinHelperAlive = false;
+  bool _stdinExecResetting = false;
 
   Stream<List<int>> claim() {
     if (_closed) return const Stream<List<int>>.empty();
@@ -54,8 +65,17 @@ final class _SharedStdin {
   void _sync() {
     if (_closed) return;
     final wanted = _readers.any((reader) => !reader.isPaused);
-    final port = _port ??= _spawn();
-    port.keepIsolateAlive = wanted;
+    var port = _port;
+    if (port == null) {
+      // During an inherited exec fd 0 belongs to the child: do not start a
+      // new reader until the exec ends and fd 0 has been restored.
+      if (_stdinExecResetting || _execUsers > 0 || !wanted) return;
+      port = _port = _spawn();
+    }
+    port.keepIsolateAlive = wanted ||
+        _settling.isNotEmpty ||
+        _pinHelperAlive ||
+        _execCancelAck != null;
     final control = _control;
     if (control != null && wanted != _reading) {
       _reading = wanted;
@@ -63,8 +83,115 @@ final class _SharedStdin {
     }
   }
 
+  /// Completes once the helper has applied every earlier pause or resume, so
+  /// while paused it reads nothing that a child process should get.
+  Future<void> settle() {
+    final control = _control;
+    if (control == null || _closed) return Future<void>.value();
+    final settled = Completer<void>();
+    _settling[++_settleId] = settled;
+    _sync();
+    control.send(('settle', _settleId));
+    return settled.future;
+  }
+
+  /// macOS only: detaches the stdin reader before a child inherits the
+  /// terminal. Pair every call with [endInheritedExec].
+  Future<void> beginInheritedExec() async {
+    if (!Platform.isMacOS) return;
+    // Count before the first await, so a concurrent program cannot start a
+    // reader while another program's child owns fd 0.
+    _execUsers++;
+    final setup = _execSetup;
+    if (setup != null) return setup.future;
+    final firstSetup = Completer<void>();
+    _execSetup = firstSetup;
+    try {
+      await _prepareForInheritedExec();
+      firstSetup.complete();
+    } catch (error, stackTrace) {
+      firstSetup.completeError(error, stackTrace);
+    }
+    return firstSetup.future;
+  }
+
+  void endInheritedExec() {
+    if (!Platform.isMacOS) return;
+    _execUsers--;
+    if (_execUsers == 0) {
+      _execSetup = null;
+      _sync();
+    }
+  }
+
+  Future<void> _prepareForInheritedExec() async {
+    if (!stdin.hasTerminal ||
+        _closed ||
+        _readers.any((reader) => !reader.isPaused)) {
+      return;
+    }
+    var control = _control;
+    if (control == null) {
+      final ready = _controlReady;
+      if (ready == null) return; // no reader was ever started
+      _pinHelperAlive = true;
+      _port?.keepIsolateAlive = true;
+      try {
+        await ready.future.timeout(const Duration(seconds: 2));
+      } on TimeoutException {
+        _pinHelperAlive = false;
+        _sync();
+        throw StateError('stdin reader did not start before exec');
+      }
+      control = _control;
+    }
+    if (control == null) {
+      _pinHelperAlive = false;
+      _sync();
+      return;
+    }
+    // Cancelling the reader closes fd 0, so keep a copy to restore.
+    final backup = preserveMacOSStdin();
+    if (backup == null) {
+      _pinHelperAlive = false;
+      _sync();
+      throw StateError('could not preserve stdin before exec');
+    }
+    final token = ++_execCancelToken;
+    final ack = Completer<void>();
+    _execCancelAck = ack;
+    _pinHelperAlive = false;
+    _stdinExecResetting = true;
+    _port?.keepIsolateAlive = true;
+    try {
+      control.send(('cancel-for-exec', token));
+      try {
+        await ack.future.timeout(const Duration(seconds: 2));
+      } on TimeoutException {
+        throw StateError('stdin reader did not stop before exec');
+      }
+    } finally {
+      if (identical(_execCancelAck, ack)) _execCancelAck = null;
+      Isolate.current.removeOnExitListener(control);
+      _port?.close();
+      _port = null;
+      _control = null;
+      _controlReady = null;
+      _reading = false;
+      try {
+        if (!await restoreMacOSStdin(backup)) {
+          throw StateError('could not restore stdin before exec');
+        }
+      } finally {
+        _stdinExecResetting = false;
+        _sync();
+      }
+    }
+  }
+
   RawReceivePort _spawn() {
     final port = RawReceivePort(_onMessage, 'dart_tui stdin');
+    _controlReady = Completer<void>();
     unawaited(Isolate.spawn(_readStdin, port.sendPort));
     return port;
   }
@@ -73,9 +200,24 @@ final class _SharedStdin {
     switch (message) {
       case SendPort():
         _control = message;
+        final ready = _controlReady;
+        if (ready != null && !ready.isCompleted) ready.complete();
         // Stop the helper with this isolate (e.g. a test isolate).
         Isolate.current.addOnExitListener(message, response: 'exit');
         _sync();
+      case ('settled', final int id):
+        _settling.remove(id)?.complete();
+        _sync();
+      case ('exec-cancelled', final int token):
+        final ack = _execCancelAck;
+        if (token == _execCancelToken && ack != null && !ack.isCompleted) {
+          ack.complete();
+        }
+      case ('exec-cancel-failed', final int token, final String error):
+        final ack = _execCancelAck;
+        if (token == _execCancelToken && ack != null && !ack.isCompleted) {
+          ack.completeError(StateError('stdin reader cancel failed: $error'));
+        }
       case List<int>():
         for (final reader in [..._readers]) {
           reader.add(message);
@@ -86,6 +228,15 @@ final class _SharedStdin {
         }
       case null:
         _closed = true;
+        _pinHelperAlive = false;
+        final ready = _controlReady;
+        if (ready != null && !ready.isCompleted) ready.complete();
+        final ack = _execCancelAck;
+        if (ack != null && !ack.isCompleted) ack.complete();
+        for (final settled in _settling.values) {
+          settled.complete();
+        }
+        _settling.clear();
         _port?.close();
         for (final reader in [..._readers]) {
           unawaited(reader.close());
@@ -107,8 +258,17 @@ void _readStdin(SendPort events) {
     },
   )..pause();
   control.handler = (Object? message) {
+    if (message case ('cancel-for-exec', final int token)) {
+      unawaited(subscription.cancel().then(
+            (_) => Isolate.exit(events, ('exec-cancelled', token)),
+            onError: (Object error) =>
+                Isolate.exit(events, ('exec-cancel-failed', token, '$error')),
+          ));
+      return;
+    }
     if (message == true && subscription.isPaused) subscription.resume();
     if (message == false && !subscription.isPaused) subscription.pause();
+    if (message case ('settle', final int id)) events.send(('settled', id));
     if (message == 'exit') {
       unawaited(subscription.cancel());
       control.close();
@@ -281,8 +441,9 @@ final class Program {
   Future<void> releaseTerminal({bool resetRenderer = false}) async {
     if (!_running) return;
     if (_disableRenderer) return;
-    _renderer?.release(reset: resetRenderer);
+    // Cook the terminal before the release sequences reach it.
     _setRawMode(false);
+    _renderer?.release(reset: resetRenderer);
   }
 
   Future<void> restoreTerminal() async {
@@ -507,10 +668,23 @@ final class Program {
           }());
           return false;
         case ExecMsg():
-          // Stop reading first so the child gets the terminal's input.
+          // Stop reading, and wait until the stdin reader has stopped, so the
+          // child gets every byte typed once the terminal is released.
           _inputSub?.pause();
-          await releaseTerminal(resetRenderer: true);
+          var inheritedExecLease = false;
           try {
+            if (msg.inheritStdio) {
+              _setRawMode(false);
+              if (Platform.isMacOS) {
+                inheritedExecLease = true;
+                await _sharedStdin.beginInheritedExec();
+              } else if (_input == null && !_disableInput) {
+                await _sharedStdin.settle();
+              }
+            }
+            if (!_running) return false;
+            await releaseTerminal(resetRenderer: true);
+            if (!_running) return false;
             if (msg.inheritStdio) {
               final process = await Process.start(
                 msg.cmd,
@@ -535,8 +709,12 @@ final class Program {
               }
             }
           } finally {
-            await restoreTerminal();
-            _inputSub?.resume();
+            try {
+              await restoreTerminal();
+            } finally {
+              _inputSub?.resume();
+              if (inheritedExecLease) _sharedStdin.endInheritedExec();
+            }
           }
           return true;
         default:

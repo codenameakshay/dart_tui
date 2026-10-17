@@ -11,10 +11,15 @@ typedef _TcGetAttrC = Int32 Function(Int32, Pointer<Uint8>);
 typedef _TcGetAttrD = int Function(int, Pointer<Uint8>);
 typedef _TcSetAttrC = Int32 Function(Int32, Int32, Pointer<Uint8>);
 typedef _TcSetAttrD = int Function(int, int, Pointer<Uint8>);
+typedef _DupC = Int32 Function(Int32);
+typedef _DupD = int Function(int);
+typedef _CloseC = Int32 Function(Int32);
+typedef _CloseD = int Function(int);
 
 // Larger than `struct termios` on macOS (72 bytes) and Linux (60 bytes).
 const int _termiosBytes = 256;
 const int _tcsaNow = 0;
+const Duration _stdinRestoreTimeout = Duration(seconds: 2);
 
 // Bits of c_iflag / c_lflag that were set before raw mode, or null when raw
 // input is not active.
@@ -33,6 +38,44 @@ void enablePosixRawInput() => _setRawInput(true);
 /// Restores the flags cleared by [enablePosixRawInput]. No-op if raw input is
 /// not active.
 void restorePosixRawInput() => _setRawInput(false);
+
+/// Keeps macOS stdin open while a Dart stdin reader is cancelled.
+///
+/// Pass the returned descriptor to [restoreMacOSStdin] after cancelling the
+/// reader. Returns null off macOS or when stdin cannot be duplicated.
+int? preserveMacOSStdin() {
+  if (!Platform.isMacOS) return null;
+  final dup = DynamicLibrary.process().lookupFunction<_DupC, _DupD>('dup');
+  final saved = dup(0);
+  return saved < 0 ? null : saved;
+}
+
+/// Reclaims fd 0 from [savedFd] after a macOS stdin reader closes it.
+///
+/// Each `dup` atomically chooses the lowest unused descriptor. If fd 0 is
+/// still occupied, only the descriptor allocated by that attempt is closed
+/// before yielding and retrying. The saved descriptor is closed on every exit.
+Future<bool> restoreMacOSStdin(int savedFd) async {
+  if (!Platform.isMacOS) {
+    throw UnsupportedError('restoreMacOSStdin is only available on macOS');
+  }
+  final libc = DynamicLibrary.process();
+  final dup = libc.lookupFunction<_DupC, _DupD>('dup');
+  final close = libc.lookupFunction<_CloseC, _CloseD>('close');
+  try {
+    final timeout = Stopwatch()..start();
+    do {
+      final restored = dup(savedFd);
+      if (restored == 0) return true;
+      if (restored < 0) return false;
+      close(restored);
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    } while (timeout.elapsed < _stdinRestoreTimeout);
+    return false;
+  } finally {
+    close(savedFd);
+  }
+}
 
 void _setRawInput(bool raw) {
   if (!Platform.isMacOS && !Platform.isLinux) return;
