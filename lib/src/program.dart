@@ -501,9 +501,9 @@ final class Program {
           }
           return false;
         case ExecMsg():
-          await releaseTerminal(resetRenderer: true);
-          // Stop reading so the child gets the terminal's input.
+          // Stop reading first so the child gets the terminal's input.
           _inputSub?.pause();
+          await releaseTerminal(resetRenderer: true);
           try {
             if (msg.inheritStdio) {
               final process = await Process.start(
