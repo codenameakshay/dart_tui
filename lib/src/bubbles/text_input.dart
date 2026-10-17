@@ -231,6 +231,18 @@ final class TextInputModel extends Model {
     );
   }
 
+  /// Inserts [text] at the cursor. Its scalars can merge into neighbouring
+  /// graphemes (combining marks, ZWJ sequences), so the new value and cursor
+  /// come from the joined string instead of counting inserted graphemes.
+  TextInputModel _insert(String text) {
+    final chars = _graphemes;
+    final at = cursorColumn;
+    final head = '${chars.sublist(0, at).join()}$text';
+    final next = head + chars.sublist(at).join();
+    if (charLimit > 0 && next.characters.length > charLimit) return this;
+    return copyWith(value: next, cursorPos: head.characters.length);
+  }
+
   @override
   (Model, Cmd?) update(Msg msg) {
     if (msg is! KeyMsg) return (this, null);
@@ -321,19 +333,7 @@ final class TextInputModel extends Model {
         if (ke.code == KeyCode.rune &&
             ke.text.isNotEmpty &&
             ke.modifiers.isEmpty) {
-          final inserted = ke.text.characters.toList();
-          if (charLimit > 0 && chars.length + inserted.length > charLimit) {
-            return (this, null);
-          }
-          final nextChars = List<String>.from(chars)
-            ..insertAll(cursorPos, inserted);
-          return (
-            copyWith(
-              value: nextChars.join(),
-              cursorPos: cursorPos + inserted.length,
-            ),
-            null
-          );
+          return (_insert(ke.text), null);
         }
         return (this, null);
     }

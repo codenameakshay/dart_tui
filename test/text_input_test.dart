@@ -254,4 +254,60 @@ void main() {
       expect(v.cursor!.x, 4);
     });
   });
+
+  group('TextInputModel multi-scalar graphemes', () {
+    const family = '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}';
+
+    // The parser delivers one KeyPressMsg per Unicode scalar.
+    TextInputModel typeScalars(TextInputModel m, String text) {
+      for (final rune in text.runes) {
+        m = _apply(m, _rune(String.fromCharCode(rune)));
+      }
+      return m;
+    }
+
+    test('combining mark merges into the previous grapheme', () {
+      var m = typeScalars(TextInputModel(), 'e\u0301');
+      expect(m.value, 'e\u0301');
+      expect(m.value.length, 2);
+      expect(m.cursorPos, 1);
+      expect(m.view, returnsNormally);
+      m = _apply(m, _rune('x'));
+      expect(m.value, 'e\u0301x');
+      expect(m.cursorPos, 2);
+    });
+
+    test('backspace after a typed family removes the whole family', () {
+      var m = typeScalars(TextInputModel(), family);
+      expect(m.value, family);
+      expect(m.cursorPos, 1);
+      m = _apply(m, _k(KeyCode.backspace));
+      expect(m.value, '');
+      expect(m.cursorPos, 0);
+    });
+
+    for (final (name, cluster) in const [
+      ('family', family),
+      ('skin tone', '\u{1F44D}\u{1F3FD}'),
+      ('flag', '\u{1F1EE}\u{1F1F3}'),
+      ('variation selector', '\u2764\uFE0F'),
+    ]) {
+      test('$name typed before existing text lands after the cluster', () {
+        var m = typeScalars(TextInputModel(value: 'Z'), cluster);
+        expect(m.value, '${cluster}Z');
+        expect(m.cursorPos, 1);
+        expect(m.view, returnsNormally);
+        m = _apply(m, _rune('x'));
+        expect(m.value, '${cluster}xZ');
+        expect(m.cursorPos, 2);
+      });
+    }
+
+    test('charLimit counts graphemes, not scalars', () {
+      var m = typeScalars(TextInputModel(charLimit: 1), family);
+      expect(m.value, family);
+      m = _apply(m, _rune('x'));
+      expect(m.value, family);
+    });
+  });
 }
