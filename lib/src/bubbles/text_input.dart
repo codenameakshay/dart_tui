@@ -190,7 +190,7 @@ final class TextInputModel extends Model {
   }
 
   List<String> get _graphemes =>
-      _graphemesCache ??= List<String>.unmodifiable(value.characters);
+      _graphemesCache ??= value.characters.toList(growable: false);
 
   List<String> get matchedSuggestions =>
       _matchedSuggestionsCache ??= List<String>.unmodifiable(() {
@@ -211,11 +211,11 @@ final class TextInputModel extends Model {
       : matchedSuggestions[currentSuggestionIndex];
 
   /// Cursor position as a grapheme index. Cell width is resolved by [view].
-  int get cursorColumn => cursorPos.clamp(0, value.characters.length);
+  int get cursorColumn => cursorPos.clamp(0, _graphemes.length);
 
   TextInputModel moveToStart() => copyWith(cursorPos: 0);
 
-  TextInputModel moveToEnd() => copyWith(cursorPos: value.characters.length);
+  TextInputModel moveToEnd() => copyWith(cursorPos: _graphemes.length);
 
   TextInputModel nextSuggestion() {
     if (matchedSuggestions.isEmpty) return this;
@@ -237,10 +237,29 @@ final class TextInputModel extends Model {
   TextInputModel _insert(String text) {
     final chars = _graphemes;
     final at = cursorColumn;
-    final head = '${chars.sublist(0, at).join()}$text';
-    final next = head + chars.sublist(at).join();
-    if (charLimit > 0 && next.characters.length > charLimit) return this;
-    return copyWith(value: next, cursorPos: head.characters.length);
+    // Text only merges into the grapheme before it, and appending never moves
+    // earlier boundaries, so the cursor comes from re-segmenting just that
+    // grapheme plus the text. At the end of the value the grapheme list is
+    // reused too, which keeps typing and unbracketed pastes from re-segmenting
+    // the whole value per key.
+    final before = at == 0 ? 0 : at - 1;
+    final joined = '${at == 0 ? '' : chars[before]}$text'.characters;
+    final String next;
+    final List<String> nextChars;
+    if (at == chars.length) {
+      next = '$value$text';
+      final tail = joined.toList();
+      nextChars = List<String>.filled(before + tail.length, '')
+        ..setRange(0, before, chars)
+        ..setRange(before, before + tail.length, tail);
+    } else {
+      // Mid-value text can also join the following grapheme.
+      next = '${chars.take(at).join()}$text${chars.skip(at).join()}';
+      nextChars = next.characters.toList(growable: false);
+    }
+    if (charLimit > 0 && nextChars.length > charLimit) return this;
+    return copyWith(value: next, cursorPos: before + joined.length)
+      .._graphemesCache = nextChars;
   }
 
   /// Bracketed paste: newlines and tabs become one space each, other control

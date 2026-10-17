@@ -1,3 +1,4 @@
+import 'package:characters/characters.dart';
 import 'package:dart_tui/dart_tui.dart';
 import 'package:test/test.dart';
 
@@ -265,6 +266,19 @@ void main() {
       }
       return m;
     }
+
+    test('appended scalars match a full segmentation', () {
+      // Flags pair regional indicators; typing them one by one at the end must
+      // give the same graphemes as segmenting the final value.
+      const text = '\u{1F1EE}\u{1F1F3}\u{1F1FA}\u{1F1F8}a\u0301$family';
+      var m = typeScalars(TextInputModel(), text);
+      expect(m.value, text);
+      expect(m.cursorPos, text.characters.length);
+      for (var left = text.characters.length; left > 0; left--) {
+        m = _apply(m, _k(KeyCode.backspace));
+        expect(m.value, text.characters.take(left - 1).toString());
+      }
+    });
 
     test('combining mark merges into the previous grapheme', () {
       var m = typeScalars(TextInputModel(), 'e\u0301');
