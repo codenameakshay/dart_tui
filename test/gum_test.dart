@@ -26,6 +26,18 @@ void main() {
       expect(r, 'banana');
     }, timeout: _timeout);
 
+    test('down moves the highlight before enter picks it', () async {
+      final r = await filter(
+        ['apple', 'apricot', 'banana'],
+        options: _opts([
+          [0x61, 0x70], // 'ap' → apple, apricot
+          [0x1b, 0x5b, 0x42], // down
+          _enter,
+        ]),
+      );
+      expect(r, 'apricot');
+    }, timeout: _timeout);
+
     test('esc cancels', () async {
       // esc is a lone escape: the program schedules a short timer to deliver it.
       final r = await filter(['a', 'b'], options: _opts([_esc]));

@@ -346,6 +346,15 @@ final class ListModel extends Model {
         );
       case 'enter':
         return (_copy(filterMode: false), null);
+      case 'up':
+      case 'ctrl+p':
+        final cur = _safeCursor;
+        return (_copy(cursor: cur > 0 ? cur - 1 : 0), null);
+      case 'down':
+      case 'ctrl+n':
+        final cur = _safeCursor;
+        final last = filteredItems.length - 1;
+        return (_copy(cursor: cur < last ? cur + 1 : cur), null);
       default:
         // Append printable characters to filter
         final key = msg.key;
