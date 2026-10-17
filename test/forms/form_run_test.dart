@@ -29,6 +29,22 @@ void main() {
     expect(values!.get<bool>('ok'), true);
   }, timeout: _timeout);
 
+  test('a paste edits only the active field', () {
+    var form = Form([
+      Group([
+        Field.input(key: 'a'),
+        Field.input(key: 'b'),
+        Field.text(key: 'c'),
+      ]),
+    ]);
+    form = form.update(PasteMsg('hi')).$1 as Form;
+    expect(
+      [form.values.get<String>('a'), form.values.get<String>('b')],
+      ['hi', ''],
+    );
+    expect(form.values.get<String>('c'), '');
+  });
+
   test('ctrl+c cancels → null', () async {
     final form = Form([
       Group([Field.input(key: 'name', title: 'Name')]),

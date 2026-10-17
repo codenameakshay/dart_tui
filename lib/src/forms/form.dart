@@ -272,22 +272,24 @@ final class Form extends Model implements OutcomeModel<FormValues> {
 
   @override
   (Model, Cmd?) update(Msg msg) {
-    if (msg is! KeyMsg) return (_broadcast(msg), null);
+    // Pastes are input: they go to the active field only, like keys.
+    if (msg is! KeyMsg && msg is! PasteMsg) return (_broadcast(msg), null);
     final current = _normalizeFocus();
     final active =
         current.groups[current.groupIndex].fields[current.fieldIndex];
-    final multiline = active.isMultiline;
-    switch (msg.key) {
-      case 'esc':
-      case 'ctrl+c':
-        return (current._copy(cancelled: true), null);
-      case 'ctrl+d':
-      case 'tab':
-        return _advance();
-      case 'shift+tab':
-        return current._back();
-      case 'enter':
-        if (!multiline) return _advance();
+    if (msg is KeyMsg) {
+      switch (msg.key) {
+        case 'esc':
+        case 'ctrl+c':
+          return (current._copy(cancelled: true), null);
+        case 'ctrl+d':
+        case 'tab':
+          return _advance();
+        case 'shift+tab':
+          return current._back();
+        case 'enter':
+          if (!active.isMultiline) return _advance();
+      }
     }
     // delegate to the active field's editor, then recompute dynamics
     final values = current._rawValues;
