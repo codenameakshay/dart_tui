@@ -144,6 +144,39 @@ void main() {
     expect(KeyPressMsg(parseKeyFromBuffer(input)!).key, 'alt+é');
   });
 
+  test('parseKeyFromBuffer maps ESC-prefixed control keys to alt keys', () {
+    for (final (bytes, key) in [
+      ([0x1b, 0x0d], 'alt+enter'),
+      ([0x1b, 0x09], 'alt+tab'),
+      ([0x1b, 0x01], 'ctrl+alt+a'),
+    ]) {
+      expect(KeyPressMsg(parseKeyFromBuffer(bytes)!).key, key);
+    }
+  });
+
+  test('parseKeyFromBuffer names the remaining control bytes', () {
+    for (final (bytes, key) in [
+      ([0x00], 'ctrl+space'),
+      ([0x1c], 'ctrl+\\'),
+      ([0x1d], 'ctrl+]'),
+      ([0x1e], 'ctrl+^'),
+      ([0x1f], 'ctrl+_'),
+    ]) {
+      expect(KeyPressMsg(parseKeyFromBuffer(bytes)!).key, key);
+    }
+  });
+
+  test('parseKeyFromBuffer parses SS3 arrow keys', () {
+    for (final (final2, key) in [
+      (0x41, 'up'),
+      (0x42, 'down'),
+      (0x43, 'right'),
+      (0x44, 'left'),
+    ]) {
+      expect(KeyPressMsg(parseKeyFromBuffer([0x1b, 0x4f, final2])!).key, key);
+    }
+  });
+
   test('parseKeyFromBuffer keeps legacy alt word-motion sequences', () {
     for (final (bytes, key) in [
       ([0x1b, 0x62], 'alt+left'),

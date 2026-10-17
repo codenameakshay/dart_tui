@@ -99,7 +99,6 @@ void main() {
     test('utf-8 multibyte rune and incomplete escape', () {
       expect(parse([0xc3, 0xa9])!.text, 'é');
       expect(parse([0x1b]), isNull); // needs more bytes
-      expect(parse([0x00])!.code, KeyCode.unknown);
     });
   });
 }

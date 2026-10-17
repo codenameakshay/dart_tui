@@ -94,6 +94,10 @@ TeaKey? parseKeyFromBuffer(List<int> buffer) {
       if (length < 3) return null;
       final b2 = buffer[offset + 2];
       final key = switch (b2) {
+        0x41 => const TeaKey(code: KeyCode.up),
+        0x42 => const TeaKey(code: KeyCode.down),
+        0x43 => const TeaKey(code: KeyCode.right),
+        0x44 => const TeaKey(code: KeyCode.left),
         0x48 => const TeaKey(code: KeyCode.home),
         0x46 => const TeaKey(code: KeyCode.end),
         0x50 => const TeaKey(code: KeyCode.f1),
@@ -127,15 +131,15 @@ TeaKey? parseKeyFromBuffer(List<int> buffer) {
       );
     }
     // Alt+key: Option-as-Meta / Esc+ terminals send ESC followed by the key.
-    if (b1 >= 0x20) {
+    if (b1 != 0x1b) {
       final inner = parseKeyFromBufferAt(buffer, offset + 1);
       if (inner == null) return null;
-      if (inner.key.code == KeyCode.rune) {
+      if (inner.key.code != KeyCode.unknown) {
         return (
           key: TeaKey(
-            code: KeyCode.rune,
+            code: inner.key.code,
             text: inner.key.text,
-            modifiers: const {KeyMod.alt},
+            modifiers: {...inner.key.modifiers, KeyMod.alt},
           ),
           consumed: 1 + inner.consumed
         );
@@ -150,9 +154,16 @@ TeaKey? parseKeyFromBuffer(List<int> buffer) {
     return (key: const TeaKey(code: KeyCode.backspace), consumed: 1);
   }
 
-  // Other non-printable controls
+  // Ctrl+Space and Ctrl+\ ] ^ _ (NUL, FS, GS, RS, US)
   if (b0 == 0x00 || (b0 >= 0x1c && b0 <= 0x1f)) {
-    return (key: const TeaKey(code: KeyCode.unknown), consumed: 1);
+    return (
+      key: TeaKey(
+        code: KeyCode.rune,
+        text: b0 == 0x00 ? ' ' : String.fromCharCode(b0 + 0x40),
+        modifiers: const {KeyMod.ctrl},
+      ),
+      consumed: 1
+    );
   }
 
   if (b0 < 0x80) {
