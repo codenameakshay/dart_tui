@@ -258,20 +258,27 @@ final class TextAreaModel extends Model {
     return const _TextAreaCursorLocation(0, 0);
   }
 
+  /// Inserts [text] at the cursor. Its scalars can merge into neighbouring
+  /// graphemes (combining marks, ZWJ sequences), so the cursor comes from the
+  /// joined text instead of counting inserted graphemes.
   TextAreaModel _insertText(String text) {
-    final currentLines = List<String>.of(_logicalLines);
+    final currentLines = _logicalLines;
     final row = cursorRow.clamp(0, currentLines.length - 1);
-    final chars = currentLines[row].characters.toList();
-    final col = cursorCol.clamp(0, chars.length);
-    final inserted = text.characters.toList();
-    chars.insertAll(col, inserted);
-    currentLines[row] = chars.join();
-    final candidate = currentLines.join('\n');
+    final line = currentLines[row].characters;
+    final col = cursorCol.clamp(0, line.length);
+    final head = [
+          ...currentLines.take(row),
+          line.take(col).toString(),
+        ].join('\n') +
+        text;
+    final candidate = head +
+        [line.skip(col).toString(), ...currentLines.skip(row + 1)].join('\n');
     if (!_accepts(candidate)) return this;
+    final headLines = head.split('\n');
     return copyWith(
       value: candidate,
-      cursorRow: row,
-      cursorCol: col + inserted.length,
+      cursorRow: headLines.length - 1,
+      cursorCol: headLines.last.characters.length,
     )._normalized();
   }
 

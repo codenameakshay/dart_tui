@@ -231,4 +231,51 @@ void main() {
       expect(ta.scrollPercent, 1.0);
     });
   });
+
+  group('TextAreaModel multi-scalar graphemes', () {
+    const family = '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}';
+
+    // The parser delivers one KeyPressMsg per Unicode scalar.
+    TextAreaModel typeScalars(TextAreaModel ta, String text) {
+      for (final rune in text.runes) {
+        ta = ta.update(_char(String.fromCharCode(rune))).$1 as TextAreaModel;
+      }
+      return ta;
+    }
+
+    for (final (name, cluster) in const [
+      ('family', family),
+      ('skin tone', '\u{1F44D}\u{1F3FD}'),
+      ('flag', '\u{1F1EE}\u{1F1F3}'),
+      ('variation selector', '\u2764\uFE0F'),
+    ]) {
+      test('$name typed before existing text lands after the cluster', () {
+        var ta = typeScalars(TextAreaModel(value: 'Z'), cluster);
+        expect(ta.value, '${cluster}Z');
+        expect(ta.cursorColumn, 1);
+        expect(ta.view, returnsNormally);
+        ta = typeScalars(ta, 'x');
+        expect(ta.value, '${cluster}xZ');
+        expect(ta.cursorColumn, 2);
+      });
+    }
+
+    test('backspace after a decomposed e removes it, not the next char', () {
+      var ta = typeScalars(TextAreaModel(value: 'Z'), 'e\u0301');
+      expect(ta.value, 'e\u0301Z');
+      expect(ta.cursorColumn, 1);
+      ta = ta.update(_special(KeyCode.backspace)).$1 as TextAreaModel;
+      expect(ta.value, 'Z');
+      expect(ta.cursorColumn, 0);
+    });
+
+    test('merging scalars on a later line keep that line intact', () {
+      final ta = typeScalars(
+        TextAreaModel(value: 'a\nZ', cursorRow: 1),
+        'e\u0301x',
+      );
+      expect(ta.value, 'a\ne\u0301xZ');
+      expect((ta.cursorRow, ta.cursorColumn), (1, 2));
+    });
+  });
 }
