@@ -188,6 +188,8 @@ final class FilePickerModel extends Model {
         );
 
       case KeyMsg():
+        // Entries still belong to the previous directory until the load lands.
+        if (loading) return (this, null);
         switch (msg.key) {
           case 'up':
           case 'k':

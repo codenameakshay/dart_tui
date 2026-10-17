@@ -136,8 +136,9 @@ void main() {
       final (opened, cmd) = m.update(_k(KeyCode.enter));
       expect((opened as FilePickerModel).currentDir, endsWith('sub'));
       expect(cmd, isNotNull);
-      // go back to parent
-      final (parent, pcmd) = opened.update(_k(KeyCode.backspace));
+      // go back to parent once the directory has loaded
+      final (parent, pcmd) =
+          (await loaded(opened)).update(_k(KeyCode.backspace));
       expect((parent as FilePickerModel).currentDir, tmp.path);
       expect(pcmd, isNotNull);
     });
