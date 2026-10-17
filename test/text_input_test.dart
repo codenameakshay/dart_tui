@@ -280,6 +280,81 @@ void main() {
       }
     });
 
+    test('completing a surrogate pair across the cursor resegments the value',
+        () {
+      for (final suffix in ['', 'Z']) {
+        final initial = TextInputModel(
+          value: '\u{1F1E6}\uD83C$suffix',
+          cursorPos: 2,
+        );
+        final next = _apply(initial, _rune('\uDDE7'));
+        final expected = '\u{1F1E6}\u{1F1E7}$suffix';
+
+        expect(next.value, expected, reason: 'suffix=$suffix');
+        expect(next.cursorPos, 1, reason: 'suffix=$suffix');
+        expect(next.cursorColumn, 1, reason: 'suffix=$suffix');
+        expect(next.view().cursor!.x, 2, reason: 'suffix=$suffix');
+        expect(
+          _apply(next.copyWith(label: 'copy'), _k(KeyCode.backspace)).value,
+          suffix,
+          reason: 'backspace must remove the completed flag as one grapheme',
+        );
+        if (suffix.isNotEmpty) {
+          final deleted = _apply(next, _k(KeyCode.delete));
+          expect(deleted.value, '\u{1F1E6}\u{1F1E7}');
+          expect(deleted.value.characters.length, 1);
+        }
+      }
+    });
+
+    test('completing a surrogate pair can fit a grapheme charLimit', () {
+      for (final viaPaste in [false, true]) {
+        final initial = TextInputModel(
+          value: '\u{1F1E6}\uD83C',
+          cursorPos: 2,
+          charLimit: 1,
+        );
+        final next = viaPaste
+            ? initial.update(PasteMsg('\uDDE7')).$1 as TextInputModel
+            : _apply(initial, _rune('\uDDE7'));
+
+        expect(next.value, '\u{1F1E6}\u{1F1E7}', reason: 'paste=$viaPaste');
+        expect(next.value.characters.length, 1, reason: 'paste=$viaPaste');
+        expect(next.cursorPos, 1, reason: 'paste=$viaPaste');
+        expect(_apply(next, _k(KeyCode.backspace)).value, '',
+            reason: 'paste=$viaPaste');
+      }
+    });
+
+    test('surrogate completion counts a supplementary combining mark', () {
+      final initial = TextInputModel(
+        value: '\u{1F1E6}\uD83CZ',
+        cursorPos: 2,
+        charLimit: 2,
+      );
+      final next = _apply(initial, _rune('\uDDE7\u{E0100}'));
+
+      expect(next.value, '\u{1F1E6}\u{1F1E7}\u{E0100}Z');
+      expect(next.value.characters.length, 2);
+      expect(next.cursorPos, 1);
+      expect(next.cursorColumn, 1);
+      expect(next.view().cursor!.x, 2);
+      expect(_apply(next, _k(KeyCode.backspace)).value, 'Z');
+    });
+
+    test('right-boundary surrogate completion keeps cursor within graphemes',
+        () {
+      final initial = TextInputModel(value: 'a\uDD65', cursorPos: 1);
+      final next = _apply(initial, _rune('\uD834'));
+
+      expect(next.value, 'a\u{1D165}');
+      expect(next.value.characters.length, 1);
+      expect(next.cursorPos, 1);
+      expect(next.cursorColumn, 1);
+      expect(next.view().cursor!.x, 1);
+      expect(_apply(next, _k(KeyCode.backspace)).value, '');
+    });
+
     test('combining mark merges into the previous grapheme', () {
       var m = typeScalars(TextInputModel(), 'e\u0301');
       expect(m.value, 'e\u0301');

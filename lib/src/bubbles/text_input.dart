@@ -237,6 +237,27 @@ final class TextInputModel extends Model {
   TextInputModel _insert(String text) {
     final chars = _graphemes;
     final at = cursorColumn;
+    final completesLeftSurrogatePair = at > 0 &&
+        chars[at - 1].codeUnitAt(chars[at - 1].length - 1) >= 0xD800 &&
+        chars[at - 1].codeUnitAt(chars[at - 1].length - 1) <= 0xDBFF &&
+        text.codeUnitAt(0) >= 0xDC00 &&
+        text.codeUnitAt(0) <= 0xDFFF;
+    final completesRightSurrogatePair = at < chars.length &&
+        text.codeUnitAt(text.length - 1) >= 0xD800 &&
+        text.codeUnitAt(text.length - 1) <= 0xDBFF &&
+        chars[at].codeUnitAt(0) >= 0xDC00 &&
+        chars[at].codeUnitAt(0) <= 0xDFFF;
+    if (completesLeftSurrogatePair || completesRightSurrogatePair) {
+      final prefix = '${chars.take(at).join()}$text';
+      final next = '$prefix${chars.skip(at).join()}';
+      final nextChars = next.characters.toList(growable: false);
+      if (charLimit > 0 && nextChars.length > charLimit) return this;
+      final cursorPrefix = completesRightSurrogatePair
+          ? '$prefix${chars[at].substring(0, 1)}'
+          : prefix;
+      return copyWith(value: next, cursorPos: cursorPrefix.characters.length)
+        .._graphemesCache = nextChars;
+    }
     // Text only merges into the grapheme before it, and appending never moves
     // earlier boundaries, so the cursor comes from re-segmenting just that
     // grapheme plus the text. At the end of the value the grapheme list is
