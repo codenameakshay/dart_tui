@@ -226,11 +226,15 @@ final class _InputPromptModel extends Model implements OutcomeModel<String> {
           null,
         );
       default:
-        if (msg.key.characters.length == 1) {
+        // Insert the rune text: msg.key is 'space' for the space key.
+        final ke = msg.keyEvent;
+        if (ke.code == KeyCode.rune &&
+            ke.text.isNotEmpty &&
+            ke.modifiers.isEmpty) {
           return (
             _InputPromptModel(
               label: label,
-              value: value + msg.key,
+              value: value + ke.text,
             ),
             null,
           );

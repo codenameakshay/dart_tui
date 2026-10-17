@@ -92,6 +92,17 @@ void main() {
       expect(r, 'h');
     }, timeout: _timeout);
 
+    test('accepts a space between words', () async {
+      final r = await promptInput('name',
+          options: _opts([
+            [0x61],
+            [0x20],
+            [0x62],
+            _enter
+          ]));
+      expect(r, 'a b');
+    }, timeout: _timeout);
+
     test('ctrl+c cancels', () async {
       final r = await promptInput('name', options: _opts([_ctrlC]));
       expect(r, isNull);
