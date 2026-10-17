@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dart_tui/dart_tui.dart';
+import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 void main() {
@@ -56,7 +57,7 @@ void main() {
   test('keys are ignored while a directory loads', () async {
     final root = await Directory.systemTemp.createTemp('picker_keys_');
     addTearDown(() => root.delete(recursive: true));
-    final sub = await Directory('${root.path}/sub').create();
+    final sub = await Directory(p.join(root.path, 'sub')).create();
     await File('${root.path}/zfile.txt').writeAsString('x');
     await File('${sub.path}/inner.txt').writeAsString('x');
 
@@ -78,6 +79,6 @@ void main() {
     picker = picker.update((await cmd!())!).$1 as FilePickerModel;
     expect(picker.loading, isFalse);
     picker = picker.update(key(KeyCode.enter)).$1 as FilePickerModel;
-    expect(picker.selected, '${sub.path}/inner.txt');
+    expect(picker.selected, p.join(sub.path, 'inner.txt'));
   });
 }
