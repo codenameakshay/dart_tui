@@ -31,7 +31,7 @@ Cmd tick(Duration d, Msg Function(DateTime t) fn) {
 /// Tick aligned to wall clock boundary.
 Cmd every(Duration d, Msg Function(DateTime t) fn) {
   if (d <= Duration.zero) {
-    throw ArgumentError.value(d, 'd', 'Must be greater than zero');
+    throw ArgumentError('Must be greater than zero, was $d', 'd');
   }
   return () async {
     final now = DateTime.now();
@@ -170,6 +170,6 @@ final class ScrollMsg extends Msg {
 
 void _requireNonNegative(Duration duration, String name) {
   if (duration.isNegative) {
-    throw ArgumentError.value(duration, name, 'Must not be negative');
+    throw ArgumentError('Must not be negative, was $duration', name);
   }
 }
