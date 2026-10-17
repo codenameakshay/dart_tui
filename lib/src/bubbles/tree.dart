@@ -361,9 +361,12 @@ final class TreeModel extends Model {
       // Expand/collapse icon (only for non-leaf nodes)
       String icon = '';
       if (!node.isLeaf) {
-        icon = node.isExpanded
-            ? '${styles.expandedIcon.render('▾')} '
-            : '${styles.collapsedIcon.render('▸')} ';
+        // Selected rows draw the glyph inside the selected style so the
+        // highlight is not reset or overpainted mid-row.
+        final glyph = node.isExpanded ? '▾' : '▸';
+        final iconStyle =
+            node.isExpanded ? styles.expandedIcon : styles.collapsedIcon;
+        icon = '${isSelected ? glyph : iconStyle.render(glyph)} ';
       }
 
       // Label
