@@ -156,17 +156,30 @@ final class Form extends Model implements OutcomeModel<FormValues> {
 
   // Refresh dynamic options/selection against the current raw values. Groups
   // whose fields are unchanged are kept as-is, so a static form still observes
-  // mutations of the caller-owned field lists.
+  // mutations of the caller-owned field lists. Later fields see selections
+  // normalized from earlier fields in declaration order.
   Form _recompute() {
-    final rv = _rawValues;
+    final rv = Map<String, Object?>.of(_rawValues.toMap());
     var changed = false;
     final next = <Group>[];
     for (final g in groups) {
-      final fields = [for (final f in g.fields) f.recompute(rv)];
-      final same = Iterable<int>.generate(fields.length)
-          .every((i) => identical(fields[i], g.fields[i]));
-      changed = changed || !same;
-      next.add(same ? g : Group(fields, title: g.title, hidden: g.hidden));
+      List<FormField>? updatedFields;
+      for (var i = 0; i < g.fields.length; i++) {
+        final field = (updatedFields ?? g.fields)[i];
+        final updated = field.recompute(FormValues(rv));
+        if (!identical(updated, field)) {
+          updatedFields ??= List<FormField>.of(g.fields);
+          updatedFields[i] = updated;
+        }
+        final key = updated.key;
+        if (key != null) rv[key] = updated.value;
+      }
+      if (updatedFields == null) {
+        next.add(g);
+      } else {
+        changed = true;
+        next.add(Group(updatedFields, title: g.title, hidden: g.hidden));
+      }
     }
     return changed ? _withGroups(next) : this;
   }

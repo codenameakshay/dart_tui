@@ -168,6 +168,27 @@ void main() {
     expect(f.values.get<String>('pick'), 'cat');
   });
 
+  test('initial dynamic options observe an upstream normalized selection', () {
+    final f = Form([
+      Group([
+        Field.selectOf<String>(
+          key: 'source',
+          initial: 'stale',
+          optionsFor: (_) => [const Option('Ready', 'ready')],
+        ),
+        Field.selectOf<String>(
+          key: 'dependent',
+          optionsFor: (values) => values.get<String>('source') == 'ready'
+              ? [const Option('Child', 'child')]
+              : const [],
+        ),
+      ]),
+    ]);
+
+    expect(f.values.get<String>('source'), 'ready');
+    expect(f.values.get<String>('dependent'), 'child');
+  });
+
   test('optionsFor multi-select lists options and keeps initial picks', () {
     final f = Form([
       Group([
