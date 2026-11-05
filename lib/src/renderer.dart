@@ -82,8 +82,11 @@ final class _CursorRendererState {
   CursorShape? _shape;
   bool? _blink;
   int? _color;
+  (int, int)? _position;
 
-  void apply(IOSink output, Cursor? cursor) {
+  // Frame writes may move the physical cursor, so only unchanged-content
+  // paths can reuse its last applied position.
+  void apply(IOSink output, Cursor? cursor, {bool forcePosition = true}) {
     if (cursor == null) {
       reset(output);
       return;
@@ -113,8 +116,13 @@ final class _CursorRendererState {
 
     final row = cursor.y.clamp(0, 0x7ffffffe) + 1;
     final column = cursor.x.clamp(0, 0x7ffffffe) + 1;
-    output.write('\x1b[$row;${column}H');
+    if (forcePosition || _position != (row, column)) {
+      output.write('\x1b[$row;${column}H');
+      _position = (row, column);
+    }
   }
+
+  void invalidatePosition() => _position = null;
 
   void reset(IOSink output) {
     if (_shape != null) output.write('\x1b[0 q');
@@ -122,6 +130,7 @@ final class _CursorRendererState {
     _shape = null;
     _blink = null;
     _color = null;
+    invalidatePosition();
   }
 }
 
@@ -172,7 +181,7 @@ final class AnsiRenderer implements TeaRenderer {
       _output.write(windowTitleSequence(view.windowTitle));
     }
     if (_hasRenderedFrame && view.content == _lastContent) {
-      _cursorState.apply(_output, view.cursor);
+      _cursorState.apply(_output, view.cursor, forcePosition: false);
       return;
     }
     final nextLines = view.content.split('\n');
@@ -232,6 +241,7 @@ final class AnsiRenderer implements TeaRenderer {
   void insertAbove(String line) {
     if (!_modes.altScreenEnabled) {
       _output.writeln(line);
+      _cursorState.invalidatePosition();
       return;
     }
     // In alt-screen: save cursor, scroll up to create space, write at top, restore
@@ -387,7 +397,7 @@ final class CellRenderer implements TeaRenderer {
       _output.write(windowTitleSequence(view.windowTitle));
     }
     if (_lastGrid != null && _lastContent == view.content) {
-      _cursorState.apply(_output, view.cursor);
+      _cursorState.apply(_output, view.cursor, forcePosition: false);
       return; // identical frame — skip rebuild + diff walk
     }
     final nextGrid = _buildGrid(view.content);
@@ -414,6 +424,7 @@ final class CellRenderer implements TeaRenderer {
   void insertAbove(String line) {
     if (!_modes.altScreenEnabled) {
       _output.writeln(line);
+      _cursorState.invalidatePosition();
       return;
     }
     _output.write('\x1b[s');

@@ -37,6 +37,181 @@ class _StringSink implements IOSink {
 }
 
 void main() {
+  for (final cellRenderer in [false, true]) {
+    group(
+      '${cellRenderer ? 'CellRenderer' : 'AnsiRenderer'} cursor caching',
+      () {
+        late StringBuffer buf;
+        late TeaRenderer renderer;
+        const cursor = Cursor(x: 3, y: 2, shape: CursorShape.bar);
+
+        setUp(() {
+          buf = StringBuffer();
+          renderer = cellRenderer
+              ? CellRenderer(
+                  output: _StringSink(buf),
+                  defaultAltScreen: false,
+                  defaultHideCursor: true,
+                )
+              : AnsiRenderer(
+                  output: _StringSink(buf),
+                  defaultAltScreen: false,
+                  defaultHideCursor: true,
+                );
+          renderer.render(View(content: 'value', cursor: cursor));
+          buf.clear();
+        });
+
+        test(
+          'equivalent cursors on repeated unchanged frames emit nothing',
+          () {
+            for (var frame = 0; frame < 10; frame++) {
+              renderer.render(
+                View(
+                  content: 'value',
+                  cursor: Cursor(
+                    x: cursor.x,
+                    y: cursor.y,
+                    shape: cursor.shape,
+                  ),
+                ),
+              );
+            }
+            expect(buf.toString(), isEmpty);
+          },
+        );
+
+        test('a position-only change emits one move', () {
+          renderer.render(
+            View(
+              content: 'value',
+              cursor: const Cursor(x: 4, y: 1, shape: CursorShape.bar),
+            ),
+          );
+          expect(buf.toString(), '\x1b[2;5H');
+          buf.clear();
+          renderer.render(
+            View(
+              content: 'value',
+              cursor: const Cursor(x: 4, y: 1, shape: CursorShape.bar),
+            ),
+          );
+          expect(buf.toString(), isEmpty);
+        });
+
+        test('style-only changes do not reposition the cursor', () {
+          renderer.render(
+            View(
+              content: 'value',
+              cursor: const Cursor(x: 3, y: 2, shape: CursorShape.underline),
+            ),
+          );
+          expect(buf.toString(), '\x1b[3 q');
+          buf.clear();
+          renderer.render(
+            View(
+              content: 'value',
+              cursor: const Cursor(
+                x: 3,
+                y: 2,
+                shape: CursorShape.underline,
+                blink: false,
+              ),
+            ),
+          );
+          expect(buf.toString(), '\x1b[4 q');
+        });
+
+        test('color-only changes do not reposition the cursor', () {
+          renderer.render(
+            View(
+              content: 'value',
+              cursor: const Cursor(
+                x: 3,
+                y: 2,
+                shape: CursorShape.bar,
+                color: 0x123456,
+              ),
+            ),
+          );
+          expect(buf.toString(), '\x1b]12;#123456\x07');
+          buf.clear();
+          renderer.render(View(content: 'value', cursor: cursor));
+          expect(buf.toString(), '\x1b]112\x07');
+        });
+
+        test('redrawing content restores the unchanged cursor position', () {
+          renderer.render(View(content: 'VALUE', cursor: cursor));
+          expect(buf.toString(), contains('VALUE'));
+          expect(buf.toString(), endsWith('\x1b[3;4H'));
+          buf.clear();
+          renderer.render(View(content: 'VALUE', cursor: cursor));
+          expect(buf.toString(), isEmpty);
+        });
+
+        test('removing and reintroducing the cursor restores it', () {
+          renderer.render(newView('value'));
+          expect(buf.toString(), '\x1b[?25l\x1b[0 q');
+          buf.clear();
+          renderer.render(newView('value'));
+          expect(buf.toString(), isEmpty);
+
+          renderer.render(View(content: 'value', cursor: cursor));
+          expect(buf.toString(), '\x1b[?25h\x1b[5 q\x1b[3;4H');
+        });
+
+        for (final operation in <String, void Function(TeaRenderer)>{
+          'clearScreen': (r) => r.clearScreen(),
+          'scroll': (r) => r.scroll(1),
+          'insertAbove in alt screen': (r) {
+            r.setAltScreen(true);
+            r.insertAbove('log');
+          },
+          'setAltScreen': (r) => r.setAltScreen(true),
+          'release': (r) => r.release(),
+          'release with reset': (r) => r.release(reset: true),
+        }.entries) {
+          test('${operation.key} restores position on the next frame', () {
+            operation.value(renderer);
+            buf.clear();
+            renderer.restore(View(content: 'value', cursor: cursor));
+            expect(buf.toString(), contains('value'));
+            expect(buf.toString(), endsWith('\x1b[3;4H'));
+            buf.clear();
+            renderer.render(View(content: 'value', cursor: cursor));
+            expect(buf.toString(), isEmpty);
+          });
+        }
+
+        test('inline insertAbove invalidates only the cursor position', () {
+          renderer.insertAbove('log');
+          buf.clear();
+          renderer.render(View(content: 'value', cursor: cursor));
+          expect(buf.toString(), '\x1b[3;4H');
+          buf.clear();
+          renderer.render(View(content: 'value', cursor: cursor));
+          expect(buf.toString(), isEmpty);
+        });
+
+        test('a declarative screen change restores cursor position', () {
+          renderer.render(
+            View(content: 'value', cursor: cursor, altScreen: true),
+          );
+          expect(buf.toString(), contains('\x1b[?1049h'));
+          expect(buf.toString(), endsWith('\x1b[3;4H'));
+        });
+
+        test('empty frames still position the cursor once', () {
+          renderer.render(View(cursor: cursor));
+          expect(buf.toString(), endsWith('\x1b[3;4H'));
+          buf.clear();
+          renderer.render(View(cursor: cursor));
+          expect(buf.toString(), isEmpty);
+        });
+      },
+    );
+  }
+
   test('AnsiRenderer clears unknown initial row content before writing', () {
     final buf = StringBuffer();
     final renderer = AnsiRenderer(
