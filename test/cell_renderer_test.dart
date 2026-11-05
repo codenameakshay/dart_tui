@@ -209,6 +209,26 @@ void main() {
       expect(buf.toString(), endsWith('\x1b[0m\x1b]8;;\x1b\\'));
     });
 
+    for (final color in [
+      '38;2;255;128;0',
+      '38;2;0;255;128',
+      '38;2;255;0;128',
+      '38;5;0',
+      '48;5;0',
+      '58;2;0;255;0',
+    ]) {
+      test('preserves bold and zero-valued color $color', () {
+        final open = '\x1b[1m\x1b[${color}m';
+        renderer.render(newView('${open}color\x1b[0m'));
+
+        expect(buf.toString(), contains('${open}color\x1b[0m'));
+
+        buf.clear();
+        renderer.render(newView('${open}coloR\x1b[0m'));
+        expect(buf.toString(), equals('\x1b[1;5H${open}R\x1b[0m'));
+      });
+    }
+
     test('repaints unchanged text when only its hyperlink changes', () {
       renderer.render(newView(
         const Style(hyperlinkUrl: 'https://one.example').render('same'),
