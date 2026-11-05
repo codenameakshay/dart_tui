@@ -108,7 +108,20 @@ final class AnsiStateTracker {
     if (_isSgr(sequence)) {
       final parameters = sequence.substring(2, sequence.length - 1);
       final parts = parameters.isEmpty ? const ['0'] : parameters.split(';');
-      final lastReset = parts.lastIndexWhere((part) => part == '0');
+      var lastReset = -1;
+      for (var index = 0; index < parts.length;) {
+        final code = parts[index].isEmpty ? 0 : int.tryParse(parts[index]);
+        if (code == 0) lastReset = index;
+        if (code == 38 || code == 48 || code == 58) {
+          // Extended foreground, background and underline colors consume
+          // operands: their zero-valued channels/indices are not SGR resets.
+          final mode =
+              index + 1 < parts.length ? int.tryParse(parts[index + 1]) : null;
+          index += mode == 2 ? 5 : (mode == 5 ? 3 : 2);
+        } else {
+          index++;
+        }
+      }
       if (lastReset >= 0) {
         _sgr.clear();
         if (lastReset < parts.length - 1) _sgr.write(sequence);
