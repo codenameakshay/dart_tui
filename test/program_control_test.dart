@@ -53,6 +53,70 @@ final class _DriverModel extends Model {
 }
 
 void main() {
+  for (final cellRenderer in [false, true]) {
+    test(
+        '${cellRenderer ? 'cell' : 'ANSI'} cursor survives actual resizing '
+        'without output on repeated size reports', () async {
+      final sink = _StringSink();
+      final frames = StreamController<WindowSizeMsg>();
+      final rendered = StreamIterator(frames.stream);
+      final program = Program(
+        options: [
+          withOutput(sink),
+          withInput(null),
+          withoutSignalHandler(),
+          withWindowSize(80, 24),
+          withFps(120),
+          withAltScreen(),
+          if (cellRenderer) withCellRenderer(),
+          withFilter((_, msg) {
+            if (msg is _RenderBarrierMsg) {
+              msg.done.complete();
+              return null;
+            }
+            return msg;
+          }),
+        ],
+      );
+      Future<void> waitForFrame() async {
+        expect(await rendered.moveNext(), isTrue);
+        // The next message is processed only after the throttled render ends.
+        final done = Completer<void>();
+        program.send(_RenderBarrierMsg(done));
+        await done.future;
+      }
+
+      final run = program.run(_CursorResizeModel(frames));
+      try {
+        // Wait for the initial WindowSizeMsg to be rendered.
+        await waitForFrame();
+        sink.buf.clear();
+
+        program.send(WindowSizeMsg(80, 24));
+        await waitForFrame();
+        expect(sink.buf.toString(), isEmpty);
+
+        for (final size in [(80, 20), (60, 20)]) {
+          sink.buf.clear();
+          program.send(WindowSizeMsg(size.$1, size.$2));
+          await waitForFrame();
+          expect(sink.buf.toString(), contains('value'));
+          expect(sink.buf.toString(), endsWith('\x1b[3;4H'));
+
+          sink.buf.clear();
+          program.send(WindowSizeMsg(size.$1, size.$2));
+          await waitForFrame();
+          expect(sink.buf.toString(), isEmpty);
+        }
+      } finally {
+        program.quit();
+        await run;
+        await rendered.cancel();
+        await frames.close();
+      }
+    });
+  }
+
   test('SetWindowTitleMsg strips OSC control characters', () async {
     final sink = _StringSink();
     await Program(options: [
@@ -621,6 +685,36 @@ final class _RestartOnUpdateModel extends Model {
 final class _LabelMsg extends Msg {
   _LabelMsg(this.label);
   final String label;
+}
+
+final class _RenderBarrierMsg extends Msg {
+  _RenderBarrierMsg(this.done);
+
+  final Completer<void> done;
+}
+
+final class _CursorResizeModel extends Model {
+  _CursorResizeModel(this.frames);
+
+  final StreamController<WindowSizeMsg> frames;
+  WindowSizeMsg? _pendingSize;
+
+  @override
+  (Model, Cmd?) update(Msg msg) {
+    if (msg is WindowSizeMsg) _pendingSize = msg;
+    return (this, null);
+  }
+
+  @override
+  View view() {
+    final size = _pendingSize;
+    if (size != null) frames.add(size);
+    _pendingSize = null;
+    return View(
+      content: 'value',
+      cursor: const Cursor(x: 3, y: 2, shape: CursorShape.bar),
+    );
+  }
 }
 
 final class _IdleModel extends Model {
