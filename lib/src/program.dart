@@ -622,6 +622,7 @@ final class Program {
     final frameClock = Stopwatch()..start();
     var lastRenderMicros = -1;
     View? lastRenderedView;
+    (int, int)? lastWindowSize;
     Future<void> render(View v) async {
       final nowMicros = frameClock.elapsedMicroseconds;
       if (lastRenderMicros >= 0 && minFrameMicros > 0) {
@@ -834,6 +835,15 @@ final class Program {
           (msg.value == 1 || msg.value == 2 || msg.value == 3)) {
         _unicodeCoreSupported = true;
         _renderer?.setUnicodeCore(true);
+      }
+      if (msg is WindowSizeMsg) {
+        final size = (msg.width, msg.height);
+        // Resizing can reflow content and move the physical cursor even when
+        // the model's view is unchanged. Polling the same size must be a no-op.
+        if (lastWindowSize != null && size != lastWindowSize) {
+          _renderer?.clearScreen();
+        }
+        lastWindowSize = size;
       }
       if (msg is MouseMsg) {
         final onMouse = lastRenderedView?.onMouse;
