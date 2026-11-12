@@ -158,8 +158,8 @@ Msg hideCursor()           // hide terminal cursor
 Msg showCursor()           // show terminal cursor
 Cmd setWindowTitle(title)  // set window/tab title via OSC
 Msg clearScrollArea()      // clear the screen (inline: only the view)
-Cmd scrollUp([int n = 1])  // scroll viewport up n lines
-Cmd scrollDown([int n = 1])// scroll viewport down n lines
+Cmd scrollUp([int n = 1])  // scroll up n lines (alt screen only)
+Cmd scrollDown([int n = 1])// scroll down n lines (alt screen only)
 ```
 
 ### Program options

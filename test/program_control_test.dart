@@ -595,7 +595,8 @@ void main() {
     final out = sink.buf.toString();
     expect(out, contains('\x1b]0;T\x07')); // window title
     expect(out, contains('\x1b[?1049h')); // enter alt-screen
-    expect(out, contains('\x1b[2S')); // scroll up 2
+    // ScrollMsg arrives on the normal screen, where it is a no-op (#18).
+    expect(out, isNot(contains('\x1b[2S')));
     expect(out, contains('\x1b]52;c;')); // clipboard OSC 52
     expect(out, contains('above')); // printLine
   }, timeout: const Timeout(Duration(seconds: 10)));

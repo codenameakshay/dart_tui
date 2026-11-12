@@ -79,7 +79,8 @@ void main() {
     expect(sink.buf.toString(), contains('\x1b[?2026h'));
     _driveModes(r, sink);
     expect(sink.buf.toString(), contains('\x1b]0;Title\x07'));
-    expect(sink.buf.toString(), contains('\x1b[2S')); // scroll up 2
+    // Scrolling runs here on the normal screen, where it is a no-op (#18).
+    expect(sink.buf.toString(), isNot(contains('\x1b[2S')));
     expect(sink.buf.toString(), contains('\x1b[?2027h'));
     expect(sink.buf.toString(), contains('\x1b[?2027l'));
   });

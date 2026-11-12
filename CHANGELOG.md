@@ -15,6 +15,9 @@
   line. Programs run in sequence (prompts, forms) start below each other.
   Suspend, exec and resize erase only the view, not the screen. Alt-screen
   output is unchanged.
+- `scrollUp` / `scrollDown` (`ScrollMsg`) now apply only in the alternate
+  screen. Outside it they do nothing, because scrolling the whole terminal
+  moved shell history and the view's anchor.
 - `ClearScrollAreaMsg` clears once instead of twice. Outside the alternate
   screen it, `ClearScreenMsg` and a resize erase only the view.
 - `example/prompts_chain.dart` now runs inline. The new

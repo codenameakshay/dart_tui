@@ -198,16 +198,17 @@ void main() {
         expect(buf.toString(), endsWith(cell ? '\r\r\n' : '\r\x1b[1A\r\n'));
       });
 
-      test('scrolling a full terminal discards the offscreen frame anchor', () {
+      test('scrolling is ignored inline, so history and the anchor stay', () {
         lines = 2;
         renderer.render(newView('a\nb'));
-        renderer.scroll(2);
         buf.clear();
+        renderer.scroll(2);
+        renderer.scroll(1, up: false);
+        expect(buf.toString(), isEmpty);
         renderer.render(newView('A\nB'));
         expect(buf.toString(), isNot(contains('\x1b[3A')));
-      },
-          skip:
-              'Decision needed: frame-local scroll or reject/no-op inline scrolling.');
+        expect(buf.toString(), contains('\r\x1b[1AA'));
+      });
 
       test('frame styling is reset before an erase on the next frame', () {
         renderer.render(newView('\x1b[41mone'));

@@ -30,6 +30,7 @@ abstract interface class TeaRenderer {
   void setCursorVisibility(bool visible);
 
   /// Emit ANSI scroll sequences: positive [n] scrolls up, negative scrolls down.
+  /// Only in the alternate screen; inline frames ignore it.
   void scroll(int n, {bool up = true});
 }
 
@@ -496,11 +497,11 @@ final class AnsiRenderer implements TeaRenderer {
 
   @override
   void scroll(int n, {bool up = true}) {
-    if (n <= 0) return;
+    // Inline, scrolling the whole terminal would move shell history and the
+    // frame's anchor, so it only applies in the alternate screen.
+    if (n <= 0 || !_modes.altScreenEnabled) return;
     // ESC[nS = scroll up n lines; ESC[nT = scroll down n lines
     _output.write(up ? '\x1b[${n}S' : '\x1b[${n}T');
-    // The cursor stays put while the frame moves with the screen contents.
-    if (!_modes.altScreenEnabled) _frame.row += up ? n : -n;
     _lastLines = const <String>[];
     _lastContent = '';
     _hasRenderedFrame = false;
@@ -754,9 +755,9 @@ final class CellRenderer implements TeaRenderer {
 
   @override
   void scroll(int n, {bool up = true}) {
-    if (n <= 0) return;
+    // See AnsiRenderer.scroll: inline scrolling is a no-op.
+    if (n <= 0 || !_modes.altScreenEnabled) return;
     _output.write(up ? '\x1b[${n}S' : '\x1b[${n}T');
-    if (!_modes.altScreenEnabled) _frame.row += up ? n : -n;
     _lastGrid = null;
     _lastContent = null;
   }
