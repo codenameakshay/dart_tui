@@ -49,6 +49,23 @@ jobs:
       - run: dart analyze --fatal-infos
       - run: dart test
 
+  # Parse every VHS tape so a broken tape fails CI. Never records GIFs.
+  tapes:
+    runs-on: ubuntu-latest
+    env:
+      VHS_VERSION: 0.12.1
+      VHS_SHA256: eb33787a5b1cebf91fe0b18bd231e2d71d36c1ff4babd99ddac1a6ab411efd10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install vhs
+        run: |
+          tarball="vhs_${VHS_VERSION}_Linux_x86_64.tar.gz"
+          curl -fsSLO "https://github.com/charmbracelet/vhs/releases/download/v${VHS_VERSION}/${tarball}"
+          echo "${VHS_SHA256}  ${tarball}" | sha256sum -c -
+          tar -xzf "${tarball}"
+          sudo install "vhs_${VHS_VERSION}_Linux_x86_64/vhs" /usr/local/bin/vhs
+      - run: vhs validate example/tapes/*.tape
+
   website:
     runs-on: ubuntu-latest
     defaults:

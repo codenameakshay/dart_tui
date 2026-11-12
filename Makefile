@@ -11,13 +11,16 @@
 EXAMPLE ?= simple
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
-VHS      := /opt/homebrew/bin/vhs
-FFMPEG   := $(HOME)/ffmpeg-local
+# vhs and ffmpeg come from PATH. Override with VHS=/path/to/vhs or
+# FFMPEG_DIR=/dir/containing/ffmpeg (prepended to PATH for recording).
+VHS        ?= vhs
+FFMPEG_DIR ?=
+GIF_ENV    := $(if $(FFMPEG_DIR),PATH="$(FFMPEG_DIR):$$PATH")
 DART     ?= dart
 export DART
 TAPES    := $(wildcard example/tapes/*.tape)
 
-.PHONY: help test analyze format coverage run kernels run-fast bench bench-all gifs new-example clean bench-hotpath bench-startup-pty
+.PHONY: help test analyze format coverage run kernels run-fast bench bench-all gifs gif check-gif-tools tape new-example clean bench-hotpath bench-startup-pty
 
 # ── Help ───────────────────────────────────────────────────────────────────────
 help:
@@ -44,9 +47,11 @@ help:
 	@echo "    make bench-hotpath           Naive Dart vs dart_tui hot-path table"
 	@echo "    make bench-startup-pty       First-visible-frame startup (PTY)"
 	@echo ""
-	@echo "  GIF recording (requires VHS + ffmpeg)"
+	@echo "  GIF recording (requires vhs + ffmpeg + ttyd on PATH)"
 	@echo "    make gifs                    Build all kernels then record all GIFs"
 	@echo "    make gif EXAMPLE=foo         Record one GIF (builds kernel first)"
+	@echo "    make tape NAME=foo           Create example/tapes/foo.tape from simple.tape"
+	@echo "    VHS=/path/to/vhs FFMPEG_DIR=/dir make gif   Override tool locations"
 	@echo ""
 	@echo "  Scaffolding"
 	@echo "    make new-example NAME=foo    Create example/foo.dart from template"
@@ -110,14 +115,46 @@ bench-startup-pty:
 	python3 tool/bench_command.py -- dart run example/simple.dart
 
 # ── GIF recording ──────────────────────────────────────────────────────────────
-gifs: kernels
+check-gif-tools:
+	@command -v "$(VHS)" >/dev/null 2>&1 || { \
+		echo "error: vhs not found: '$(VHS)'. Install it (https://github.com/charmbracelet/vhs) or set VHS=/path/to/vhs." >&2; \
+		exit 1; \
+	}
+	@$(if $(FFMPEG_DIR),export PATH="$(FFMPEG_DIR):$$PATH";) command -v ffmpeg >/dev/null 2>&1 || { \
+		echo "error: ffmpeg not found on PATH$(if $(FFMPEG_DIR), or in FFMPEG_DIR=$(FFMPEG_DIR)). Install ffmpeg or set FFMPEG_DIR=/dir/containing/ffmpeg." >&2; \
+		exit 1; \
+	}
+
+gifs: check-gif-tools
+	$(MAKE) kernels
 	@for tape in $(TAPES); do \
 		echo "  recording $$tape ..."; \
-		PATH=$(FFMPEG):$$PATH $(VHS) "$$tape"; \
+		$(GIF_ENV) "$(VHS)" "$$tape" || exit 1; \
 	done
 
-gif: tool/bin/$(EXAMPLE).dill
-	PATH=$(FFMPEG):$$PATH $(VHS) example/tapes/$(EXAMPLE).tape
+gif: check-gif-tools
+	$(MAKE) tool/bin/$(EXAMPLE).dill
+	$(GIF_ENV) "$(VHS)" example/tapes/$(EXAMPLE).tape
+
+# Scaffold example/tapes/$(NAME).tape with simple.tape's settings.
+tape:
+	@if [ -z "$(NAME)" ]; then \
+		echo "Usage: make tape NAME=my_feature" >&2; \
+		exit 1; \
+	fi
+	@if [ ! -f "example/$(NAME).dart" ]; then \
+		echo "example/$(NAME).dart does not exist (create it with make new-example NAME=$(NAME))" >&2; \
+		exit 1; \
+	fi
+	@if [ -e "example/tapes/$(NAME).tape" ]; then \
+		echo "example/tapes/$(NAME).tape already exists" >&2; \
+		exit 1; \
+	fi
+	@sed -e 's|output/simple\.gif|output/$(NAME).gif|' \
+		-e 's|tool/bin/simple\.dill|tool/bin/$(NAME).dill|' \
+		example/tapes/simple.tape > example/tapes/$(NAME).tape
+	@echo "Created example/tapes/$(NAME).tape"
+	@echo "Record with: make gif EXAMPLE=$(NAME)"
 
 # ── New example scaffold ───────────────────────────────────────────────────────
 new-example:
@@ -160,4 +197,4 @@ new-example:
 		> example/$(NAME).dart
 	@echo "Created example/$(NAME).dart"
 	@echo "Run with: make run EXAMPLE=$(NAME)"
-	@echo "Record:   make gif EXAMPLE=$(NAME)  (after adding example/tapes/$(NAME).tape)"
+	@echo "Record:   make tape NAME=$(NAME) && make gif EXAMPLE=$(NAME)"
