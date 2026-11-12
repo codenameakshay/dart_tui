@@ -40,6 +40,11 @@ Each entry drives one page via `components/doc-page.tsx`. To add or edit docs,
 change the registry — the sidebar, search, index grids, prev/next nav and
 footer all update automatically.
 
+`/changelog` and `/changelog/rss.xml` are built from the repo's root
+`CHANGELOG.md` at build time (`lib/changelog-source.ts`), so the build needs
+the whole repo checkout, not just `website/`. The parser lives in
+`lib/changelog.ts` and `lib/markdown.ts`; run its tests with `npm test`.
+
 Component previews use the GIFs recorded by the package's own `make gifs`
 target, copied into `public/gifs/`.
 
@@ -51,6 +56,9 @@ importing the repo into Vercel:
 1. **Root Directory** → set to `website`
 2. Framework preset → **Next.js** (auto-detected)
 3. Build command / output → defaults (`next build`)
+
+Keep **Include files outside the root directory in the Build Step** on (the
+default): the changelog page reads `../CHANGELOG.md` during the build.
 
 That's it — no environment variables required.
 

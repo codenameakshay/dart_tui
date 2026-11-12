@@ -40,6 +40,7 @@ const columns = [
   {
     title: "Resources",
     links: [
+      { label: "Changelog", href: "/changelog" },
       { label: "GitHub", href: siteConfig.github },
       { label: "pub.dev", href: siteConfig.pub },
       { label: "Bubble Tea", href: "https://github.com/charmbracelet/bubbletea" },

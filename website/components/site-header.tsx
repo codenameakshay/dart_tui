@@ -15,6 +15,7 @@ const nav = [
   { href: "/blocks", label: "Blocks" },
   { href: "/examples", label: "Examples" },
   { href: "/guides/installation", label: "Guides", match: "/guides" },
+  { href: "/changelog", label: "Changelog" },
 ];
 
 export function SiteHeader() {

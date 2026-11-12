@@ -9,6 +9,7 @@ import {
   Blocks,
   Search,
   Github,
+  History,
   SquareTerminal,
 } from "lucide-react";
 import { allEntries, CATEGORY_META, type Category } from "@/content";
@@ -116,6 +117,14 @@ export function CommandMenu() {
             heading="Links"
             className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground"
           >
+            <Command.Item
+              value="changelog releases release notes"
+              onSelect={() => go("/changelog")}
+              className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm aria-selected:bg-muted"
+            >
+              <History className="h-4 w-4 text-muted-foreground" />
+              <span className="font-medium">Changelog</span>
+            </Command.Item>
             <Command.Item
               value="github repository source"
               onSelect={() => {
