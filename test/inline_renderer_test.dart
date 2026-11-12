@@ -190,6 +190,60 @@ void main() {
         expect(out.substring(leave), endsWith('\r\r\n'));
       });
 
+      test('quitting in alt after a trailing newline adds no blank row', () {
+        renderer.render(newView('one\n'));
+        renderer.setAltScreen(true);
+        buf.clear();
+        renderer.close();
+        expect(buf.toString(), endsWith(cell ? '\r\r\n' : '\r\x1b[1A\r\n'));
+      });
+
+      test('scrolling a full terminal discards the offscreen frame anchor', () {
+        lines = 2;
+        renderer.render(newView('a\nb'));
+        renderer.scroll(2);
+        buf.clear();
+        renderer.render(newView('A\nB'));
+        expect(buf.toString(), isNot(contains('\x1b[3A')));
+      },
+          skip:
+              'Decision needed: frame-local scroll or reject/no-op inline scrolling.');
+
+      test('frame styling is reset before an erase on the next frame', () {
+        renderer.render(newView('\x1b[41mone'));
+        renderer.clearScreen();
+        final output = buf.toString();
+        final text = output.indexOf('one');
+        final clear = output.indexOf('\x1b[J', text);
+        expect(clear, greaterThan(text));
+        expect(output.substring(text, clear), contains('\x1b[0m'));
+      });
+
+      test('insertAbove closes background style before frame erasure', () {
+        renderer.render(newView('one'));
+        buf.clear();
+        renderer.insertAbove('\x1b[41mlog');
+        renderer.render(newView('two'));
+        final output = buf.toString();
+        final log = output.indexOf('log');
+        final clear = output.indexOf('\x1b[K', log);
+        expect(clear, greaterThan(log));
+        expect(output.substring(log, clear), contains('\x1b[0m'));
+      });
+
+      test('reset release from alt screen erases only the saved inline frame',
+          () {
+        renderer.render(newView('one\ntwo'));
+        renderer.setAltScreen(true);
+        buf.clear();
+        renderer.release(reset: true);
+        final out = buf.toString();
+        final leave = out.indexOf('\x1b[?1049l');
+        expect(leave, greaterThanOrEqualTo(0));
+        expect(out.substring(leave), isNot(contains(_absoluteRow)));
+        expect(out, endsWith('\r\x1b[1A\x1b[J'));
+      });
+
       test('release(reset) then restore draws a new frame at the cursor', () {
         renderer.render(newView('a\nb'));
         renderer.release(reset: true);
@@ -222,6 +276,7 @@ void main() {
       renderer.render(newView('one\ntwo'));
       expect(buf.toString(), contains('\x1b[1;1H'));
       buf.clear();
+      // A pure alt-screen program keeps its exact bytes, including this clear.
       renderer.release(reset: true);
       expect(buf.toString(), endsWith('\x1b[?2004l\x1b[H\x1b[2J'));
     }

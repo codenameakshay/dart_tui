@@ -23,8 +23,10 @@ Future<void> main(List<String> arguments) async {
         ? const ['FIRST', 'SECOND']
         : const ['INLINE'];
     for (final step in steps) {
-      await Program(options: [if (cell) withCellRenderer()])
-          .run(_InlineModel(step));
+      await Program(options: [if (cell) withCellRenderer()]).run(
+          scenario.startsWith('inline-lifecycle')
+              ? _InlineLifecycleModel()
+              : _InlineModel(step));
     }
     return;
   }
@@ -132,6 +134,8 @@ const _scenarios = {
   'default-init-exec-reads',
   'explicit-exec',
   'restart-suspend',
+  'inline-lifecycle',
+  'inline-lifecycle-cell',
   'inline',
   'inline-cell',
   'inline-chain',
@@ -172,6 +176,52 @@ final class _InlineModel implements Model {
         '${name}_LAST rows=$rows',
       ].join('\n'));
 }
+
+final class _InlineLifecycleModel extends Model {
+  _InlineLifecycleModel({this.altScreen = false, this.revision = 0});
+
+  final bool altScreen;
+  final int revision;
+
+  @override
+  Cmd? init() => null;
+
+  @override
+  (Model, Cmd?) update(Msg msg) {
+    if (msg is _InlineExecDoneMsg) {
+      return (
+        _InlineLifecycleModel(altScreen: altScreen, revision: revision + 1),
+        null,
+      );
+    }
+    if (msg is! KeyMsg) return (this, null);
+    return switch (msg.key) {
+      'a' => (
+          _InlineLifecycleModel(altScreen: !altScreen, revision: revision + 1),
+          null
+        ),
+      'c' => (
+          _InlineLifecycleModel(altScreen: altScreen, revision: revision + 1),
+          clearScrollArea
+        ),
+      'x' => (
+          this,
+          execProcess('/bin/sh', ['-c', r'printf "INLINE_CHILD\n"'],
+              onExit: (_) => _InlineExecDoneMsg())
+        ),
+      'q' => (this, () => quit()),
+      _ => (this, null),
+    };
+  }
+
+  @override
+  View view() => View(
+        content: 'LIFECYCLE_TOP v$revision\nLIFECYCLE_LAST v$revision',
+        altScreen: altScreen,
+      );
+}
+
+final class _InlineExecDoneMsg extends Msg {}
 
 final class _ProbeModel implements Model {
   const _ProbeModel(this.scenario, [this.state]);

@@ -38,6 +38,63 @@ class _StringSink implements IOSink {
 
 void main() {
   for (final cellRenderer in [false, true]) {
+    test(
+        '${cellRenderer ? 'CellRenderer' : 'AnsiRenderer'} preserves '
+        '3a78df5 alternate-screen bytes', () {
+      final buf = StringBuffer();
+      final TeaRenderer renderer = cellRenderer
+          ? CellRenderer(
+              output: _StringSink(buf),
+              defaultAltScreen: true,
+              defaultHideCursor: true,
+            )
+          : AnsiRenderer(
+              output: _StringSink(buf),
+              defaultAltScreen: true,
+              defaultHideCursor: true,
+            );
+      renderer.render(View(
+        content: 'one\ntwo\nthree',
+        cursor: const Cursor(x: 1, y: 1),
+      ));
+      renderer.render(View(
+        content: 'onX\n\x1b[41mtwo\x1b[0m\nthree',
+        cursor: const Cursor(x: 2, y: 0),
+      ));
+      renderer.render(newView('a'));
+      renderer.insertAbove('log');
+      renderer.render(newView('four'));
+      renderer.scroll(2);
+      renderer.render(newView('five'));
+      renderer.clearScreen();
+      renderer.render(newView('六a'));
+      renderer.release();
+
+      const prefix = '\x1b[?1049h\x1b[?2004h'
+          '\x1b[>4;2m\x1b[=1;1u\x1b[?u';
+      const suffix = '\x1b[>4m\x1b[=0;1u\x1b[?25h\x1b[?1049l'
+          '\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l'
+          '\x1b[?1004l\x1b[?2004l';
+      const ansi = '\x1b[1;1H\x1b[Kone\x1b[2;1H\x1b[Ktwo'
+          '\x1b[3;1H\x1b[Kthree\x1b[1 q\x1b[2;2H'
+          '\x1b[1;1HonX\x1b[2;1H\x1b[41mtwo\x1b[0m\x1b[1;3H'
+          '\x1b[?25l\x1b[1;1Ha\x1b[K\x1b[2;1H\x1b[K'
+          '\x1b[3;1H\x1b[K\x1b[0 q'
+          '\x1b[s\x1b[1;1H\x1b[S\x1b[1;1H\x1b[Klog\x1b[u'
+          '\x1b[1;1H\x1b[Kfour\x1b[2S\x1b[1;1H\x1b[Kfive'
+          '\x1b[H\x1b[2J\x1b[1;1H\x1b[K六a';
+      const cell = '\x1b[1;1H\x1b[K\x1b[2;1H\x1b[K'
+          '\x1b[3;1H\x1b[K\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree'
+          '\x1b[1 q\x1b[2;2H\x1b[1;3HX\x1b[2;1H'
+          '\x1b[41mtwo\x1b[0m\x1b[1;3H\x1b[?25l'
+          '\x1b[1;1Ha  \x1b[2;1H   \x1b[3;1H     \x1b[0 q'
+          '\x1b[s\x1b[1;1H\x1b[S\x1b[1;1H\x1b[Klog\x1b[u'
+          '\x1b[1;1H\x1b[K\x1b[1;1Hfour\x1b[2S'
+          '\x1b[1;1H\x1b[K\x1b[1;1Hfive\x1b[H\x1b[2J'
+          '\x1b[1;1H\x1b[K\x1b[1;1H六a';
+      expect(buf.toString(), '$prefix${cellRenderer ? cell : ansi}$suffix');
+    });
+
     group(
       '${cellRenderer ? 'CellRenderer' : 'AnsiRenderer'} cursor caching',
       () {

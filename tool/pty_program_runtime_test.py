@@ -505,6 +505,64 @@ class InlineRenderingTmuxTest(unittest.TestCase):
                 # The rows the frame shrank away from were erased.
                 self.assertFalse(any("INLINE_ROW_" in line for line in lines))
 
+    def test_clear_resize_and_exec_preserve_inline_history(self) -> None:
+        for scenario in ("inline-lifecycle", "inline-lifecycle-cell"):
+            with self.subTest(scenario=scenario):
+                pane = self._run(scenario)
+                pane.wait_for("LIFECYCLE_LAST v0")
+                pane.keys("c")
+                pane.wait_for("LIFECYCLE_LAST v1")
+                pane._tmux("resize-window", "-t", "t", "-x", "90", "-y", "28")
+                time.sleep(0.3)
+                pane.keys("x")
+                pane.wait_for("LIFECYCLE_LAST v2")
+                pane.keys("q")
+                lines = pane.wait_for("AFTER_MARK")
+                expected = [
+                    "MARK_1", "MARK_2", "MARK_3", "INLINE_CHILD",
+                    "LIFECYCLE_TOP v2", "LIFECYCLE_LAST v2", "AFTER_MARK",
+                ]
+                found = [self._index(lines, marker) for marker in expected]
+                self.assertEqual(
+                    found, list(range(found[0], found[0] + len(found))), lines
+                )
+
+    def test_exec_from_alt_screen_keeps_shell_history(self) -> None:
+        for scenario in ("inline-lifecycle", "inline-lifecycle-cell"):
+            with self.subTest(scenario=scenario):
+                pane = self._run(scenario)
+                pane.wait_for("LIFECYCLE_LAST v0")
+                pane.keys("a")
+                pane.wait_for("LIFECYCLE_LAST v1")
+                pane.keys("x")
+                pane.wait_for("LIFECYCLE_LAST v2")
+                pane.keys("a")
+                pane.wait_for("LIFECYCLE_LAST v3")
+                pane.keys("q")
+                lines = pane.wait_for("AFTER_MARK")
+                expected = [
+                    "MARK_1", "MARK_2", "MARK_3", "INLINE_CHILD",
+                    "LIFECYCLE_TOP v3", "LIFECYCLE_LAST v3", "AFTER_MARK",
+                ]
+                found = [self._index(lines, marker) for marker in expected]
+                self.assertEqual(
+                    found, list(range(found[0], found[0] + len(found))), lines
+                )
+
+    def test_quit_in_alt_screen_after_inline_frame_parks_below_frame(self) -> None:
+        for scenario in ("inline-lifecycle", "inline-lifecycle-cell"):
+            with self.subTest(scenario=scenario):
+                pane = self._run(scenario)
+                pane.wait_for("LIFECYCLE_LAST v0")
+                pane.keys("a")
+                pane.wait_for("LIFECYCLE_LAST v1")
+                pane.keys("q")
+                lines = pane.wait_for("AFTER_MARK")
+                last = self._index(lines, "LIFECYCLE_LAST v0")
+                self.assertEqual(self._index(lines, "AFTER_MARK"), last + 1, lines)
+                for n in (1, 2, 3):
+                    self._index(lines, f"MARK_{n}")
+
     def test_tall_frame_redraws_do_not_flood_scrollback(self) -> None:
         for scenario in ("inline", "inline-cell"):
             with self.subTest(scenario=scenario):

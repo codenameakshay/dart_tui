@@ -107,6 +107,9 @@ final class _InlineFrame {
   /// The number of rows the frame occupies on screen.
   int height = 0;
 
+  /// The 1-based exit row, excluding a final empty line.
+  int parkRow = 0;
+
   /// Moves to column 0 of [target], creating rows below the frame as needed.
   void moveTo(IOSink output, int target) {
     output.write('\r');
@@ -141,6 +144,7 @@ final class _InlineFrame {
   void reset() {
     row = 0;
     height = 0;
+    parkRow = 0;
   }
 }
 
@@ -149,7 +153,8 @@ final class _InlineFrame {
 void _insertAboveInline(IOSink output, _InlineFrame frame, String line) {
   frame.eraseFrom(output, 0);
   frame.moveTo(output, 0);
-  output.write('${line.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n')}\r\n');
+  output.write(
+      '${balanceAnsiState(line).replaceAll('\r\n', '\n').replaceAll('\n', '\r\n')}\r\n');
   frame.reset();
 }
 
@@ -345,7 +350,7 @@ final class AnsiRenderer implements TeaRenderer {
 
   void _renderInline(View view) {
     final columns = _terminalColumns();
-    final all = view.content.split('\n');
+    final all = balanceAnsiState(view.content).split('\n');
     final clipped = _clipRows(all, _terminalLines());
     final nextLines = columns > 0
         ? [for (final line in clipped) truncate(line, columns)]
@@ -371,6 +376,8 @@ final class AnsiRenderer implements TeaRenderer {
     _frame.eraseFrom(_output, nextLines.length);
     if (_syncUpdates) _output.write('\x1b[?2026l');
 
+    _frame.parkRow =
+        _parkRow(nextLines.length, (r) => getWidth(nextLines[r]), 0);
     _lastLines = nextLines;
     _lastContent = view.content;
     _hasRenderedFrame = true;
@@ -438,7 +445,7 @@ final class AnsiRenderer implements TeaRenderer {
         ? 0
         : inline && _hasRenderedFrame
             ? _parkRow(lines.length, (r) => getWidth(lines[r]), 0)
-            : _frame.height;
+            : _frame.parkRow;
     setUnicodeCore(false);
     _terminalViewState.reset(_output);
     _cursorState.reset(_output);
@@ -448,8 +455,10 @@ final class AnsiRenderer implements TeaRenderer {
     _lastContent = '';
     _hasRenderedFrame = false;
     if (reset) {
-      // Inline: erase only the frame, never the shell history above it.
-      if (inline) {
+      // Erase only an inline frame (including one saved under the alt
+      // screen), never the shell history above it. A pure alt-screen program
+      // keeps its existing clear.
+      if (inline || _frame.height > 0) {
         _frame.eraseFrom(_output, 0);
       } else {
         _output.write('\x1b[H\x1b[2J');
@@ -640,6 +649,7 @@ final class CellRenderer implements TeaRenderer {
       _frame.moveTo(_output, row);
       if (col > 0) _output.write('\x1b[${col + 1}G');
     });
+    _frame.parkRow = _parkRow(grid.length, (r) => grid[r].length, 0);
     _lastGrid = grid;
     _lastContent = view.content;
     _cursorState.apply(_output, view.cursor, place: _placeCursor);
@@ -689,7 +699,7 @@ final class CellRenderer implements TeaRenderer {
         ? 0
         : inline && grid != null
             ? _parkRow(grid.length, (r) => grid[r].length, 0)
-            : _frame.height;
+            : _frame.parkRow;
     setUnicodeCore(false);
     _terminalViewState.reset(_output);
     _cursorState.reset(_output);
@@ -698,7 +708,10 @@ final class CellRenderer implements TeaRenderer {
     _lastGrid = null;
     _lastContent = null;
     if (reset) {
-      if (inline) {
+      // Erase only an inline frame (including one saved under the alt
+      // screen), never the shell history above it. A pure alt-screen program
+      // keeps its existing clear.
+      if (inline || _frame.height > 0) {
         _frame.eraseFrom(_output, 0);
       } else {
         _output.write('\x1b[H\x1b[2J');
