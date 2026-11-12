@@ -517,7 +517,7 @@ renderer.render(model.view())`,
       },
       {
         type: "prose",
-        md: "The cell-level diff renderer writes only changed cells, giving zero flicker. `Synchronized updates (CSI ?2026)` are used automatically where the terminal supports them.",
+        md: "The default renderer diffs line by line; the opt-in cell-level renderer (`withCellRenderer()`) writes only changed cells, which reduces flicker. `Synchronized updates (CSI ?2026)` are used automatically where the terminal supports them.",
       },
     ],
     related: ["mvu-architecture", "program-options"],
@@ -527,9 +527,9 @@ renderer.render(model.view())`,
     name: "Examples",
     category: "guides",
     order: 11,
-    tagline: "60+ runnable programs covering every feature.",
+    tagline: "60 runnable programs, each with a recorded GIF.",
     description:
-      "The package ships 60+ runnable examples — one per feature, each with a recorded GIF. Clone the repo and run any of them.",
+      "The package ships 60 runnable examples, each with a recorded GIF. Clone the repo and run any of them.",
     blocks: [
       { type: "heading", text: "Running an example" },
       {
@@ -538,7 +538,7 @@ renderer.render(model.view())`,
         code: `# JIT (source, slower first run)
 dart run example/simple.dart
 
-# Kernel snapshot (~2× faster startup)
+# Kernel snapshot (~3× faster startup)
 make kernel EXAMPLE=simple
 dart run tool/bin/simple.dill`,
       },
@@ -597,12 +597,12 @@ dart run tool/bin/simple.dill`,
     tagline:
       "Measure naive Dart vs dart_tui hot paths, plus kernel and AOT startup.",
     description:
-      "Cell-level diff, grapheme width, and cached component models beat reprinting the whole screen every frame. Run the benches locally to see naive Dart vs dart_tui, and kernel/AOT first-visible startup.",
+      "Diffing renderers, grapheme width, and cached component models beat reprinting the whole screen every frame. Run the benches locally to see naive Dart vs dart_tui, and kernel/AOT first-visible startup.",
     blocks: [
       { type: "heading", text: "Why not print every frame" },
       {
         type: "prose",
-        md: "Reprint-the-screen loops pay for every cell on every tick. dart_tui writes only cells that changed, measures grapheme width without reallocating on every call, and keeps cached row models in components like TextArea and Viewport so update/view work stays cheap.",
+        md: "Reprint-the-screen loops pay for every cell on every tick. dart_tui writes only the lines that changed (or only the cells, with the cell renderer), measures grapheme width without reallocating on every call, and keeps cached row models in components like TextArea and Viewport so update/view work stays cheap.",
       },
       { type: "heading", text: "Run the benches" },
       {

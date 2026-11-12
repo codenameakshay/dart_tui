@@ -18,7 +18,7 @@ Build rich, interactive CLI applications with a clean **Model–Update–View** 
 
 - **Model–Update–View** — same architecture as Elm and Bubble Tea; pure, testable state
 - **Async commands** (`Cmd`) for timers, HTTP, subprocesses, and any async work
-- **27+ ready-made components** — spinners, progress bars, text inputs, tables, trees, multi-select, list with fuzzy filter, tabbed views, in-line cursor, and more
+- **17 ready-made components** — spinners, progress bars, text inputs, tables, trees, multi-select, list with fuzzy filter, tabbed views, in-line cursor, and more — plus huh-style forms
 - **One-shot helpers** — `promptSelect` / `promptConfirm` / `promptInput`, plus gum-style `filter`, `spin`, and `pager`
 - **Spring animation** — harmonica-style damped-spring easing for smooth progress, scroll, and cursor motion
 - **Readline editing keys** — emacs bindings in text input & area (`ctrl+a/e/b/f/w`, `alt`-word motion, `ctrl+w`)
@@ -27,11 +27,11 @@ Build rich, interactive CLI applications with a clean **Model–Update–View** 
 - **Style utilities** — `getWidth()`, `getHeight()`, `truncate()`, `truncateLeft()`, per-side border flags, `tabWidth`, `marginBackground`
 - **Style inheritance** — `Style.inherit(parent)` fills unset fields; `CompleteColor` for per-profile color downgrade
 - **Canvas compositing** — paint styled blocks at arbitrary (x, y) positions with z-index layering
-- **Cell-level diff renderer** — only changed cells are written; zero flicker
+- **Diffing renderers** — line-level diff by default; opt-in cell-level diff (`withCellRenderer()`) writes only changed cells
 - **Synchronized updates** (`CSI ?2026`) for terminals that support them
 - **Auto background detection** — OSC 11 query fires at startup; your model receives `BackgroundColorMsg`
 - **Fluent `ProgramOption` functions** — `withAltScreen()`, `withHideCursor()`, `withTickInterval()`, `withMouseCellMotion()`, `withMouseAllMotion()`, `withReportFocus()`, `withWindowSize()`, `withLogFile()`
-- **Fast startup** — kernel snapshots cut warm-JIT from ~1 s to ~500 ms; AOT compiles to native
+- **Fast startup** — kernel snapshots cut first-frame time from ~550 ms (JIT) to ~160 ms; AOT compiles to native
 
 ---
 
@@ -271,7 +271,7 @@ Border.hidden   // space-padded (preserves geometry)
 Border.none     // no border
 
 // Draw only specific sides
-style.withBorderSides(top: true, bottom: true)  // top + bottom only
+style.withBorderSides(showLeft: false, showRight: false)  // top + bottom only
 Border.rounded.topOnly    // pre-built single-side helpers
 Border.rounded.sidesOnly
 ```
@@ -364,7 +364,7 @@ All components are in `package:dart_tui/dart_tui.dart`.
 Animated indeterminate activity indicator, driven by `TickMsg`.
 
 ```dart
-SpinnerModel(style: Spinner.dot, prefix: 'Loading ')
+SpinnerModel(prefix: 'Loading ') // Braille dots by default; pass `frames:` for others
 ```
 
 ![spinner](https://dart-tui.vercel.app/gifs/spinner.gif)
@@ -374,7 +374,7 @@ SpinnerModel(style: Spinner.dot, prefix: 'Loading ')
 Determinate progress (0.0–1.0) with `█`/`░` fill and configurable width/label.
 
 ```dart
-ProgressModel(progress: 0.65, width: 40, showPercent: true)
+ProgressModel(fraction: 0.65, width: 40, label: 'Downloading')
 ```
 
 ![progress_bar](https://dart-tui.vercel.app/gifs/progress_bar.gif)
@@ -400,7 +400,7 @@ Multi-line editor with scroll, line-kill (`Ctrl+K`), and word movement.
 Vertical list with keyboard cursor (`↑↓ / jk`). Embeds into parent models for menu flows.
 
 ```dart
-SelectListModel(items: ['Option A', 'Option B', 'Option C'], height: 8)
+SelectListModel(items: ['Option A', 'Option B', 'Option C'], title: 'Pick one')
 ```
 
 ![list_default](https://dart-tui.vercel.app/gifs/list_default.gif)
@@ -446,7 +446,10 @@ Scrollable data table with configurable headers, column widths, per-row/per-cell
 
 ```dart
 TableModel(
-  columns: [TableColumn('City', 20), TableColumn('Pop', 12)],
+  columns: [
+    TableColumn(title: 'City', width: 20),
+    TableColumn(title: 'Pop', width: 12),
+  ],
   rows: data,
   styles: TableStyles(
     header: const Style(isBold: true, isUnderline: true),
@@ -519,7 +522,7 @@ final (next, _) = cursor.update(tickMsg);
 Scrollable content pane with soft-wrap; useful for long text, logs, or file content.
 
 ```dart
-ViewportModel(content: longText, height: 20, wrap: true)
+ViewportModel(content: longText, height: 20, softWrap: true)
 ```
 
 ![pager](https://dart-tui.vercel.app/gifs/pager.gif)
@@ -538,7 +541,7 @@ StopwatchModel()                              // elapsed time; .start()/.stop()/
 Compact page indicator (dots or numeric) for multi-page flows.
 
 ```dart
-PaginatorModel(totalPages: 5, activePage: 0)
+PaginatorModel(page: 0, totalPages: 5) // "Page 1/5"; pass `labelBuilder:` for dots
 ```
 
 ![paginator](https://dart-tui.vercel.app/gifs/paginator.gif)
@@ -548,13 +551,17 @@ PaginatorModel(totalPages: 5, activePage: 0)
 Compact / full keybinding reference panel built from a `KeyMap`.
 
 ```dart
-final keyMap = KeyMap([
-  KeyBinding(['↑', 'k'], 'move up'),
-  KeyBinding(['↓', 'j'], 'move down'),
-  KeyBinding(['enter'], 'select'),
-  KeyBinding(['q'], 'quit'),
-]);
-HelpModel.fromKeyMap(keyMap)
+final class AppKeys implements KeyMap {
+  @override
+  List<KeyBinding> get bindings => const [
+        KeyBinding(keys: ['up', 'k'], help: (key: '↑/k', description: 'move up')),
+        KeyBinding(keys: ['down', 'j'], help: (key: '↓/j', description: 'move down')),
+        KeyBinding(keys: ['enter'], help: (key: 'enter', description: 'select')),
+        KeyBinding(keys: ['q'], help: (key: 'q', description: 'quit')),
+      ];
+}
+
+HelpModel.fromKeyMap(AppKeys())
 ```
 
 ![help](https://dart-tui.vercel.app/gifs/help.gif)
@@ -565,8 +572,8 @@ Async directory browser with configurable extension filter and keyboard navigati
 
 ```dart
 FilePickerModel(
-  initialDirectory: Directory.current,
-  extensions: {'.dart', '.yaml'},
+  currentDir: Directory.current.path,
+  allowedExtensions: ['.dart', '.yaml'],
 )
 ```
 
@@ -660,7 +667,7 @@ Field types: `Field.input`, `.password`, `.text` (multiline), `.file`, `.select`
 
 ## Examples
 
-61 runnable examples covering every feature:
+60 single-file runnable examples:
 
 | Example | What it shows |
 |---------|---------------|
@@ -689,7 +696,7 @@ Field types: `Field.input`, `.password`, `.text` (multiline), `.file`, `.select`
 | `help.dart` | HelpModel + KeyMap |
 | `timer.dart` | Countdown timer |
 | `stopwatch.dart` | Elapsed-time stopwatch |
-| `paginator.dart` | Page dot indicator |
+| `paginator.dart` | Page indicator with a custom dot label |
 | `gradient.dart` | Per-character gradient text |
 | `canvas.dart` | Canvas compositing with z-index |
 | `color_profile.dart` | ColorProfile + BackgroundColorMsg |
@@ -716,7 +723,7 @@ Run any example:
 # JIT (source, slower first run)
 dart run example/simple.dart
 
-# Kernel snapshot (~2× faster startup)
+# Kernel snapshot (~3× faster startup)
 make kernel EXAMPLE=simple
 dart run tool/bin/simple.dill
 ```

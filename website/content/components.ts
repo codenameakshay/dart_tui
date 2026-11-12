@@ -600,7 +600,7 @@ print(next.elapsed); // Duration since start`,
       rows: [
         { name: "page", type: "int", description: "Current page index." },
         { name: "totalPages", type: "int", description: "Total number of pages (> 0)." },
-        { name: "labelBuilder", type: "String Function(int, int)?", description: "Custom renderer; defaults to dots." },
+        { name: "labelBuilder", type: "String Function(int, int)?", description: "Custom renderer; defaults to \"Page n/total\"." },
       ],
     },
     keybindings: [
