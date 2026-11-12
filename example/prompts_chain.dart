@@ -11,23 +11,17 @@ Future<void> main() async {
     'Each prompt opens its own Program; null means user cancelled the prompt.\n',
   );
 
+  // No alt screen: each prompt draws inline, right below the previous output.
   final flavor = await promptSelect(
     const ['Vanilla', 'Chocolate', 'Strawberry'],
     title: 'Favorite ice cream',
-    options: [withAltScreen()],
   );
   stdout.writeln('Selected: $flavor');
 
-  final ok = await promptConfirm(
-    'Ship to production?',
-    options: [withAltScreen()],
-  );
+  final ok = await promptConfirm('Ship to production?');
   stdout.writeln('Confirmed: $ok');
 
-  final note = await promptInput(
-    'Notes: ',
-    options: [withAltScreen()],
-  );
+  final note = await promptInput('Notes: ');
   stdout.writeln('Notes: $note');
 
   stdout.writeln('\nSummary:');

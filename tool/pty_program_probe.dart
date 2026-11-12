@@ -16,6 +16,18 @@ Future<void> main(List<String> arguments) async {
   }
 
   final scenario = arguments.single;
+  if (scenario.startsWith('inline')) {
+    // Normal-screen programs (#18): each draws where the cursor is.
+    final cell = scenario.endsWith('-cell');
+    final steps = scenario.startsWith('inline-chain')
+        ? const ['FIRST', 'SECOND']
+        : const ['INLINE'];
+    for (final step in steps) {
+      await Program(options: [if (cell) withCellRenderer()])
+          .run(_InlineModel(step));
+    }
+    return;
+  }
   if (scenario == 'default-chain') {
     // Sequential programs share the implicit process stdin.
     for (final step in ['chain-one', 'chain-two']) {
@@ -120,7 +132,46 @@ const _scenarios = {
   'default-init-exec-reads',
   'explicit-exec',
   'restart-suspend',
+  'inline',
+  'inline-cell',
+  'inline-chain',
+  'inline-chain-cell',
 };
+
+/// A normal-screen view: `g` grows it, `s` shrinks it, `t` makes it taller
+/// than the terminal (and redraws it again on every later `t`), `p` prints a
+/// line above it, and `q` quits.
+final class _InlineModel implements Model {
+  const _InlineModel(this.name, [this.rows = 2, this.redraws = 0]);
+
+  final String name;
+  final int rows;
+  final int redraws;
+
+  @override
+  Cmd? init() => null;
+
+  @override
+  (Model, Cmd?) update(Msg msg) {
+    if (msg is! KeyMsg) return (this, null);
+    return switch (msg.key) {
+      'g' => (_InlineModel(name, rows + 3, redraws), null),
+      's' => (_InlineModel(name, 2, redraws), null),
+      't' => (_InlineModel(name, 40, redraws + 1), null),
+      'p' => (this, println('${name}_PRINTED')),
+      'q' => (this, () => quit()),
+      _ => (this, null),
+    };
+  }
+
+  @override
+  View view() => newView([
+        '${name}_TOP rows=$rows redraws=$redraws',
+        for (var row = 1; row < rows - 1; row++)
+          '${name}_ROW_${row.toString().padLeft(2, '0')} v$redraws',
+        '${name}_LAST rows=$rows',
+      ].join('\n'));
+}
 
 final class _ProbeModel implements Model {
   const _ProbeModel(this.scenario, [this.state]);
