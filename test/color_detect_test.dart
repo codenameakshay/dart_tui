@@ -404,6 +404,183 @@ void main() {
         allOf(contains('\x1b[48;5;'), contains('\x1b[38;5;46m')),
       );
     });
+
+    test('progress cells keep the filled profile', () {
+      Style.defaultProfile = _noColor;
+      final progress = ProgressModel(
+        fraction: 1,
+        width: 2,
+        colors: const [RgbColor(255, 0, 0), RgbColor(0, 0, 255)],
+        styles: ProgressStyles(filled: const Style().withProfile(_ansi256)),
+      );
+      final output = progress.view().content;
+      expect(output, contains('\x1b[38;5;9m█'));
+      expect(output, contains('\x1b[38;5;12m█'));
+      expect(output, isNot(contains(';2;')));
+    });
+  });
+
+  group('profile rendering compatibility', () {
+    test('trueColor bytes match baseline', () {
+      Style.defaultProfile = _trueColor;
+      const red = RgbColor(255, 0, 0);
+      final style = const Style()
+          .withBorder(Border.normal)
+          .withBorderForeground(red)
+          .withBorderBackground(red)
+          .withMargin(const EdgeInsets.all(1))
+          .withMarginBackground(red)
+          .underline()
+          .withUnderlineColor(red);
+
+      // Captured from e3a004a: keep exact bytes, including reset placement.
+      expect(
+        style.render('x'),
+        '\x1b[4m\x1b[58;2;255;0;0m\x1b[48;2;255;0;0m     '
+        '\x1b[0m\x1b[59m\x1b[0m\n'
+        '\x1b[4m\x1b[58;2;255;0;0m\x1b[48;2;255;0;0m '
+        '\x1b[0m\x1b[38;2;255;0;0m\x1b[48;2;255;0;0m+-+'
+        '\x1b[0m\x1b[48;2;255;0;0m \x1b[0m\x1b[59m\x1b[0m\n'
+        '\x1b[4m\x1b[58;2;255;0;0m\x1b[48;2;255;0;0m '
+        '\x1b[0m\x1b[38;2;255;0;0m\x1b[48;2;255;0;0m|\x1b[0m'
+        'x\x1b[38;2;255;0;0m\x1b[48;2;255;0;0m|\x1b[0m'
+        '\x1b[48;2;255;0;0m \x1b[0m\x1b[59m\x1b[0m\n'
+        '\x1b[4m\x1b[58;2;255;0;0m\x1b[48;2;255;0;0m '
+        '\x1b[0m\x1b[38;2;255;0;0m\x1b[48;2;255;0;0m+-+'
+        '\x1b[0m\x1b[48;2;255;0;0m \x1b[0m\x1b[59m\x1b[0m\n'
+        '\x1b[4m\x1b[58;2;255;0;0m\x1b[48;2;255;0;0m     '
+        '\x1b[0m\x1b[59m\x1b[0m',
+      );
+      expect(
+        gradientText('ab', const [red, RgbColor(0, 0, 255)]),
+        '\x1b[38;2;255;0;0ma\x1b[38;2;0;0;255mb\x1b[0m',
+      );
+      final rgbForeground = const Style().foregroundColorRgb(255, 0, 0);
+      final indexedForeground = const Style().foregroundColor256(196);
+      final bold = const Style().bold();
+      final plain = const Style();
+      expect(rgbForeground.render('x'), '\x1b[38;2;255;0;0mx\x1b[0m');
+      expect(indexedForeground.render('x'), '\x1b[38;5;196mx\x1b[0m');
+      expect(bold.render('x'), '\x1b[1mx\x1b[0m');
+      expect(plain.render('x'), 'x');
+    });
+
+    test('gradient foreground profile overrides and downgrades', () {
+      const colors = [RgbColor(255, 0, 0), RgbColor(0, 0, 255)];
+      String render(Style foreground) =>
+          gradientBackground('a', colors, foreground: foreground);
+      Style.defaultProfile = _ansi;
+      expect(gradientBackground('a', colors), '\x1b[41ma\x1b[0m');
+      expect(
+        render(const Style().foregroundColor256(46)),
+        '\x1b[41m\x1b[32ma\x1b[0m',
+      );
+      Style.defaultProfile = _noColor;
+      expect(render(const Style().bold()), '\x1b[1ma\x1b[0m');
+      final trueColorForeground =
+          const Style().foregroundColorRgb(0, 255, 0).withProfile(_trueColor);
+      expect(
+        render(trueColorForeground),
+        '\x1b[38;2;0;255;0ma\x1b[0m',
+      );
+      Style.defaultProfile = _trueColor;
+      final noColorForeground =
+          const Style().foregroundColorRgb(0, 255, 0).withProfile(_noColor);
+      expect(
+        render(noColorForeground),
+        '\x1b[48;2;255;0;0ma\x1b[0m',
+      );
+    });
+
+    test('trueColor gradient background foreground bytes are stable', () {
+      const colors = [RgbColor(255, 0, 0), RgbColor(0, 0, 255)];
+      String render(Style foreground) =>
+          gradientBackground('a', colors, foreground: foreground);
+      Style.defaultProfile = _trueColor;
+      expect(
+        render(const Style().foregroundColorRgb(0, 255, 0)),
+        '\x1b[48;2;255;0;0m\x1b[38;2;0;255;0ma\x1b[0m',
+      );
+      expect(
+        render(const Style().foregroundColor256(46)),
+        '\x1b[48;2;255;0;0m\x1b[38;5;46ma\x1b[0m',
+      );
+      expect(
+        render(const Style().bold()),
+        '\x1b[48;2;255;0;0m\x1b[1ma\x1b[0m',
+      );
+      expect(gradientBackground('a', colors), '\x1b[48;2;255;0;0ma\x1b[0m');
+    });
+
+    test('noColor keeps attributes and glyphs', () {
+      Style.defaultProfile = _noColor;
+      final style = const Style()
+          .withBorder(Border.normal)
+          .withBorderForeground(const RgbColor(255, 0, 0))
+          .withBorderBackground(const RgbColor(255, 0, 0))
+          .withMargin(const EdgeInsets.all(1))
+          .withMarginBackground(const RgbColor(255, 0, 0))
+          .underline()
+          .withUnderlineColor(const RgbColor(255, 0, 0));
+      final out = style.render('x');
+
+      expect(out, contains('+-+'));
+      expect(out, contains('|x|'));
+      expect(out, contains('\x1b[4m'));
+      expect(out, isNot(contains('\x1b[59m')));
+      expect(out, isNot(contains('\x1b[38;')));
+      expect(out, isNot(contains('\x1b[48;')));
+      expect(out, isNot(contains('\x1b[58;')));
+      expect(const Style().bold().render('x'), '\x1b[1mx\x1b[0m');
+      expect(const Style().render('x'), 'x');
+      final underlineOnly =
+          const Style().withUnderlineColor(const RgbColor(255, 0, 0));
+      expect(underlineOnly.render('x'), 'x');
+      expect(
+        const Style()
+            .withBorder(Border.normal)
+            .withBorderForeground(const RgbColor(255, 0, 0))
+            .withBorderBackground(const RgbColor(255, 0, 0))
+            .withMargin(const EdgeInsets.all(1))
+            .withMarginBackground(const RgbColor(255, 0, 0))
+            .render('x'),
+        '     \n +-+ \n |x| \n +-+ \n     ',
+      );
+    });
+
+    test('copied and inherited profiles win', () {
+      Style.defaultProfile = _noColor;
+      final parent = const Style()
+          .withProfile(_ansi256)
+          .withBorder(Border.normal)
+          .withBorderForeground(const RgbColor(255, 0, 0))
+          .withBorderBackground(const RgbColor(0, 0, 255))
+          .withMargin(const EdgeInsets.all(1))
+          .withMarginBackground(const RgbColor(0, 255, 0))
+          .underline()
+          .withUnderlineColor(const RgbColor(255, 255, 0));
+      final copied = parent.copyWith(isBold: true);
+      final inherited = const Style()
+          .withBorder(Border.normal)
+          .withMargin(const EdgeInsets.all(1))
+          .inherit(parent);
+      expect(copied.foregroundColorRgb(255, 0, 0).profile, _ansi256);
+      expect(inherited.foregroundColorRgb(255, 0, 0).profile, _ansi256);
+      for (final rendered in [copied.render('x'), inherited.render('x')]) {
+        expect(rendered, contains('\x1b[38;5;9m'));
+        expect(rendered, contains('\x1b[48;5;12m'));
+        expect(rendered, contains('\x1b[48;5;10m'));
+        expect(rendered, contains('\x1b[58;5;11m'));
+        expect(rendered, isNot(contains(';2;')));
+      }
+      expect(
+        const Style()
+            .foregroundColorRgb(255, 0, 0)
+            .withProfile(_ansi)
+            .render('x'),
+        '\x1b[31mx\x1b[0m',
+      );
+    });
   });
 
   group('Program', () {
