@@ -15,7 +15,9 @@
   `Program` reported. Outside a `Program` it is `trueColor`, or `noColor` when
   `NO_COLOR` is set. Scripts can opt in with
   `Style.defaultProfile = detectColorProfile();`. `withColorProfile` now pins
-  it for the run.
+  it for the run. Border, margin and underline colours, `gradientText` and
+  `gradientBackground` follow the profile too. Before, they always sent true
+  colour, also when `NO_COLOR` was set.
 - **Light and dark follow the terminal.** `AdaptiveColor` uses the style's own
   background, then the new `Style.hasDarkBackground`. That value starts from
   `COLORFGBG` and is otherwise dark. A `Program` updates it from the
@@ -23,7 +25,9 @@
   message, so the next frame uses the correct variant.
 - A `Program` restores both defaults when its run ends, also when `update`
   throws. A `Program` with a custom output sink (`withOutput`) keeps
-  `trueColor`, so test output does not change.
+  `trueColor`, so test output does not change. `make test` and
+  `tool/coverage.sh` unset `NO_COLOR`, because the suite pins true-colour
+  output.
 - `example/color_profile.dart` shows the detected profile and background. The
   new website guide "Colour and terminals" describes the rules.
 

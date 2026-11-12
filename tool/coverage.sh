@@ -15,7 +15,9 @@ OUT=".coverage_out"
 
 rm -rf "$OUT"
 $DART pub global activate coverage >/dev/null 2>&1 || true
-$DART test --coverage="$OUT"
+# NO_COLOR switches every Style outside a Program to no colour; the suite
+# pins true-colour output.
+env -u NO_COLOR $DART test --coverage="$OUT"
 $DART pub global run coverage:format_coverage \
   --lcov --check-ignore --in="$OUT" --out="$OUT/lcov.info" --report-on=lib \
   >/dev/null

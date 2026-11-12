@@ -332,6 +332,80 @@ void main() {
     }
   });
 
+  group('colour outside the text follows the profile', () {
+    const red = RgbColor(255, 0, 0);
+    final boxed = const Style()
+        .withBorder(Border.rounded)
+        .withBorderForeground(red)
+        .withBorderBackground(red)
+        .withMargin(const EdgeInsets.all(1))
+        .withMarginBackground(red)
+        .underline()
+        .withUnderlineColor(red);
+
+    test('true colour output is unchanged', () {
+      final out = boxed.render('x');
+      expect(out, contains('\x1b[38;2;255;0;0m'));
+      expect(out, contains('\x1b[48;2;255;0;0m'));
+      expect(out, contains('\x1b[58;2;255;0;0m'));
+      expect(out, contains('\x1b[59m'));
+      expect(gradientText('ab', const [red, RgbColor(0, 0, 255)]),
+          '\x1b[38;2;255;0;0ma\x1b[38;2;0;0;255mb\x1b[0m');
+    });
+
+    test('noColor drops border, margin and underline colour', () {
+      Style.defaultProfile = _noColor;
+      final out = boxed.render('x');
+      expect(out, isNot(contains('38;')));
+      expect(out, isNot(contains('48;')));
+      expect(out, isNot(contains('58;')));
+      expect(out, isNot(contains('\x1b[59m')));
+      expect(out, contains('\x1b[4m'));
+      expect(out, contains('╭'));
+    });
+
+    test('a style profile wins over the default', () {
+      Style.defaultProfile = _noColor;
+      expect(boxed.withProfile(_trueColor).render('x'),
+          contains('\x1b[38;2;255;0;0m'));
+    });
+
+    test('ansi256 and ansi step the colours down', () {
+      Style.defaultProfile = _ansi256;
+      final out256 = boxed.render('x');
+      expect(out256, contains('\x1b[38;5;'));
+      expect(out256, contains('\x1b[48;5;'));
+      expect(out256, contains('\x1b[58;5;'));
+      expect(out256, isNot(contains(';2;')));
+      Style.defaultProfile = _ansi;
+      final out16 = boxed.render('x');
+      expect(out16, contains('\x1b[31m'));
+      expect(out16, contains('\x1b[41m'));
+      expect(out16, contains('\x1b[58;5;1m'));
+      expect(out16, isNot(contains(';2;')));
+    });
+
+    test('gradients follow the default profile', () {
+      const colors = [red, RgbColor(0, 0, 255)];
+      Style.defaultProfile = _noColor;
+      expect(gradientText('ab', colors), 'ab');
+      expect(gradientBackground('ab', colors), 'ab');
+      expect(
+        gradientBackground('ab', colors,
+            foreground: const Style().bold().foregroundColorRgb(0, 255, 0)),
+        '\x1b[1ma\x1b[1mb\x1b[0m',
+      );
+      Style.defaultProfile = _ansi256;
+      expect(gradientText('ab', colors), contains('\x1b[38;5;'));
+      expect(gradientText('ab', colors), isNot(contains(';2;')));
+      expect(
+        gradientBackground('ab', colors,
+            foreground: const Style().foregroundColor256(46)),
+        allOf(contains('\x1b[48;5;'), contains('\x1b[38;5;46m')),
+      );
+    });
+  });
+
   group('Program', () {
     test('a synthetic background reply preserves light COLORFGBG', () async {
       Style.hasDarkBackground = true;

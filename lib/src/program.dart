@@ -900,7 +900,9 @@ final class Program {
     }
 
     // Styles read the process-wide colour defaults; this run owns them until
-    // it ends.
+    // it ends. ponytail: one owner at a time, so overlapping Programs in one
+    // isolate share them; scope them per run (zone value) if that case appears,
+    // at the cost of a zone lookup in Style's colour path.
     final previousProfile = Style.defaultProfile;
     final previousDarkBackground = Style.hasDarkBackground;
     var defaultsRestored = false;

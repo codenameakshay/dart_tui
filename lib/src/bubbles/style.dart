@@ -187,6 +187,9 @@ final class Style {
   /// [detectColorProfile] for the run, and restores it afterwards. Scripts
   /// can opt in to detection with `Style.defaultProfile =
   /// detectColorProfile();`.
+  ///
+  /// The value is per isolate. Programs that overlap in one isolate share
+  /// it, and each restores the value it found when it started.
   static ColorProfile defaultProfile = environmentDefaultProfile();
 
   /// Whether the terminal background is dark, for [AdaptiveColor] in styles
@@ -689,15 +692,10 @@ final class Style {
 
   /// Returns ANSI open sequence for border coloring, or empty string.
   String _borderAnsiOpen() {
+    final p = profile ?? defaultProfile;
     final open = StringBuffer();
-    if (borderForeground != null) {
-      final c = borderForeground!;
-      open.write('\x1b[38;2;${c.r};${c.g};${c.b}m');
-    }
-    if (borderBackground != null) {
-      final c = borderBackground!;
-      open.write('\x1b[48;2;${c.r};${c.g};${c.b}m');
-    }
+    if (borderForeground case final c?) open.write(_rgbSgr(c, 38, p));
+    if (borderBackground case final c?) open.write(_rgbSgr(c, 48, p));
     return open.toString();
   }
 
@@ -713,10 +711,9 @@ final class Style {
     // Build the ANSI open/close sequences for the margin background, if any.
     String mOpen = '';
     String mClose = '';
-    if (marginBackground != null) {
-      final c = marginBackground!;
-      mOpen = '\x1b[48;2;${c.r};${c.g};${c.b}m';
-      mClose = '\x1b[0m';
+    if (marginBackground case final c?) {
+      mOpen = _rgbSgr(c, 48, profile ?? defaultProfile);
+      if (mOpen.isNotEmpty) mClose = '\x1b[0m';
     }
     // Total row width including left+right margins
     final totalW = margin.left + maxW + margin.right;
@@ -754,9 +751,10 @@ final class Style {
       UnderlineStyle.dashed => '\x1b[4:5m',
     };
     if (underlineCode != null) open.write(underlineCode);
-    if (underlineColor case final color?) {
-      open.write('\x1b[58;2;${color.r};${color.g};${color.b}m');
-    }
+    final underlineSgr = underlineColor == null
+        ? ''
+        : _rgbSgr(underlineColor!, 58, profile ?? defaultProfile);
+    open.write(underlineSgr);
     if (isBlink ?? false) open.write('\x1b[5m');
     if (isReverse ?? false) open.write('\x1b[7m');
     if (isStrikethrough ?? false) open.write('\x1b[9m');
@@ -798,7 +796,7 @@ final class Style {
     final sgrOpen = open.toString();
     final sgrClose = open.isEmpty
         ? ''
-        : '${underlineColor == null ? '' : '\x1b[59m'}$_sgrReset';
+        : '${underlineSgr.isEmpty ? '' : '\x1b[59m'}$_sgrReset';
     final close = '$sgrClose${linkOpen.isEmpty ? '' : linkClose}';
     final reOpen = '$linkOpen$sgrOpen';
     final balancedValue = value.replaceAll('\n', '$close\n$reOpen');
@@ -988,6 +986,24 @@ final class _ResolvedColor {
   final _ColorType type;
   final int value;
   final int r, g, b;
+}
+
+/// The SGR that sets [c] for [base] (38 foreground, 48 background, 58
+/// underline) under [profile], or '' for [ColorProfile.noColor].
+String _rgbSgr(RgbColor c, int base, ColorProfile profile) {
+  switch (profile) {
+    case ColorProfile.trueColor:
+      return '\x1b[$base;2;${c.r};${c.g};${c.b}m';
+    case ColorProfile.ansi256:
+      return '\x1b[$base;5;${_nearestAnsi256(c)}m';
+    case ColorProfile.ansi:
+      final index = _nearestAnsi16(c);
+      // Underline colour has no 16-colour SGR; its 256 form covers 0-15.
+      if (base == 58) return '\x1b[58;5;${index}m';
+      return Style._ansi16Code(index, foreground: base == 38);
+    case ColorProfile.noColor:
+      return '';
+  }
 }
 
 bool _isDarkBackground(RgbColor c) {
@@ -1563,11 +1579,14 @@ final class AdaptiveColor {
 ///
 /// [colors] must have at least 2 entries. The gradient is computed in true-color
 /// RGB space; each grapheme cluster receives its own `\x1b[38;2;r;g;bm` code.
+/// The codes step down to [Style.defaultProfile]; with
+/// [ColorProfile.noColor] the text comes back plain.
 /// Use [gradientBackground] for background gradients.
 String gradientText(String text, List<RgbColor> colors) {
   assert(colors.length >= 2, 'gradientText requires at least 2 colors');
   final chars = text.characters.toList();
   if (chars.isEmpty) return '';
+  final profile = Style.defaultProfile;
   final b = StringBuffer();
   final n = colors.length - 1;
   for (var i = 0; i < chars.length; i++) {
@@ -1575,9 +1594,9 @@ String gradientText(String text, List<RgbColor> colors) {
     final seg = (t * n).floor().clamp(0, n - 1);
     final localT = (t * n) - seg;
     final c = blend(colors[seg], colors[seg + 1], localT);
-    b.write('\x1b[38;2;${c.r};${c.g};${c.b}m${chars[i]}');
+    b.write('${_rgbSgr(c, 38, profile)}${chars[i]}');
   }
-  b.write('\x1b[0m');
+  if (profile != ColorProfile.noColor) b.write('\x1b[0m');
   return b.toString();
 }
 
@@ -1593,7 +1612,8 @@ String gradientBackground(
   assert(colors.length >= 2, 'gradientBackground requires at least 2 colors');
   final chars = text.characters.toList();
   if (chars.isEmpty) return '';
-  final fgCode = foreground != null ? _extractFgCode(foreground) : '';
+  final profile = Style.defaultProfile;
+  final fgCode = foreground != null ? _extractFgCode(foreground, profile) : '';
   final b = StringBuffer();
   final n = colors.length - 1;
   for (var i = 0; i < chars.length; i++) {
@@ -1601,19 +1621,25 @@ String gradientBackground(
     final seg = (t * n).floor().clamp(0, n - 1);
     final localT = (t * n) - seg;
     final c = blend(colors[seg], colors[seg + 1], localT);
-    b.write('\x1b[48;2;${c.r};${c.g};${c.b}m$fgCode${chars[i]}');
+    b.write('${_rgbSgr(c, 48, profile)}$fgCode${chars[i]}');
   }
-  b.write('\x1b[0m');
+  if (profile != ColorProfile.noColor || fgCode.isNotEmpty) b.write('\x1b[0m');
   return b.toString();
 }
 
 /// Extract the foreground ANSI code string from a [Style] (no layout applied).
-String _extractFgCode(Style s) {
-  if (s.foregroundRgb != null) {
-    final c = s.foregroundRgb!;
-    return '\x1b[38;2;${c.r};${c.g};${c.b}m';
+String _extractFgCode(Style s, ColorProfile profile) {
+  final p = s.profile ?? profile;
+  if (s.foregroundRgb case final c?) {
+    final code = _rgbSgr(c, 38, p);
+    if (code.isNotEmpty || !(s.isBold ?? false)) return code;
+  } else if (s.foreground256 case final index?) {
+    if (p != ColorProfile.noColor) {
+      return p == ColorProfile.ansi
+          ? _rgbSgr(_ansi256ToRgb(index), 38, p)
+          : '\x1b[38;5;${index}m';
+    }
   }
-  if (s.foreground256 != null) return '\x1b[38;5;${s.foreground256}m';
   if (s.isBold ?? false) return '\x1b[1m';
   return '';
 }

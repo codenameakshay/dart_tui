@@ -390,7 +390,7 @@ final banner = gradientBackground('  Welcome!  ', [
       { type: "heading", text: "What the Program does" },
       {
         type: "prose",
-        md: "When a `Program` writes to the real stdout, it calls `detectColorProfile()` at startup and sets `Style.defaultProfile` for the run. Each `Style` without its own `profile` uses that value, so RGB colours step down to 256 colours, to 16 colours, or to no colour. Bold, italic and underline stay. Your model also gets the value as `ColorProfileMsg`. When the run ends, the previous value comes back, also when `update` throws or SIGTERM stops the program.",
+        md: "When a `Program` writes to the real stdout, it calls `detectColorProfile()` at startup and sets `Style.defaultProfile` for the run. Each `Style` without its own `profile` uses that value, so RGB colours step down to 256 colours, to 16 colours, or to no colour. This includes border, margin and underline colours, and `gradientText` / `gradientBackground`. Bold, italic and underline stay. Your model also gets the value as `ColorProfileMsg`. When the run ends, the previous value comes back, also when `update` throws or SIGTERM stops the program.",
       },
       { type: "heading", text: "Detection rules" },
       {
@@ -480,7 +480,7 @@ await Program(options: [
       {
         type: "callout",
         variant: "note",
-        md: "`Style.defaultProfile` and `Style.hasDarkBackground` are process-wide. A test that sets them must restore them, for example in `addTearDown`.",
+        md: "`Style.defaultProfile` and `Style.hasDarkBackground` are shared by the whole isolate. A test that sets them must restore them, for example in `addTearDown`. Programs that overlap in one isolate share them too.",
       },
     ],
     related: ["colors-and-gradients", "styling", "program-options"],
