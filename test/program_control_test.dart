@@ -512,7 +512,9 @@ void main() {
       await Program(options: [withOutput(sink), withInput(null), ...options])
           .run(_DriverModel(const []));
 
-      expect(sink.buf.toString(), endsWith('\x1b[1;1H\n'));
+      final output = sink.buf.toString();
+      expect(output, endsWith('\x1b[?2004l\r\n'));
+      expect(output, isNot(contains(RegExp(r'\x1b\[\d+;\d+H'))));
     }
   });
 
@@ -558,6 +560,39 @@ void main() {
     await runFuture.timeout(const Duration(seconds: 1));
   });
 
+  for (final cellRenderer in [false, true]) {
+    test('${cellRenderer ? 'cell' : 'ANSI'} scroll commands follow screen mode',
+        () async {
+      final sink = _StringSink();
+      final up = (await scrollUp(2)())!;
+      final down = (await scrollDown(3)())!;
+      await Program(options: [
+        withOutput(sink),
+        withInput(null),
+        if (cellRenderer) withCellRenderer(),
+      ])
+          .run(_DriverModel([
+            up,
+            down,
+            EnterAltScreenMsg(),
+            up,
+            down,
+            ExitAltScreenMsg(),
+            up,
+            down,
+          ]))
+          .timeout(const Duration(seconds: 5));
+
+      final output = sink.buf.toString();
+      expect('\x1b[2S'.allMatches(output), hasLength(1));
+      expect('\x1b[3T'.allMatches(output), hasLength(1));
+      expect(output.indexOf('\x1b[2S'),
+          greaterThan(output.indexOf('\x1b[?1049h')));
+      expect(
+          output.indexOf('\x1b[3T'), lessThan(output.indexOf('\x1b[?1049l')));
+    });
+  }
+
   test('applyMsg drives the terminal-control switch + renderer methods',
       () async {
     final sink = _StringSink();
@@ -593,7 +628,8 @@ void main() {
     final out = sink.buf.toString();
     expect(out, contains('\x1b]0;T\x07')); // window title
     expect(out, contains('\x1b[?1049h')); // enter alt-screen
-    expect(out, contains('\x1b[2S')); // scroll up 2
+    // ScrollMsg arrives on the normal screen, where it is a no-op (#18).
+    expect(out, isNot(contains('\x1b[2S')));
     expect(out, contains('\x1b]52;c;')); // clipboard OSC 52
     expect(out, contains('above')); // printLine
   }, timeout: const Timeout(Duration(seconds: 10)));

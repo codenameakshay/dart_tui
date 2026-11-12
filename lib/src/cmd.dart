@@ -110,10 +110,12 @@ Cmd setWindowTitle(String title) => () => SetWindowTitleMsg(title);
 /// Clear the scroll area (non-alt-screen) and reset the scroll region.
 Msg clearScrollArea() => ClearScrollAreaMsg();
 
-/// Scroll the terminal up by [n] lines.
+/// Scroll the terminal up by [n] lines. Only in the alternate screen: an
+/// inline program ignores it, so shell history above the view stays put.
 Cmd scrollUp([int n = 1]) => () => ScrollMsg(n, up: true);
 
-/// Scroll the terminal down by [n] lines.
+/// Scroll the terminal down by [n] lines. Only in the alternate screen (see
+/// [scrollUp]).
 Cmd scrollDown([int n = 1]) => () => ScrollMsg(n, up: false);
 
 final class RequestWindowSizeMsg extends Msg {}

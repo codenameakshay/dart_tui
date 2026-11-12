@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:characters/characters.dart';
 
 import 'ansi_state.dart';
-import 'bubbles/style.dart' show getWidth;
+import 'bubbles/style.dart' show getWidth, truncate;
 import 'grapheme_width.dart';
 import 'terminal_control.dart';
 import 'terminal_mode_state.dart';
@@ -29,7 +29,8 @@ abstract interface class TeaRenderer {
   /// Imperatively hide or show the cursor.
   void setCursorVisibility(bool visible);
 
-  /// Emit ANSI scroll sequences: positive [n] scrolls up, negative scrolls down.
+  /// Scroll [n] lines up, or down when [up] is false.
+  /// Non-positive counts and calls outside the alternate screen do nothing.
   void scroll(int n, {bool up = true});
 }
 
@@ -78,6 +79,101 @@ int _stdoutColumns(IOSink output) =>
         ? stdout.terminalColumns
         : 0;
 
+/// The physical row count when [output] is an interactive stdout, else 0.
+int _stdoutLines(IOSink output) =>
+    identical(output, stdout) && stdout.hasTerminal ? stdout.terminalLines : 0;
+
+/// The last [maxRows] items of [rows] (all of them when [maxRows] <= 0).
+List<T> _clipRows<T>(List<T> rows, int maxRows) =>
+    maxRows > 0 && rows.length > maxRows
+        ? rows.sublist(rows.length - maxRows)
+        : rows;
+
+/// An inline (normal-screen) frame: the rows it occupies below the row the
+/// cursor was on when it first rendered (#18).
+///
+/// Every move is relative to the frame's top row (CR plus CSI n A / CSI n B),
+/// so the frame never needs absolute rows or a cursor-position query and
+/// never paints over the shell history above it. Rows below the frame are
+/// created with newlines, which scroll the terminal when the frame reaches
+/// the bottom of the screen.
+///
+/// Known limit: when the terminal is resized narrower, terminals that reflow
+/// soft-wrapped rows can move the frame's top. The next redraw starts from
+/// the tracked top, so some stale rows may stay above the redrawn frame.
+final class _InlineFrame {
+  /// The cursor row relative to the frame's top row.
+  int row = 0;
+
+  /// The number of rows the frame occupies on screen.
+  int height = 0;
+
+  /// The 1-based exit row, excluding a final empty line.
+  int parkRow = 0;
+
+  /// Moves to column 0 of [target], creating rows below the frame as needed.
+  void moveTo(IOSink output, int target) {
+    output.write('\r');
+    // The cursor's own row always exists, even before the first write.
+    final existing = height > 0 ? height : 1;
+    final reachable = target < existing ? target : existing - 1;
+    final delta = reachable - row;
+    if (delta < 0) output.write('\x1b[${-delta}A');
+    if (delta > 0) output.write('\x1b[${delta}B');
+    for (var i = reachable; i < target; i++) {
+      output.write('\r\n');
+    }
+    row = target;
+    if (target >= height) height = target + 1;
+  }
+
+  /// Places the cursor at [r], [column] inside the frame.
+  void place(IOSink output, int r, int column) {
+    moveTo(output, r.clamp(0, height > 0 ? height - 1 : 0));
+    if (column > 0) output.write('\x1b[${column + 1}G');
+  }
+
+  /// Erases the frame's rows from [from] down and forgets them.
+  void eraseFrom(IOSink output, int from) {
+    if (from >= height) return;
+    moveTo(output, from);
+    output.write('\x1b[J');
+    height = from;
+  }
+
+  /// Starts a new, empty frame at the cursor's current row.
+  void reset() {
+    row = 0;
+    height = 0;
+    parkRow = 0;
+  }
+}
+
+/// Erases [frame], writes [line] where it was (so it scrolls into history
+/// like ordinary output), and starts a new frame on the row below it.
+void _insertAboveInline(IOSink output, _InlineFrame frame, String line) {
+  frame.eraseFrom(output, 0);
+  frame.moveTo(output, 0);
+  output.write(
+      '${balanceAnsiState(line).replaceAll('\r\n', '\n').replaceAll('\n', '\r\n')}\r\n');
+  frame.reset();
+}
+
+/// Moves to the 1-based [row] of an inline [frame] (none when 0) on exit.
+/// Leaving the alternate screen restores the cursor to where it entered, and
+/// Program writes no newline after an alt-screen exit, so step below the
+/// inline frame here.
+void _parkInline(
+  IOSink output,
+  _InlineFrame frame,
+  int row, {
+  required bool afterAltScreen,
+}) {
+  if (row <= 0 || frame.height == 0) return;
+  frame.moveTo(output, row - 1);
+  if (afterAltScreen) output.write('\r\n');
+}
+
 final class _CursorRendererState {
   CursorShape? _shape;
   bool? _blink;
@@ -85,8 +181,14 @@ final class _CursorRendererState {
   (int, int)? _position;
 
   // Frame writes may move the physical cursor, so only unchanged-content
-  // paths can reuse its last applied position.
-  void apply(IOSink output, Cursor? cursor, {bool forcePosition = true}) {
+  // paths can reuse its last applied position. [place] positions the cursor
+  // relative to an inline frame instead of with an absolute CSI row;colH.
+  void apply(
+    IOSink output,
+    Cursor? cursor, {
+    bool forcePosition = true,
+    void Function(int row, int column)? place,
+  }) {
     if (cursor == null) {
       reset(output);
       return;
@@ -117,7 +219,11 @@ final class _CursorRendererState {
     final row = cursor.y.clamp(0, 0x7ffffffe) + 1;
     final column = cursor.x.clamp(0, 0x7ffffffe) + 1;
     if (forcePosition || _position != (row, column)) {
-      output.write('\x1b[$row;${column}H');
+      if (place != null) {
+        place(row - 1, column - 1);
+      } else {
+        output.write('\x1b[$row;${column}H');
+      }
       _position = (row, column);
     }
   }
@@ -134,9 +240,17 @@ final class _CursorRendererState {
   }
 }
 
+/// Renders views line by line.
+///
+/// Outside the alternate screen the view is drawn inline: the first frame
+/// starts on the cursor's row, and every later move is relative to the
+/// frame's top (see [_InlineFrame]). A frame taller than the terminal shows
+/// its last rows, and lines wider than the terminal are truncated, so redraws
+/// never push frame rows into scrollback.
 final class AnsiRenderer implements TeaRenderer {
-  /// [terminalColumns] reports the physical width used to park the cursor
-  /// below a soft-wrapped last line on exit; it defaults to stdout's width.
+  /// [terminalColumns] and [terminalLines] report the physical terminal size
+  /// used to fit inline frames; they default to stdout's size (0 = unknown,
+  /// no fitting).
   AnsiRenderer({
     required IOSink output,
     IOSink? logSink,
@@ -145,9 +259,11 @@ final class AnsiRenderer implements TeaRenderer {
     MouseMode defaultMouseMode = MouseMode.none,
     bool defaultReportFocus = false,
     int Function()? terminalColumns,
+    int Function()? terminalLines,
   })  : _output = output,
         _logSink = logSink,
         _terminalColumns = terminalColumns ?? (() => _stdoutColumns(output)),
+        _terminalLines = terminalLines ?? (() => _stdoutLines(output)),
         _modes = TerminalModeState(
           defaultAltScreen: defaultAltScreen,
           defaultHideCursor: defaultHideCursor,
@@ -158,6 +274,7 @@ final class AnsiRenderer implements TeaRenderer {
   final IOSink _output;
   final IOSink? _logSink;
   final int Function() _terminalColumns;
+  final int Function() _terminalLines;
   final TerminalModeState _modes;
   List<String> _lastLines = const <String>[];
   String _lastContent = '';
@@ -166,6 +283,12 @@ final class AnsiRenderer implements TeaRenderer {
   bool _unicodeCoreEnabled = false;
   final _cursorState = _CursorRendererState();
   final _terminalViewState = TerminalViewState();
+  final _frame = _InlineFrame();
+  int _clippedRows = 0;
+
+  void Function(int, int)? get _placeCursor => _modes.altScreenEnabled
+      ? null
+      : (row, column) => _frame.place(_output, row - _clippedRows, column);
 
   @override
   void render(View view) {
@@ -181,7 +304,16 @@ final class AnsiRenderer implements TeaRenderer {
       _output.write(windowTitleSequence(view.windowTitle));
     }
     if (_hasRenderedFrame && view.content == _lastContent) {
-      _cursorState.apply(_output, view.cursor, forcePosition: false);
+      _cursorState.apply(
+        _output,
+        view.cursor,
+        forcePosition: false,
+        place: _placeCursor,
+      );
+      return;
+    }
+    if (!_modes.altScreenEnabled) {
+      _renderInline(view);
       return;
     }
     final nextLines = view.content.split('\n');
@@ -217,6 +349,43 @@ final class AnsiRenderer implements TeaRenderer {
     _logSink?.writeln('--- frame (diff) ---\n${view.content}');
   }
 
+  void _renderInline(View view) {
+    final columns = _terminalColumns();
+    final all = balanceAnsiState(view.content).split('\n');
+    final clipped = _clipRows(all, _terminalLines());
+    final nextLines = columns > 0
+        ? [for (final line in clipped) truncate(line, columns)]
+        : clipped;
+    _clippedRows = all.length - nextLines.length;
+    final full = !_hasRenderedFrame;
+    final prevLines = full ? const <String>[] : _lastLines;
+
+    if (_syncUpdates) _output.write('\x1b[?2026h');
+    for (var row = 0; row < nextLines.length; row++) {
+      final next = nextLines[row];
+      final prev = row < prevLines.length ? prevLines[row] : null;
+      if (next == prev) continue;
+      _frame.moveTo(_output, row);
+      // A repainted or new row may hold stale cells; clear it before writing
+      // (erasing after would wipe the last column of a full-width line, #7).
+      if (prev == null) _output.write('\x1b[K');
+      _output.write(next);
+      if (prev != null && getWidth(next) < getWidth(prev)) {
+        _output.write('\x1b[K');
+      }
+    }
+    _frame.eraseFrom(_output, nextLines.length);
+    if (_syncUpdates) _output.write('\x1b[?2026l');
+
+    _frame.parkRow =
+        _parkRow(nextLines.length, (r) => getWidth(nextLines[r]), 0);
+    _lastLines = nextLines;
+    _lastContent = view.content;
+    _hasRenderedFrame = true;
+    _cursorState.apply(_output, view.cursor, place: _placeCursor);
+    _logSink?.writeln('--- frame (inline) ---\n${view.content}');
+  }
+
   @override
   void setSyncUpdates(bool enabled) {
     _syncUpdates = enabled;
@@ -229,9 +398,14 @@ final class AnsiRenderer implements TeaRenderer {
     _unicodeCoreEnabled = enabled;
   }
 
+  /// Clears the alternate screen, or erases only the inline frame.
   @override
   void clearScreen() {
-    _output.write('\x1b[H\x1b[2J');
+    if (_modes.altScreenEnabled) {
+      _output.write('\x1b[H\x1b[2J');
+    } else {
+      _frame.eraseFrom(_output, 0);
+    }
     _lastLines = const <String>[];
     _lastContent = '';
     _hasRenderedFrame = false;
@@ -240,8 +414,11 @@ final class AnsiRenderer implements TeaRenderer {
   @override
   void insertAbove(String line) {
     if (!_modes.altScreenEnabled) {
-      _output.writeln(line);
+      _insertAboveInline(_output, _frame, line);
       _cursorState.invalidatePosition();
+      _lastLines = const <String>[];
+      _lastContent = '';
+      _hasRenderedFrame = false;
       return;
     }
     // In alt-screen: save cursor, scroll up to create space, write at top, restore
@@ -261,22 +438,34 @@ final class AnsiRenderer implements TeaRenderer {
   @override
   void release({bool reset = false}) {
     // Park on the view's last row, not the last changed one, so the newline
-    // Program writes on exit puts the shell prompt below the view.
+    // Program writes on exit puts the shell prompt below the view. Inline
+    // lines are truncated to the terminal width, so they never soft-wrap.
     final lines = _lastLines;
-    final parkRow = !reset && _hasRenderedFrame && !_modes.altScreenEnabled
-        ? _parkRow(lines.length, (r) => getWidth(lines[r]), _terminalColumns())
-        : 0;
+    final inline = !_modes.altScreenEnabled;
+    final parkRow = reset
+        ? 0
+        : inline && _hasRenderedFrame
+            ? _parkRow(lines.length, (r) => getWidth(lines[r]), 0)
+            : _frame.parkRow;
     setUnicodeCore(false);
     _terminalViewState.reset(_output);
     _cursorState.reset(_output);
     _modes.reset(_output);
-    if (parkRow > 0) _output.write('\x1b[$parkRow;1H');
+    _parkInline(_output, _frame, parkRow, afterAltScreen: !inline);
     _lastLines = const <String>[];
     _lastContent = '';
     _hasRenderedFrame = false;
     if (reset) {
-      clearScreen();
+      // Erase only an inline frame (including one saved under the alt
+      // screen), never the shell history above it. A pure alt-screen program
+      // keeps its existing clear.
+      if (inline || _frame.height > 0) {
+        _frame.eraseFrom(_output, 0);
+      } else {
+        _output.write('\x1b[H\x1b[2J');
+      }
     }
+    _frame.reset();
   }
 
   @override
@@ -308,7 +497,9 @@ final class AnsiRenderer implements TeaRenderer {
 
   @override
   void scroll(int n, {bool up = true}) {
-    if (n <= 0) return;
+    // Inline, scrolling the whole terminal would move shell history and the
+    // frame's anchor, so it only applies in the alternate screen.
+    if (n <= 0 || !_modes.altScreenEnabled) return;
     // ESC[nS = scroll up n lines; ESC[nT = scroll down n lines
     _output.write(up ? '\x1b[${n}S' : '\x1b[${n}T');
     _lastLines = const <String>[];
@@ -354,7 +545,8 @@ final class _Cell {
 ///
 /// Activate via [withCellRenderer] program option.
 final class CellRenderer implements TeaRenderer {
-  /// See [AnsiRenderer.new] for [terminalColumns].
+  /// See [AnsiRenderer.new] for [terminalColumns], [terminalLines] and inline
+  /// rendering outside the alternate screen.
   CellRenderer({
     required IOSink output,
     IOSink? logSink,
@@ -363,9 +555,11 @@ final class CellRenderer implements TeaRenderer {
     MouseMode defaultMouseMode = MouseMode.none,
     bool defaultReportFocus = false,
     int Function()? terminalColumns,
+    int Function()? terminalLines,
   })  : _output = output,
         _logSink = logSink,
         _terminalColumns = terminalColumns ?? (() => _stdoutColumns(output)),
+        _terminalLines = terminalLines ?? (() => _stdoutLines(output)),
         _modes = TerminalModeState(
           defaultAltScreen: defaultAltScreen,
           defaultHideCursor: defaultHideCursor,
@@ -376,6 +570,7 @@ final class CellRenderer implements TeaRenderer {
   final IOSink _output;
   final IOSink? _logSink;
   final int Function() _terminalColumns;
+  final int Function() _terminalLines;
   final TerminalModeState _modes;
   bool _unicodeCoreEnabled = false;
 
@@ -383,6 +578,12 @@ final class CellRenderer implements TeaRenderer {
   String? _lastContent;
   final _cursorState = _CursorRendererState();
   final _terminalViewState = TerminalViewState();
+  final _frame = _InlineFrame();
+  int _clippedRows = 0;
+
+  void Function(int, int)? get _placeCursor => _modes.altScreenEnabled
+      ? null
+      : (row, column) => _frame.place(_output, row - _clippedRows, column);
 
   @override
   void render(View view) {
@@ -397,25 +598,73 @@ final class CellRenderer implements TeaRenderer {
       _output.write(windowTitleSequence(view.windowTitle));
     }
     if (_lastGrid != null && _lastContent == view.content) {
-      _cursorState.apply(_output, view.cursor, forcePosition: false);
+      _cursorState.apply(
+        _output,
+        view.cursor,
+        forcePosition: false,
+        place: _placeCursor,
+      );
       return; // identical frame — skip rebuild + diff walk
     }
     final nextGrid = _buildGrid(view.content);
+    if (!_modes.altScreenEnabled) {
+      _renderInline(view, nextGrid);
+      return;
+    }
     if (_lastGrid == null) {
       for (var row = 0; row < nextGrid.length; row++) {
         _output.write('\x1b[${row + 1};1H\x1b[K');
       }
     }
-    _diffAndEmit(nextGrid);
+    _diffAndEmit(
+      nextGrid,
+      (row, col) => _output.write('\x1b[${row + 1};${col + 1}H'),
+    );
     _lastGrid = nextGrid;
     _lastContent = view.content;
     _cursorState.apply(_output, view.cursor);
     _logSink?.writeln('--- cell frame ---\n${view.content}');
   }
 
+  void _renderInline(View view, List<List<_Cell>> built) {
+    final columns = _terminalColumns();
+    final clipped = _clipRows(built, _terminalLines());
+    final grid = columns > 0
+        ? [for (final row in clipped) _truncateCells(row, columns)]
+        : clipped;
+    _clippedRows = built.length - grid.length;
+    _frame.eraseFrom(_output, grid.length);
+    final prev = _lastGrid;
+    // Erased rows must not be diffed (or recreated).
+    if (prev != null && prev.length > grid.length) {
+      _lastGrid = prev.sublist(0, grid.length);
+    }
+    // Clear rows that may hold stale cells before the diff writes (with no
+    // SGR active, so the erase is not colored): every row when the frame is
+    // new or its diff state was lost, else only rows the frame grows into.
+    for (var row = prev == null ? 0 : _frame.height; row < grid.length; row++) {
+      _frame.moveTo(_output, row);
+      _output.write('\x1b[K');
+    }
+    _diffAndEmit(grid, (row, col) {
+      _frame.moveTo(_output, row);
+      if (col > 0) _output.write('\x1b[${col + 1}G');
+    });
+    _frame.parkRow = _parkRow(grid.length, (r) => grid[r].length, 0);
+    _lastGrid = grid;
+    _lastContent = view.content;
+    _cursorState.apply(_output, view.cursor, place: _placeCursor);
+    _logSink?.writeln('--- cell frame (inline) ---\n${view.content}');
+  }
+
+  /// Clears the alternate screen, or erases only the inline frame.
   @override
   void clearScreen() {
-    _output.write('\x1b[H\x1b[2J');
+    if (_modes.altScreenEnabled) {
+      _output.write('\x1b[H\x1b[2J');
+    } else {
+      _frame.eraseFrom(_output, 0);
+    }
     _lastGrid = null;
     _lastContent = null;
   }
@@ -423,8 +672,10 @@ final class CellRenderer implements TeaRenderer {
   @override
   void insertAbove(String line) {
     if (!_modes.altScreenEnabled) {
-      _output.writeln(line);
+      _insertAboveInline(_output, _frame, line);
       _cursorState.invalidatePosition();
+      _lastGrid = null;
+      _lastContent = null;
       return;
     }
     _output.write('\x1b[s');
@@ -444,17 +695,30 @@ final class CellRenderer implements TeaRenderer {
   void release({bool reset = false}) {
     // See AnsiRenderer.release.
     final grid = _lastGrid;
-    final parkRow = !reset && !_modes.altScreenEnabled && grid != null
-        ? _parkRow(grid.length, (r) => grid[r].length, _terminalColumns())
-        : 0;
+    final inline = !_modes.altScreenEnabled;
+    final parkRow = reset
+        ? 0
+        : inline && grid != null
+            ? _parkRow(grid.length, (r) => grid[r].length, 0)
+            : _frame.parkRow;
     setUnicodeCore(false);
     _terminalViewState.reset(_output);
     _cursorState.reset(_output);
     _modes.reset(_output);
-    if (parkRow > 0) _output.write('\x1b[$parkRow;1H');
+    _parkInline(_output, _frame, parkRow, afterAltScreen: !inline);
     _lastGrid = null;
     _lastContent = null;
-    if (reset) clearScreen();
+    if (reset) {
+      // Erase only an inline frame (including one saved under the alt
+      // screen), never the shell history above it. A pure alt-screen program
+      // keeps its existing clear.
+      if (inline || _frame.height > 0) {
+        _frame.eraseFrom(_output, 0);
+      } else {
+        _output.write('\x1b[H\x1b[2J');
+      }
+    }
+    _frame.reset();
   }
 
   @override
@@ -491,7 +755,8 @@ final class CellRenderer implements TeaRenderer {
 
   @override
   void scroll(int n, {bool up = true}) {
-    if (n <= 0) return;
+    // See AnsiRenderer.scroll: inline scrolling is a no-op.
+    if (n <= 0 || !_modes.altScreenEnabled) return;
     _output.write(up ? '\x1b[${n}S' : '\x1b[${n}T');
     _lastGrid = null;
     _lastContent = null;
@@ -537,8 +802,12 @@ final class CellRenderer implements TeaRenderer {
     return grid;
   }
 
-  /// Emit only the cells that differ from [_lastGrid].
-  void _diffAndEmit(List<List<_Cell>> next) {
+  /// Emit only the cells that differ from [_lastGrid], positioning the cursor
+  /// with [move] (0-based row and column).
+  void _diffAndEmit(
+    List<List<_Cell>> next,
+    void Function(int row, int col) move,
+  ) {
     final prev = _lastGrid;
     final rows =
         next.length > (prev?.length ?? 0) ? next.length : (prev?.length ?? 0);
@@ -570,7 +839,7 @@ final class CellRenderer implements TeaRenderer {
 
         // Move cursor if needed
         if (lastRow != row || lastCol != col) {
-          _output.write('\x1b[${row + 1};${col + 1}H');
+          move(row, col);
           lastRow = row;
           lastCol = col;
         }
@@ -606,6 +875,17 @@ final class CellRenderer implements TeaRenderer {
       _output.write('\x1b]8;;\x1b\\');
     }
   }
+}
+
+/// The first [columns] cells of [row], dropping a wide grapheme that would
+/// straddle the right edge.
+List<_Cell> _truncateCells(List<_Cell> row, int columns) {
+  if (row.length <= columns) return row;
+  var end = columns;
+  while (end > 0 && row[end].isContinuation) {
+    end--;
+  }
+  return row.sublist(0, end);
 }
 
 // ── Escape sequence parser helper ─────────────────────────────────────────────

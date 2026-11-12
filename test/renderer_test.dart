@@ -38,6 +38,98 @@ class _StringSink implements IOSink {
 
 void main() {
   for (final cellRenderer in [false, true]) {
+    test(
+        '${cellRenderer ? 'CellRenderer' : 'AnsiRenderer'} preserves '
+        '3a78df5 alternate-screen bytes', () {
+      final buf = StringBuffer();
+      final TeaRenderer renderer = cellRenderer
+          ? CellRenderer(
+              output: _StringSink(buf),
+              defaultAltScreen: true,
+              defaultHideCursor: true,
+            )
+          : AnsiRenderer(
+              output: _StringSink(buf),
+              defaultAltScreen: true,
+              defaultHideCursor: true,
+            );
+      renderer.render(View(
+        content: 'one\ntwo\nthree',
+        cursor: const Cursor(x: 1, y: 1),
+      ));
+      renderer.render(View(
+        content: 'onX\n\x1b[41mtwo\x1b[0m\nthree',
+        cursor: const Cursor(x: 2, y: 0),
+      ));
+      renderer.render(newView('a'));
+      renderer.insertAbove('log');
+      renderer.render(newView('four'));
+      renderer.scroll(2);
+      renderer.render(newView('five'));
+      renderer.clearScreen();
+      renderer.render(newView('六a'));
+      renderer.release();
+
+      const prefix = '\x1b[?1049h\x1b[?2004h'
+          '\x1b[>4;2m\x1b[=1;1u\x1b[?u';
+      const suffix = '\x1b[>4m\x1b[=0;1u\x1b[?25h\x1b[?1049l'
+          '\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l'
+          '\x1b[?1004l\x1b[?2004l';
+      const ansi = '\x1b[1;1H\x1b[Kone\x1b[2;1H\x1b[Ktwo'
+          '\x1b[3;1H\x1b[Kthree\x1b[1 q\x1b[2;2H'
+          '\x1b[1;1HonX\x1b[2;1H\x1b[41mtwo\x1b[0m\x1b[1;3H'
+          '\x1b[?25l\x1b[1;1Ha\x1b[K\x1b[2;1H\x1b[K'
+          '\x1b[3;1H\x1b[K\x1b[0 q'
+          '\x1b[s\x1b[1;1H\x1b[S\x1b[1;1H\x1b[Klog\x1b[u'
+          '\x1b[1;1H\x1b[Kfour\x1b[2S\x1b[1;1H\x1b[Kfive'
+          '\x1b[H\x1b[2J\x1b[1;1H\x1b[K六a';
+      const cell = '\x1b[1;1H\x1b[K\x1b[2;1H\x1b[K'
+          '\x1b[3;1H\x1b[K\x1b[1;1Hone\x1b[2;1Htwo\x1b[3;1Hthree'
+          '\x1b[1 q\x1b[2;2H\x1b[1;3HX\x1b[2;1H'
+          '\x1b[41mtwo\x1b[0m\x1b[1;3H\x1b[?25l'
+          '\x1b[1;1Ha  \x1b[2;1H   \x1b[3;1H     \x1b[0 q'
+          '\x1b[s\x1b[1;1H\x1b[S\x1b[1;1H\x1b[Klog\x1b[u'
+          '\x1b[1;1H\x1b[K\x1b[1;1Hfour\x1b[2S'
+          '\x1b[1;1H\x1b[K\x1b[1;1Hfive\x1b[H\x1b[2J'
+          '\x1b[1;1H\x1b[K\x1b[1;1H六a';
+      expect(buf.toString(), '$prefix${cellRenderer ? cell : ansi}$suffix');
+    });
+
+    for (final up in [true, false]) {
+      test(
+          '${cellRenderer ? 'CellRenderer' : 'AnsiRenderer'} scroll '
+          '${up ? 'up' : 'down'} invalidates an unchanged alternate frame', () {
+        final buf = StringBuffer();
+        final TeaRenderer renderer = cellRenderer
+            ? CellRenderer(
+                output: _StringSink(buf),
+                defaultAltScreen: true,
+                defaultHideCursor: true,
+              )
+            : AnsiRenderer(
+                output: _StringSink(buf),
+                defaultAltScreen: true,
+                defaultHideCursor: true,
+              );
+        renderer.render(newView('ab'));
+        buf.clear();
+        renderer.scroll(0, up: up);
+        renderer.scroll(-2, up: up);
+        renderer.render(newView('ab'));
+        expect(buf.toString(), isEmpty);
+
+        renderer.scroll(2, up: up);
+        expect(buf.toString(), up ? '\x1b[2S' : '\x1b[2T');
+        buf.clear();
+        renderer.render(newView('ab'));
+        expect(buf.toString(),
+            cellRenderer ? '\x1b[1;1H\x1b[K\x1b[1;1Hab' : '\x1b[1;1H\x1b[Kab');
+        buf.clear();
+        renderer.render(newView('ab'));
+        expect(buf.toString(), isEmpty);
+      });
+    }
+
     group(
       '${cellRenderer ? 'CellRenderer' : 'AnsiRenderer'} cursor caching',
       () {
@@ -47,15 +139,17 @@ void main() {
 
         setUp(() {
           buf = StringBuffer();
+          // Absolute cursor positioning is an alternate-screen behavior;
+          // inline cursor placement is covered by the inline groups below.
           renderer = cellRenderer
               ? CellRenderer(
                   output: _StringSink(buf),
-                  defaultAltScreen: false,
+                  defaultAltScreen: true,
                   defaultHideCursor: true,
                 )
               : AnsiRenderer(
                   output: _StringSink(buf),
-                  defaultAltScreen: false,
+                  defaultAltScreen: true,
                   defaultHideCursor: true,
                 );
           renderer.render(View(content: 'value', cursor: cursor));
@@ -163,11 +257,8 @@ void main() {
         for (final operation in <String, void Function(TeaRenderer)>{
           'clearScreen': (r) => r.clearScreen(),
           'scroll': (r) => r.scroll(1),
-          'insertAbove in alt screen': (r) {
-            r.setAltScreen(true);
-            r.insertAbove('log');
-          },
-          'setAltScreen': (r) => r.setAltScreen(true),
+          'insertAbove in alt screen': (r) => r.insertAbove('log'),
+          'setAltScreen': (r) => r.setAltScreen(false),
           'release': (r) => r.release(),
           'release with reset': (r) => r.release(reset: true),
         }.entries) {
@@ -183,18 +274,21 @@ void main() {
           });
         }
 
-        test('inline insertAbove invalidates only the cursor position', () {
-          renderer.insertAbove('log');
-          buf.clear();
-          renderer.render(View(content: 'value', cursor: cursor));
-          expect(buf.toString(), '\x1b[3;4H');
-          buf.clear();
-          renderer.render(View(content: 'value', cursor: cursor));
-          expect(buf.toString(), isEmpty);
-        });
-
         test('a declarative screen change restores cursor position', () {
-          renderer.render(
+          final inline = cellRenderer
+              ? CellRenderer(
+                  output: _StringSink(buf),
+                  defaultAltScreen: false,
+                  defaultHideCursor: true,
+                )
+              : AnsiRenderer(
+                  output: _StringSink(buf),
+                  defaultAltScreen: false,
+                  defaultHideCursor: true,
+                );
+          inline.render(View(content: 'value', cursor: cursor));
+          buf.clear();
+          inline.render(
             View(content: 'value', cursor: cursor, altScreen: true),
           );
           expect(buf.toString(), contains('\x1b[?1049h'));
@@ -222,7 +316,8 @@ void main() {
 
     renderer.render(newView('short'));
 
-    expect(buf.toString(), contains('\x1b[1;1H\x1b[Kshort'));
+    expect(buf.toString(), contains('\r\x1b[Kshort'));
+    expect(buf.toString(), isNot(contains(RegExp(r'\x1b\[\d+;\d+H'))));
   });
 
   test('AnsiRenderer strips controls from window titles', () {
@@ -251,10 +346,10 @@ void main() {
     );
 
     renderer.render(View(
-      content: 'value',
+      content: 'a\nb\nvalue',
       cursor: const Cursor(
         x: 4,
-        y: 2,
+        y: 0,
         color: 0x12abef,
         shape: CursorShape.underline,
         blink: false,
@@ -264,7 +359,7 @@ void main() {
     final output = buf.toString();
     expect(output, contains('\x1b[4 q'));
     expect(output, contains('\x1b]12;#12abef\x07'));
-    expect(output, endsWith('\x1b[3;5H'));
+    expect(output, endsWith('\r\x1b[2A\x1b[5G'));
   });
 
   test('AnsiRenderer updates cursor state when frame content is unchanged', () {
@@ -275,7 +370,7 @@ void main() {
       defaultHideCursor: true,
     );
     renderer.render(View(
-      content: 'value',
+      content: 'value\nmore',
       cursor: const Cursor(
         x: 0,
         y: 0,
@@ -287,7 +382,7 @@ void main() {
     buf.clear();
 
     renderer.render(View(
-      content: 'value',
+      content: 'value\nmore',
       cursor: const Cursor(
         x: 2,
         y: 1,
@@ -295,7 +390,7 @@ void main() {
       ),
     ));
 
-    expect(buf.toString(), equals('\x1b[5 q\x1b]112\x07\x1b[2;3H'));
+    expect(buf.toString(), equals('\x1b[5 q\x1b]112\x07\r\x1b[1B\x1b[3G'));
   });
 
   test('AnsiRenderer applies and resets terminal colors and progress', () {
@@ -511,7 +606,7 @@ void main() {
 
       renderer.close();
 
-      expect(buf.toString(), endsWith('\x1b[3;1H'));
+      expect(buf.toString(), endsWith('\r\x1b[2B'));
     });
 
     test('parking follows a view that shrinks', () {
@@ -521,7 +616,7 @@ void main() {
 
       renderer.close();
 
-      expect(buf.toString(), endsWith('\x1b[1;1H'));
+      expect(buf.toString(), endsWith('\r\x1b[1A'));
     });
 
     test('a trailing newline ends the last row instead of adding one', () {
@@ -530,10 +625,10 @@ void main() {
 
       renderer.close();
 
-      expect(buf.toString(), endsWith('\x1b[2;1H'));
+      expect(buf.toString(), endsWith('\r\x1b[1A'));
     });
 
-    test('a last line wider than the terminal parks on its wrapped end', () {
+    test('a line wider than the terminal is truncated, so it never wraps', () {
       final wrapping = AnsiRenderer(
         output: _StringSink(buf),
         defaultAltScreen: false,
@@ -541,21 +636,23 @@ void main() {
         terminalColumns: () => 10,
       );
       wrapping.render(newView('title\n${'x' * 25}'));
+      expect(buf.toString(), contains('x' * 10));
+      expect(buf.toString(), isNot(contains('x' * 11)));
       buf.clear();
 
       wrapping.close();
 
-      expect(buf.toString(), endsWith('\x1b[4;1H'));
+      expect(buf.toString(), endsWith('\x1b[?2004l\r'));
     });
 
-    test('release(reset: true) clears instead of parking', () {
+    test('release(reset: true) erases only the inline frame', () {
       renderer.render(newView('one\ntwo'));
       buf.clear();
 
       renderer.release(reset: true);
 
-      expect(buf.toString(), isNot(contains('\x1b[2;1H')));
-      expect(buf.toString(), endsWith('\x1b[H\x1b[2J'));
+      expect(buf.toString(), isNot(contains('\x1b[2J')));
+      expect(buf.toString(), endsWith('\r\x1b[1A\x1b[J'));
     });
 
     test('close does not park in the alternate screen', () {

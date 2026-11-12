@@ -157,9 +157,9 @@ Msg exitAltScreen()        // return to primary screen
 Msg hideCursor()           // hide terminal cursor
 Msg showCursor()           // show terminal cursor
 Cmd setWindowTitle(title)  // set window/tab title via OSC
-Msg clearScrollArea()      // clear screen and scrollback
-Cmd scrollUp([int n = 1])  // scroll viewport up n lines
-Cmd scrollDown([int n = 1])// scroll viewport down n lines
+Msg clearScrollArea()      // clear the screen (inline: only the view)
+Cmd scrollUp([int n = 1])  // scroll up n lines (alt screen only)
+Cmd scrollDown([int n = 1])// scroll down n lines (alt screen only)
 ```
 
 ### Program options
@@ -188,6 +188,22 @@ Program(
 For an interactive program that explicitly owns terminal input, pass
 `withInput(stdin)`. `Program` restores cooked terminal mode before cancelling
 that subscription during shutdown.
+
+### Inline mode
+
+Without `withAltScreen()`, a program draws inline: its view starts on the
+cursor's row, below your shell history, and redraws in place. `println`
+output goes above the view and into scrollback. On exit the last frame stays
+on screen, and the shell prompt comes back on the line below it. So
+programs run one after another, like `promptSelect` then `promptInput`, stack
+under each other.
+
+A view taller than the terminal shows its last rows, and lines wider than the
+terminal are cut off. Known limit: when you make the terminal narrower,
+terminals that reflow wrapped lines can leave stale rows above the redrawn
+view.
+
+![Inline prompts below shell history](example/tapes/output/inline.gif)
 
 ---
 

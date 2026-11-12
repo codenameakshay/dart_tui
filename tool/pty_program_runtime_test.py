@@ -9,7 +9,10 @@ import os
 from pathlib import Path
 import pty
 import select
+import shlex
+import shutil
 import signal
+import subprocess
 import struct
 import termios
 import time
@@ -412,6 +415,195 @@ class ProgramRuntimePtyTest(unittest.TestCase):
         os.kill(probe.pid, signal.SIGTERM)
         self.assert_terminal_restored(probe.finish())
         self.assert_cooked_mode(probe)
+
+
+class _Tmux:
+    """A detached tmux pane: a real terminal emulator with scrollback."""
+
+    def __init__(self, command: str, rows: int = 24, columns: int = 80):
+        self.socket = f"dart_tui_test_{os.getpid()}_{time.monotonic_ns()}"
+        self._tmux(
+            "new-session", "-d", "-s", "t", "-x", str(columns), "-y", str(rows),
+            f"cd {shlex.quote(str(ROOT))} && {command}; sleep 60",
+        )
+        self._tmux("set-option", "-t", "t", "history-limit", "5000")
+
+    def _tmux(self, *args: str) -> str:
+        return subprocess.run(
+            ["tmux", "-L", self.socket, *args],
+            check=True, capture_output=True, text=True,
+        ).stdout
+
+    def history(self) -> list[str]:
+        """Every line in scrollback and on screen, top to bottom."""
+        text = self._tmux("capture-pane", "-p", "-S", "-", "-t", "t")
+        return [line.rstrip() for line in text.splitlines()]
+
+    def wait_for(self, marker: str, count: int = 1) -> list[str]:
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline:
+            lines = self.history()
+            if sum(marker in line for line in lines) >= count:
+                return lines
+            time.sleep(0.1)
+        raise AssertionError(
+            f"missing {marker!r} x{count}; pane=\n" + "\n".join(self.history())
+        )
+
+    def keys(self, keys: str) -> None:
+        for key in keys:
+            self._tmux("send-keys", "-t", "t", "-l", key)
+            time.sleep(0.15)
+
+    def close(self) -> None:
+        subprocess.run(
+            ["tmux", "-L", self.socket, "kill-server"], capture_output=True
+        )
+
+
+@unittest.skipUnless(shutil.which("tmux"), "tmux is not installed")
+class InlineRenderingTmuxTest(unittest.TestCase):
+    """Inline frames keep the shell history above them (#18)."""
+
+    def _run(self, scenario: str) -> _Tmux:
+        command = (
+            "printf 'MARK_1\\nMARK_2\\nMARK_3\\n'; "
+            f"dart run {shlex.quote(str(PROBE))} {scenario}; echo AFTER_MARK"
+        )
+        pane = _Tmux(command)
+        self.addCleanup(pane.close)
+        return pane
+
+    def _index(self, lines: list[str], marker: str) -> int:
+        found = [i for i, line in enumerate(lines) if marker in line]
+        self.assertEqual(len(found), 1, f"{marker!r} not once in {lines!r}")
+        return found[0]
+
+    def test_inline_program_keeps_history_and_ends_above_the_prompt(self) -> None:
+        for scenario in ("inline", "inline-cell"):
+            with self.subTest(scenario=scenario):
+                pane = self._run(scenario)
+                pane.wait_for("INLINE_LAST rows=2")
+                pane.keys("g")
+                pane.wait_for("INLINE_LAST rows=5")
+                pane.keys("p")
+                pane.wait_for("INLINE_PRINTED")
+                pane.keys("s")
+                pane.wait_for("INLINE_LAST rows=2")
+                pane.keys("q")
+                lines = pane.wait_for("AFTER_MARK")
+                marks = [self._index(lines, f"MARK_{n}") for n in (1, 2, 3)]
+                printed = self._index(lines, "INLINE_PRINTED")
+                top = self._index(lines, "INLINE_TOP rows=2")
+                last = self._index(lines, "INLINE_LAST rows=2")
+                after = self._index(lines, "AFTER_MARK")
+                self.assertEqual(marks, sorted(marks))
+                self.assertEqual(marks[2] + 1, printed, lines)
+                self.assertEqual(printed + 1, top, lines)
+                self.assertEqual(top + 1, last, lines)
+                self.assertEqual(last + 1, after, lines)
+                # The rows the frame shrank away from were erased.
+                self.assertFalse(any("INLINE_ROW_" in line for line in lines))
+
+    def test_clear_resize_and_exec_preserve_inline_history(self) -> None:
+        for scenario in ("inline-lifecycle", "inline-lifecycle-cell"):
+            with self.subTest(scenario=scenario):
+                pane = self._run(scenario)
+                pane.wait_for("LIFECYCLE_LAST v0")
+                pane.keys("c")
+                pane.wait_for("LIFECYCLE_LAST v1")
+                pane._tmux("resize-window", "-t", "t", "-x", "90", "-y", "28")
+                time.sleep(0.3)
+                pane.keys("x")
+                pane.wait_for("LIFECYCLE_LAST v2")
+                pane.keys("q")
+                lines = pane.wait_for("AFTER_MARK")
+                expected = [
+                    "MARK_1", "MARK_2", "MARK_3", "INLINE_CHILD",
+                    "LIFECYCLE_TOP v2", "LIFECYCLE_LAST v2", "AFTER_MARK",
+                ]
+                found = [self._index(lines, marker) for marker in expected]
+                self.assertEqual(
+                    found, list(range(found[0], found[0] + len(found))), lines
+                )
+
+    def test_exec_from_alt_screen_keeps_shell_history(self) -> None:
+        for scenario in ("inline-lifecycle", "inline-lifecycle-cell"):
+            with self.subTest(scenario=scenario):
+                pane = self._run(scenario)
+                pane.wait_for("LIFECYCLE_LAST v0")
+                pane.keys("a")
+                pane.wait_for("LIFECYCLE_LAST v1")
+                pane.keys("x")
+                pane.wait_for("LIFECYCLE_LAST v2")
+                pane.keys("a")
+                pane.wait_for("LIFECYCLE_LAST v3")
+                pane.keys("q")
+                lines = pane.wait_for("AFTER_MARK")
+                expected = [
+                    "MARK_1", "MARK_2", "MARK_3", "INLINE_CHILD",
+                    "LIFECYCLE_TOP v3", "LIFECYCLE_LAST v3", "AFTER_MARK",
+                ]
+                found = [self._index(lines, marker) for marker in expected]
+                self.assertEqual(
+                    found, list(range(found[0], found[0] + len(found))), lines
+                )
+
+    def test_quit_in_alt_screen_after_inline_frame_parks_below_frame(self) -> None:
+        for scenario in ("inline-lifecycle", "inline-lifecycle-cell"):
+            with self.subTest(scenario=scenario):
+                pane = self._run(scenario)
+                pane.wait_for("LIFECYCLE_LAST v0")
+                pane.keys("a")
+                pane.wait_for("LIFECYCLE_LAST v1")
+                pane.keys("q")
+                lines = pane.wait_for("AFTER_MARK")
+                last = self._index(lines, "LIFECYCLE_LAST v0")
+                self.assertEqual(self._index(lines, "AFTER_MARK"), last + 1, lines)
+                for n in (1, 2, 3):
+                    self._index(lines, f"MARK_{n}")
+
+    def test_tall_frame_redraws_do_not_flood_scrollback(self) -> None:
+        for scenario in ("inline", "inline-cell"):
+            with self.subTest(scenario=scenario):
+                pane = self._run(scenario)
+                pane.wait_for("INLINE_LAST rows=2")
+                for redraw in (1, 2, 3):
+                    pane.keys("t")
+                    pane.wait_for(f"INLINE_ROW_38 v{redraw}")
+                pane.keys("q")
+                lines = pane.wait_for("AFTER_MARK")
+                # 40 rows in a 24-row pane: only the last 24 are ever drawn,
+                # and each redraw rewrites them in place.
+                self.assertFalse(any("INLINE_ROW_01 " in line for line in lines))
+                self.assertEqual(
+                    sum("INLINE_ROW_38" in line for line in lines), 1, lines
+                )
+                self.assertEqual(
+                    sum("INLINE_LAST rows=40" in line for line in lines), 1
+                )
+                for n in (1, 2, 3):
+                    self._index(lines, f"MARK_{n}")
+
+    def test_sequential_programs_start_below_each_other(self) -> None:
+        for scenario in ("inline-chain", "inline-chain-cell"):
+            with self.subTest(scenario=scenario):
+                pane = self._run(scenario)
+                pane.wait_for("FIRST_LAST")
+                pane.keys("q")
+                pane.wait_for("SECOND_LAST")
+                pane.keys("q")
+                lines = pane.wait_for("AFTER_MARK")
+                expected = [
+                    "MARK_1", "MARK_2", "MARK_3",
+                    "FIRST_TOP", "FIRST_LAST",
+                    "SECOND_TOP", "SECOND_LAST",
+                    "AFTER_MARK",
+                ]
+                found = [self._index(lines, marker) for marker in expected]
+                self.assertEqual(
+                    found, list(range(found[0], found[0] + len(found))), lines
+                )
 
 
 if __name__ == "__main__":

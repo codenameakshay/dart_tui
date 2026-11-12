@@ -333,6 +333,14 @@ ProgramOption withWindowSize(int width, int height) {
 }
 
 /// Enter the alternate screen buffer at startup.
+///
+/// Without it, the program renders inline: the view starts on the cursor's
+/// row, below the shell history, and every redraw moves relative to the
+/// view's top row. A view taller than the terminal shows its last rows, and
+/// lines are cut to the terminal width. On exit the last frame stays, with the
+/// cursor on the line below it. Known limit: when the terminal is made
+/// narrower, terminals that reflow wrapped lines can leave stale rows above
+/// the redrawn view.
 ProgramOption withAltScreen() => (p) => p._altScreen = true;
 
 /// Hide the terminal cursor at startup (default behaviour).
@@ -741,7 +749,8 @@ final class Program {
           _output.write(windowTitleSequence(msg.title));
           return false;
         case ClearScrollAreaMsg():
-          _output.write('\x1b[2J\x1b[H');
+          // The renderer clears once: the alternate screen, or only the
+          // inline frame on the normal screen.
           _renderer?.clearScreen();
           return true;
         case ScrollMsg():

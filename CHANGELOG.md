@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- **Inline programs no longer paint over shell history (#18).** Outside the
+  alternate screen, both renderers now draw the view where the cursor is and
+  move only relative to the view's top row. They send no absolute row moves
+  and no cursor-position query. Redraws rewrite only changed lines and erase
+  rows the view no longer uses. A view taller than the terminal shows its last
+  rows, and lines are cut to the terminal width, so redraws do not flood
+  scrollback. `println`/`printf` output goes above the view and into
+  scrollback. On exit the last frame stays, with the shell prompt on the next
+  line. Programs run in sequence (prompts, forms) start below each other.
+  Suspend, exec and resize erase only the view, not the screen. Alt-screen
+  output is unchanged.
+- `scrollUp` / `scrollDown` (`ScrollMsg`) now apply only in the alternate
+  screen. Outside it they do nothing, because scrolling the whole terminal
+  moved shell history and the view's anchor.
+- `ClearScrollAreaMsg` clears once instead of twice. Outside the alternate
+  screen it, `ClearScreenMsg` and a resize erase only the view.
+- `example/prompts_chain.dart` now runs inline. The new
+  `example/tapes/inline.tape` records it below shell history.
+
+Known limit: when the terminal is made narrower, terminals that reflow wrapped
+lines can leave stale rows above the redrawn view.
+
 ## 3.0.0 - 2026-10-17
 
 This major release makes raw mode behave like Bubble Tea on macOS and Linux,

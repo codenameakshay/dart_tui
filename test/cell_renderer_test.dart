@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:test/test.dart';
 
 // Internal imports — use package paths to access src directly
+import 'package:dart_tui/src/ansi_state.dart';
 import 'package:dart_tui/src/bubbles/style.dart';
 import 'package:dart_tui/src/renderer.dart';
 import 'package:dart_tui/src/view.dart';
@@ -35,7 +36,8 @@ void main() {
     test('clears unknown initial row content before writing', () {
       renderer.render(newView('short'));
 
-      expect(buf.toString(), contains('\x1b[1;1H\x1b[K'));
+      expect(buf.toString(), contains('\r\x1b[K'));
+      expect(buf.toString(), isNot(contains(RegExp(r'\x1b\[\d+;\d+H'))));
     });
 
     test('strips controls from window titles', () {
@@ -58,8 +60,7 @@ void main() {
       expect(output, contains('X'));
       // Should NOT re-render unchanged 'hell' characters (those positions should not appear)
       // We verify there is exactly one cursor-move sequence (to position of 'o'→'X')
-      final cursorMoves = RegExp(r'\x1b\[\d+;\d+H').allMatches(output).length;
-      expect(cursorMoves, equals(1));
+      expect(output, equals('\r\x1b[5GX'));
     });
 
     test('positions changes after wide graphemes by terminal column', () {
@@ -68,15 +69,15 @@ void main() {
 
       renderer.render(newView('你b'));
 
-      expect(buf.toString(), equals('\x1b[1;3Hb'));
+      expect(buf.toString(), equals('\r\x1b[3Gb'));
     });
 
     test('applies cursor position, shape, blink, and color', () {
       renderer.render(View(
-        content: 'value',
+        content: 'a\nb\nvalue',
         cursor: const Cursor(
           x: 4,
-          y: 2,
+          y: 0,
           color: 0x12abef,
           shape: CursorShape.underline,
           blink: false,
@@ -86,7 +87,8 @@ void main() {
       final output = buf.toString();
       expect(output, contains('\x1b[4 q'));
       expect(output, contains('\x1b]12;#12abef\x07'));
-      expect(output, endsWith('\x1b[3;5H'));
+      // Inline: relative to the frame's top row, never an absolute row.
+      expect(output, endsWith('\r\x1b[2A\x1b[5G'));
     });
 
     test('applies and resets terminal colors and progress', () {
@@ -175,19 +177,19 @@ void main() {
 
       renderer.render(newView('A❤️C'));
 
-      expect(buf.toString(), contains('\x1b[1;4HC'));
+      expect(buf.toString(), contains('\r\x1b[4GC'));
     });
 
     test('does not render ST-terminated OSC payloads or terminators', () {
       renderer.render(newView('A\x1b]0;hidden\x1b\\B'));
 
-      expect(buf.toString(), endsWith('\x1b[1;1HAB'));
+      expect(buf.toString(), endsWith('\rAB'));
     });
 
     test('does not render ST-terminated DCS payloads or terminators', () {
       renderer.render(newView('A\x1bP1;2|hidden\x1b\\B'));
 
-      expect(buf.toString(), endsWith('\x1b[1;1HAB'));
+      expect(buf.toString(), endsWith('\rAB'));
     });
 
     test('preserves hyperlinks and combined rich underline state', () {
@@ -225,7 +227,7 @@ void main() {
 
         buf.clear();
         renderer.render(newView('${open}coloR\x1b[0m'));
-        expect(buf.toString(), equals('\x1b[1;5H${open}R\x1b[0m'));
+        expect(buf.toString(), equals('\r\x1b[5G${open}R\x1b[0m'));
       });
     }
 
@@ -262,6 +264,60 @@ void main() {
       expect(buf.toString(), contains('\x1b[1;1Hsame'));
     });
 
+    test('shrinking then regrowing redraws previously erased grid rows', () {
+      renderer.render(newView('a\nb\nc'));
+      renderer.render(newView('a'));
+      buf.clear();
+
+      renderer.render(newView('a\nb\nc'));
+
+      expect('\r\n'.allMatches(buf.toString()), hasLength(2));
+      expect(buf.toString(), contains('b'));
+      expect(buf.toString(), contains('c'));
+    });
+
+    test('truncation drops wide edge glyphs and clears their old cells', () {
+      renderer = CellRenderer(
+        output: sink,
+        defaultAltScreen: false,
+        defaultHideCursor: false,
+        terminalColumns: () => 3,
+      );
+      renderer.render(newView('ab你'));
+      expect(buf.toString(), endsWith('ab'));
+      expect(buf.toString(), isNot(contains('你')));
+      buf.clear();
+
+      renderer.render(newView('a你'));
+      expect(buf.toString(), equals('\r\x1b[2G你'));
+      buf.clear();
+
+      renderer.render(newView('ab你'));
+      expect(buf.toString(), equals('\r\x1b[2Gb '));
+    });
+
+    test('erases only with reset SGR after colored shrinking and regrowing',
+        () {
+      renderer.render(newView('\x1b[41mred\n\x1b[44mblue'));
+      renderer.render(newView('r'));
+      renderer.render(newView('r\n\x1b[42mgreen'));
+      renderer.clearScreen();
+      renderer.render(newView('plain'));
+
+      final state = AnsiStateTracker();
+      var erases = 0;
+      for (final token in tokenizeAnsi(buf.toString())) {
+        if (token.value == '\x1b[K' || token.value == '\x1b[J') {
+          erases++;
+          expect(state.sgrOpenSequence, isEmpty);
+        }
+        if (RegExp(r'^\x1b\[[0-9;:]*m$').hasMatch(token.value)) {
+          state.accept(token.value);
+        }
+      }
+      expect(erases, greaterThanOrEqualTo(5));
+    });
+
     test('clearScreen resets grid state', () {
       renderer.render(newView('hello'));
       renderer.clearScreen();
@@ -279,7 +335,7 @@ void main() {
 
       renderer.close();
 
-      expect(buf.toString(), endsWith('\x1b[3;1H'));
+      expect(buf.toString(), endsWith('\r\x1b[2B'));
     });
 
     test('parking follows a view that shrinks', () {
@@ -289,7 +345,7 @@ void main() {
 
       renderer.close();
 
-      expect(buf.toString(), endsWith('\x1b[1;1H'));
+      expect(buf.toString(), endsWith('\r\x1b[1A'));
     });
 
     test('a trailing newline ends the last row instead of adding one', () {
@@ -298,10 +354,10 @@ void main() {
 
       renderer.close();
 
-      expect(buf.toString(), endsWith('\x1b[2;1H'));
+      expect(buf.toString(), endsWith('\x1b[?2004l\r'));
     });
 
-    test('a last line wider than the terminal parks on its wrapped end', () {
+    test('a line wider than the terminal is truncated, so it never wraps', () {
       final wrapping = CellRenderer(
         output: sink,
         defaultAltScreen: false,
@@ -309,21 +365,23 @@ void main() {
         terminalColumns: () => 10,
       );
       wrapping.render(newView('title\n${'x' * 25}'));
+      expect(buf.toString(), contains('x' * 10));
+      expect(buf.toString(), isNot(contains('x' * 11)));
       buf.clear();
 
       wrapping.close();
 
-      expect(buf.toString(), endsWith('\x1b[4;1H'));
+      expect(buf.toString(), endsWith('\x1b[?2004l\r'));
     });
 
-    test('release(reset: true) clears instead of parking', () {
+    test('release(reset: true) erases only the inline frame', () {
       renderer.render(newView('one\ntwo'));
       buf.clear();
 
       renderer.release(reset: true);
 
-      expect(buf.toString(), isNot(contains('\x1b[2;1H')));
-      expect(buf.toString(), endsWith('\x1b[H\x1b[2J'));
+      expect(buf.toString(), isNot(contains('\x1b[2J')));
+      expect(buf.toString(), endsWith('\r\x1b[1A\x1b[J'));
     });
 
     test('close does not park in the alternate screen', () {
