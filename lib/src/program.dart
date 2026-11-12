@@ -741,7 +741,8 @@ final class Program {
           _output.write(windowTitleSequence(msg.title));
           return false;
         case ClearScrollAreaMsg():
-          _output.write('\x1b[2J\x1b[H');
+          // The renderer clears once: the alternate screen, or only the
+          // inline frame on the normal screen.
           _renderer?.clearScreen();
           return true;
         case ScrollMsg():

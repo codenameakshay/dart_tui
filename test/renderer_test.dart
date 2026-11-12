@@ -47,15 +47,17 @@ void main() {
 
         setUp(() {
           buf = StringBuffer();
+          // Absolute cursor positioning is an alternate-screen behavior;
+          // inline cursor placement is covered by the inline groups below.
           renderer = cellRenderer
               ? CellRenderer(
                   output: _StringSink(buf),
-                  defaultAltScreen: false,
+                  defaultAltScreen: true,
                   defaultHideCursor: true,
                 )
               : AnsiRenderer(
                   output: _StringSink(buf),
-                  defaultAltScreen: false,
+                  defaultAltScreen: true,
                   defaultHideCursor: true,
                 );
           renderer.render(View(content: 'value', cursor: cursor));
@@ -163,11 +165,8 @@ void main() {
         for (final operation in <String, void Function(TeaRenderer)>{
           'clearScreen': (r) => r.clearScreen(),
           'scroll': (r) => r.scroll(1),
-          'insertAbove in alt screen': (r) {
-            r.setAltScreen(true);
-            r.insertAbove('log');
-          },
-          'setAltScreen': (r) => r.setAltScreen(true),
+          'insertAbove in alt screen': (r) => r.insertAbove('log'),
+          'setAltScreen': (r) => r.setAltScreen(false),
           'release': (r) => r.release(),
           'release with reset': (r) => r.release(reset: true),
         }.entries) {
@@ -183,18 +182,21 @@ void main() {
           });
         }
 
-        test('inline insertAbove invalidates only the cursor position', () {
-          renderer.insertAbove('log');
-          buf.clear();
-          renderer.render(View(content: 'value', cursor: cursor));
-          expect(buf.toString(), '\x1b[3;4H');
-          buf.clear();
-          renderer.render(View(content: 'value', cursor: cursor));
-          expect(buf.toString(), isEmpty);
-        });
-
         test('a declarative screen change restores cursor position', () {
-          renderer.render(
+          final inline = cellRenderer
+              ? CellRenderer(
+                  output: _StringSink(buf),
+                  defaultAltScreen: false,
+                  defaultHideCursor: true,
+                )
+              : AnsiRenderer(
+                  output: _StringSink(buf),
+                  defaultAltScreen: false,
+                  defaultHideCursor: true,
+                );
+          inline.render(View(content: 'value', cursor: cursor));
+          buf.clear();
+          inline.render(
             View(content: 'value', cursor: cursor, altScreen: true),
           );
           expect(buf.toString(), contains('\x1b[?1049h'));
@@ -222,7 +224,8 @@ void main() {
 
     renderer.render(newView('short'));
 
-    expect(buf.toString(), contains('\x1b[1;1H\x1b[Kshort'));
+    expect(buf.toString(), contains('\r\x1b[Kshort'));
+    expect(buf.toString(), isNot(contains(RegExp(r'\x1b\[\d+;\d+H'))));
   });
 
   test('AnsiRenderer strips controls from window titles', () {
@@ -251,10 +254,10 @@ void main() {
     );
 
     renderer.render(View(
-      content: 'value',
+      content: 'a\nb\nvalue',
       cursor: const Cursor(
         x: 4,
-        y: 2,
+        y: 0,
         color: 0x12abef,
         shape: CursorShape.underline,
         blink: false,
@@ -264,7 +267,7 @@ void main() {
     final output = buf.toString();
     expect(output, contains('\x1b[4 q'));
     expect(output, contains('\x1b]12;#12abef\x07'));
-    expect(output, endsWith('\x1b[3;5H'));
+    expect(output, endsWith('\r\x1b[2A\x1b[5G'));
   });
 
   test('AnsiRenderer updates cursor state when frame content is unchanged', () {
@@ -275,7 +278,7 @@ void main() {
       defaultHideCursor: true,
     );
     renderer.render(View(
-      content: 'value',
+      content: 'value\nmore',
       cursor: const Cursor(
         x: 0,
         y: 0,
@@ -287,7 +290,7 @@ void main() {
     buf.clear();
 
     renderer.render(View(
-      content: 'value',
+      content: 'value\nmore',
       cursor: const Cursor(
         x: 2,
         y: 1,
@@ -295,7 +298,7 @@ void main() {
       ),
     ));
 
-    expect(buf.toString(), equals('\x1b[5 q\x1b]112\x07\x1b[2;3H'));
+    expect(buf.toString(), equals('\x1b[5 q\x1b]112\x07\r\x1b[1B\x1b[3G'));
   });
 
   test('AnsiRenderer applies and resets terminal colors and progress', () {
@@ -511,7 +514,7 @@ void main() {
 
       renderer.close();
 
-      expect(buf.toString(), endsWith('\x1b[3;1H'));
+      expect(buf.toString(), endsWith('\r\x1b[2B'));
     });
 
     test('parking follows a view that shrinks', () {
@@ -521,7 +524,7 @@ void main() {
 
       renderer.close();
 
-      expect(buf.toString(), endsWith('\x1b[1;1H'));
+      expect(buf.toString(), endsWith('\r\x1b[1A'));
     });
 
     test('a trailing newline ends the last row instead of adding one', () {
@@ -530,10 +533,10 @@ void main() {
 
       renderer.close();
 
-      expect(buf.toString(), endsWith('\x1b[2;1H'));
+      expect(buf.toString(), endsWith('\r\x1b[1A'));
     });
 
-    test('a last line wider than the terminal parks on its wrapped end', () {
+    test('a line wider than the terminal is truncated, so it never wraps', () {
       final wrapping = AnsiRenderer(
         output: _StringSink(buf),
         defaultAltScreen: false,
@@ -541,21 +544,23 @@ void main() {
         terminalColumns: () => 10,
       );
       wrapping.render(newView('title\n${'x' * 25}'));
+      expect(buf.toString(), contains('x' * 10));
+      expect(buf.toString(), isNot(contains('x' * 11)));
       buf.clear();
 
       wrapping.close();
 
-      expect(buf.toString(), endsWith('\x1b[4;1H'));
+      expect(buf.toString(), endsWith('\x1b[?2004l\r'));
     });
 
-    test('release(reset: true) clears instead of parking', () {
+    test('release(reset: true) erases only the inline frame', () {
       renderer.render(newView('one\ntwo'));
       buf.clear();
 
       renderer.release(reset: true);
 
-      expect(buf.toString(), isNot(contains('\x1b[2;1H')));
-      expect(buf.toString(), endsWith('\x1b[H\x1b[2J'));
+      expect(buf.toString(), isNot(contains('\x1b[2J')));
+      expect(buf.toString(), endsWith('\r\x1b[1A\x1b[J'));
     });
 
     test('close does not park in the alternate screen', () {

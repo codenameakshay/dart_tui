@@ -512,7 +512,9 @@ void main() {
       await Program(options: [withOutput(sink), withInput(null), ...options])
           .run(_DriverModel(const []));
 
-      expect(sink.buf.toString(), endsWith('\x1b[1;1H\n'));
+      final output = sink.buf.toString();
+      expect(output, endsWith('\x1b[?2004l\r\n'));
+      expect(output, isNot(contains(RegExp(r'\x1b\[\d+;\d+H'))));
     }
   });
 
