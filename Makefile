@@ -47,7 +47,7 @@ help:
 	@echo "    make bench-hotpath           Naive Dart vs dart_tui hot-path table"
 	@echo "    make bench-startup-pty       First-visible-frame startup (PTY)"
 	@echo ""
-	@echo "  GIF recording (requires vhs + ffmpeg on PATH)"
+	@echo "  GIF recording (requires vhs + ffmpeg + ttyd on PATH)"
 	@echo "    make gifs                    Build all kernels then record all GIFs"
 	@echo "    make gif EXAMPLE=foo         Record one GIF (builds kernel first)"
 	@echo "    make tape NAME=foo           Create example/tapes/foo.tape from simple.tape"
@@ -125,13 +125,15 @@ check-gif-tools:
 		exit 1; \
 	}
 
-gifs: check-gif-tools kernels
+gifs: check-gif-tools
+	$(MAKE) kernels
 	@for tape in $(TAPES); do \
 		echo "  recording $$tape ..."; \
 		$(GIF_ENV) "$(VHS)" "$$tape" || exit 1; \
 	done
 
-gif: check-gif-tools tool/bin/$(EXAMPLE).dill
+gif: check-gif-tools
+	$(MAKE) tool/bin/$(EXAMPLE).dill
 	$(GIF_ENV) "$(VHS)" example/tapes/$(EXAMPLE).tape
 
 # Scaffold example/tapes/$(NAME).tape with simple.tape's settings.
