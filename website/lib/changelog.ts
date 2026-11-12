@@ -1,4 +1,4 @@
-import { blocksToHtml, closesFence, parseBlocks, type Block } from "./markdown.ts";
+import { blocksToHtml, parseBlocks, type Block } from "./markdown.ts";
 
 export interface ChangelogVersion {
   version: string;
@@ -14,8 +14,7 @@ export interface ChangelogOptions {
   repoUrl?: string;
 }
 
-const VERSION_HEADING = /^##\s+(\S+)(?:\s+[-–—]\s+(\d{4}-\d{2}-\d{2}))?\s*$/;
-const FENCE = /^\s*(`{3,}|~{3,})/;
+const VERSION_HEADING = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\s+[-–—]\s+(\d{4}-\d{2}-\d{2}))?$/;
 
 export function versionSlug(version: string): string {
   return version
@@ -25,42 +24,50 @@ export function versionSlug(version: string): string {
 }
 
 /**
- * Split CHANGELOG.md into versions at each top-level `## X.Y.Z - YYYY-MM-DD`
- * heading (the date is optional), ignoring headings inside code fences.
+ * Split CHANGELOG.md into versions at each top-level semantic-version heading.
  * Returns versions newest first.
  */
 export function parseChangelog(
   markdown: string,
   options: ChangelogOptions = {},
 ): ChangelogVersion[] {
-  const lines = markdown.split(/\r?\n/);
-  const sections: { version: string; date?: string; lines: string[] }[] = [];
-  let fence: string | null = null;
-
-  for (const line of lines) {
-    const f = FENCE.exec(line);
-    if (fence) {
-      if (closesFence(line, fence)) fence = null;
-    } else if (f) {
-      fence = f[1];
-    } else {
-      const heading = VERSION_HEADING.exec(line);
-      if (heading) {
-        sections.push({ version: heading[1], date: heading[2], lines: [] });
+  const sections: ChangelogVersion[] = [];
+  let current: ChangelogVersion | undefined;
+  for (const block of parseBlocks(markdown)) {
+    if (block.type === "heading" && block.level === 2) {
+      const heading = VERSION_HEADING.exec(block.text);
+      if (!heading) {
+        current?.blocks.push(block);
         continue;
       }
+      const version = block.text.replace(/\s+[-–—]\s+\d{4}-\d{2}-\d{2}$/, "");
+      current = {
+        version,
+        slug: versionSlug(version),
+        ...(heading[6] ? { date: heading[6] } : {}),
+        blocks: [],
+      };
+      sections.push(current);
+    } else if (current) {
+      current.blocks.push(block);
     }
-    sections[sections.length - 1]?.lines.push(line);
   }
 
-  return sections
-    .map((s) => ({
-      version: s.version,
-      slug: versionSlug(s.version),
-      ...(s.date ? { date: s.date } : {}),
-      blocks: resolveBlocks(parseBlocks(s.lines), options),
-    }))
-    .sort((a, b) => compareVersions(b.version, a.version));
+  const sorted = sections.sort((a, b) => compareVersions(b.version, a.version));
+  const usedSlugs = new Set<string>();
+  for (const section of sorted) {
+    const base = section.slug;
+    let candidate = base;
+    let suffix = 2;
+    while (usedSlugs.has(candidate) || usedSlugs.has(`${candidate}-title`)) {
+      candidate = `${base}-${suffix++}`;
+    }
+    section.slug = candidate;
+    usedSlugs.add(candidate);
+    usedSlugs.add(`${candidate}-title`);
+    section.blocks = resolveBlocks(section.blocks, options);
+  }
+  return sorted;
 }
 
 /** Compare semver-ish strings: core numbers, then pre-release < release, then build. */
@@ -81,7 +88,25 @@ export function compareVersions(a: string, b: string): number {
   if (pa.pre !== pb.pre) {
     if (pa.pre === null) return 1;
     if (pb.pre === null) return -1;
-    return pa.pre.localeCompare(pb.pre, "en", { numeric: true });
+    const aa = pa.pre.split(".");
+    const bb = pb.pre.split(".");
+    for (let i = 0; i < Math.min(aa.length, bb.length); i++) {
+      const an = /^\d+$/.test(aa[i]);
+      const bn = /^\d+$/.test(bb[i]);
+      if (an && bn) {
+        const left = aa[i].replace(/^0+(?=\d)/, "");
+        const right = bb[i].replace(/^0+(?=\d)/, "");
+        if (left.length !== right.length) return left.length - right.length;
+        const d = left < right ? -1 : left > right ? 1 : 0;
+        if (d) return d;
+      } else if (an !== bn) {
+        return an ? -1 : 1;
+      } else {
+        const d = aa[i] < bb[i] ? -1 : aa[i] > bb[i] ? 1 : 0;
+        if (d) return d;
+      }
+    }
+    return aa.length - bb.length;
   }
   for (let i = 0; i < Math.max(pa.build.length, pb.build.length); i++) {
     const d = (pa.build[i] || 0) - (pb.build[i] || 0);
@@ -104,6 +129,7 @@ function resolveBlocks(blocks: Block[], options: ChangelogOptions): Block[] {
       case "table":
         return { ...b, headers: b.headers.map(fix), rows: b.rows.map((r) => r.map(fix)) };
       case "code":
+      case "thematicBreak":
         return b;
     }
   });
@@ -124,7 +150,8 @@ function resolveInline(text: string, repoUrl: string): string {
       }
       if (part.startsWith("`")) return part;
       return part.replace(/\]\(([^)\s]+)\)$/, (_, href: string) => {
-        const absolute = /^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("#");
+        const absolute =
+          /^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("#") || href.startsWith("//");
         if (absolute) return `](${href})`;
         return `](${repoUrl}/blob/main/${href.replace(/^\.?\//, "")})`;
       });
@@ -139,7 +166,20 @@ export interface RssOptions {
 }
 
 function escapeXml(text: string): string {
-  return text
+  const valid = Array.from(text)
+    .map((character) => {
+      const code = character.codePointAt(0)!;
+      const isValid =
+        code === 0x9 ||
+        code === 0xa ||
+        code === 0xd ||
+        (code >= 0x20 && code <= 0xd7ff) ||
+        (code >= 0xe000 && code <= 0xfffd) ||
+        (code >= 0x10000 && code <= 0x10ffff);
+      return isValid ? character : "\uFFFD";
+    })
+    .join("");
+  return valid
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")

@@ -17,6 +17,7 @@ export type InlineToken =
 export type Block =
   | { type: "heading"; level: number; text: string }
   | { type: "paragraph"; text: string }
+  | { type: "thematicBreak" }
   | { type: "list"; items: Block[][] }
   | { type: "code"; lang: string; code: string }
   | { type: "table"; headers: string[]; rows: string[][] };
@@ -44,11 +45,14 @@ export function tokenizeInline(text: string): InlineToken[] {
       });
     } else {
       const close = token.indexOf("](");
-      tokens.push({
-        type: "link",
-        href: token.slice(close + 2, -1),
-        children: tokenizeInline(token.slice(1, close)),
-      });
+      const href = token.slice(close + 2, -1);
+      const children = tokenizeInline(token.slice(1, close));
+      const normalizedHref = href.replace(/[\u0000-\u0020]/g, "");
+      if (/^(?:javascript|vbscript|data):/i.test(normalizedHref)) {
+        tokens.push(...children);
+      } else {
+        tokens.push({ type: "link", href, children });
+      }
     }
     last = pattern.lastIndex;
   }
@@ -62,6 +66,7 @@ const FENCE_OPEN = /^(\s*)(`{3,}|~{3,})\s*([^\s`]*)/;
 const HEADING = /^(#{1,6})\s+(.*?)(?:\s+#+)?\s*$/;
 const LIST_ITEM = /^([-*])(\s+)(.*)$/;
 const TABLE_DELIMITER = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
+const THEMATIC_BREAK = /^\s*(?:(?:\*\s*){3,}|(?:-\s*){3,}|(?:_\s*){3,})$/;
 
 function isBlank(line: string): boolean {
   return line.trim() === "";
@@ -103,6 +108,7 @@ function startsBlock(lines: string[], i: number): boolean {
     FENCE_OPEN.test(line) ||
     HEADING.test(line) ||
     LIST_ITEM.test(line) ||
+    THEMATIC_BREAK.test(line) ||
     startsTable(lines, i)
   );
 }
@@ -135,6 +141,15 @@ function splitRow(line: string): string[] {
   return cells;
 }
 
+function listLineFenceMarker(line: string): string | null {
+  let content = line.trimStart();
+  let item: RegExpExecArray | null;
+  while ((item = LIST_ITEM.exec(content)) !== null) {
+    content = item[3];
+  }
+  return FENCE_OPEN.exec(content)?.[2] ?? null;
+}
+
 /** Parse block-level markdown into a flat list of blocks. */
 export function parseBlocks(source: string | string[]): Block[] {
   const lines = typeof source === "string" ? source.split(/\r?\n/) : source;
@@ -145,6 +160,12 @@ export function parseBlocks(source: string | string[]): Block[] {
     const line = lines[i];
 
     if (isBlank(line)) {
+      i++;
+      continue;
+    }
+
+    if (THEMATIC_BREAK.test(line)) {
+      blocks.push({ type: "thematicBreak" });
       i++;
       continue;
     }
@@ -220,7 +241,8 @@ function parseList(lines: string[], start: number): [Block, number] {
 
     const contentIndent = m[1].length + m[2].length;
     const itemLines = [m[3]];
-    let fenceMarker: string | null = null;
+    let fenceMarker = listLineFenceMarker(m[3]);
+    let justClosedFence = false;
     i++;
 
     while (i < lines.length) {
@@ -228,7 +250,10 @@ function parseList(lines: string[], start: number): [Block, number] {
 
       if (fenceMarker) {
         itemLines.push(dedent(line, contentIndent));
-        if (closesFence(line, fenceMarker)) fenceMarker = null;
+        if (closesFence(line, fenceMarker)) {
+          fenceMarker = null;
+          justClosedFence = true;
+        }
         i++;
         continue;
       }
@@ -246,16 +271,16 @@ function parseList(lines: string[], start: number): [Block, number] {
 
       if (indentOf(line) >= contentIndent) {
         const inner = dedent(line, contentIndent);
-        const open = FENCE_OPEN.exec(inner);
-        if (open && open[1] === "") fenceMarker = open[2];
+        fenceMarker = listLineFenceMarker(inner) ?? fenceMarker;
         itemLines.push(inner);
+        justClosedFence = false;
         i++;
         continue;
       }
 
       // Lazy continuation of the item's paragraph.
       const previous = itemLines[itemLines.length - 1];
-      if (!isBlank(previous) && !startsBlock(lines, i)) {
+      if (!justClosedFence && !isBlank(previous) && !startsBlock(lines, i)) {
         itemLines.push(line.trim());
         i++;
         continue;
@@ -268,7 +293,11 @@ function parseList(lines: string[], start: number): [Block, number] {
     // Blank lines between items do not end the list.
     let j = i;
     while (j < lines.length && isBlank(lines[j])) j++;
-    if (j < lines.length && LIST_ITEM.test(lines[j])) {
+    if (
+      j < lines.length &&
+      LIST_ITEM.test(lines[j]) &&
+      !THEMATIC_BREAK.test(lines[j])
+    ) {
       i = j;
       continue;
     }
@@ -316,6 +345,8 @@ export function blocksToHtml(blocks: Block[]): string {
           return `<h${b.level}>${inlineToHtml(b.text)}</h${b.level}>`;
         case "paragraph":
           return `<p>${inlineToHtml(b.text)}</p>`;
+        case "thematicBreak":
+          return "<hr />";
         case "list":
           return `<ul>${b.items
             .map((item) => `<li>${blocksToHtml(item)}</li>`)

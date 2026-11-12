@@ -45,6 +45,9 @@ async function renderBlock(block: Block, key: number) {
         </p>
       );
 
+    case "thematicBreak":
+      return <hr key={key} className="border-border" />;
+
     case "list": {
       const items = await Promise.all(
         block.items.map(async (item, i) => (
