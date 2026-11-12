@@ -1,6 +1,7 @@
 import 'package:characters/characters.dart';
 
 import '../ansi_state.dart';
+import '../color_detect.dart';
 import '../grapheme_width.dart';
 import '../msg.dart';
 import '../terminal_control.dart';
@@ -174,7 +175,27 @@ final class Style {
   /// Defaults to 4. Set to 0 to pass tabs through unmodified.
   final int tabWidth;
 
+  /// The colour profile for this style. When null, [Style.defaultProfile]
+  /// applies.
   final ColorProfile? profile;
+
+  /// The [ColorProfile] every style uses when its own [profile] is null.
+  ///
+  /// Outside a [Program] it is [ColorProfile.trueColor], or
+  /// [ColorProfile.noColor] when `NO_COLOR` is set (https://no-color.org).
+  /// A [Program] that writes to the real stdout sets it to
+  /// [detectColorProfile] for the run, and restores it afterwards. Scripts
+  /// can opt in to detection with `Style.defaultProfile =
+  /// detectColorProfile();`.
+  static ColorProfile defaultProfile = environmentDefaultProfile();
+
+  /// Whether the terminal background is dark, for [AdaptiveColor] in styles
+  /// with no background of their own.
+  ///
+  /// Starts from `COLORFGBG` (for example `15;0`) and is otherwise `true`. A
+  /// [Program] updates it when the terminal answers the background colour
+  /// query ([BackgroundColorMsg]), and restores it when the run ends.
+  static bool hasDarkBackground = environmentHasDarkBackground();
 
   /// Optional post-processing function applied to the final rendered string
   /// (after layout, before returning). Useful for custom transforms.
@@ -804,7 +825,7 @@ final class Style {
     AdaptiveColor? adaptive,
     required bool isBackground,
   }) {
-    final activeProfile = profile ?? ColorProfile.trueColor;
+    final activeProfile = profile ?? defaultProfile;
     if (activeProfile == ColorProfile.noColor) return null;
 
     // CompleteColor takes precedence: pick the value for this profile tier.
@@ -834,7 +855,8 @@ final class Style {
     if (adaptive != null) {
       final bgRgb = backgroundRgb ??
           (background256 != null ? _ansi256ToRgb(background256!) : null);
-      final isDark = bgRgb == null || _isDarkBackground(bgRgb);
+      final isDark =
+          bgRgb == null ? hasDarkBackground : _isDarkBackground(bgRgb);
       rgb = isDark ? adaptive.dark : adaptive.light;
     } else if (explicitRgb != null) {
       rgb = explicitRgb;

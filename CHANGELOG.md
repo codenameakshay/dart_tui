@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### Features
+
+- **Colour profile detection.** The new `detectColorProfile()` reads
+  `FORCE_COLOR`, `NO_COLOR`, `CLICOLOR_FORCE`, `TERM`, `COLORTERM`,
+  `TERM_PROGRAM` and `WT_SESSION`, after
+  [charmbracelet/colorprofile](https://github.com/charmbracelet/colorprofile).
+  A `Program` that writes to the real stdout now uses it when you do not pass
+  `withColorProfile`, and sends the result in `ColorProfileMsg`.
+- **Styles follow the profile.** The new `Style.defaultProfile` applies to every
+  `Style` without its own `profile`. Before, no style read the profile the
+  `Program` reported. Outside a `Program` it is `trueColor`, or `noColor` when
+  `NO_COLOR` is set. Scripts can opt in with
+  `Style.defaultProfile = detectColorProfile();`. `withColorProfile` now pins
+  it for the run.
+- **Light and dark follow the terminal.** `AdaptiveColor` uses the style's own
+  background, then the new `Style.hasDarkBackground`. That value starts from
+  `COLORFGBG` and is otherwise dark. A `Program` updates it from the
+  terminal's OSC 11 reply (`BackgroundColorMsg`) before the model sees the
+  message, so the next frame uses the correct variant.
+- A `Program` restores both defaults when its run ends, also when `update`
+  throws. A `Program` with a custom output sink (`withOutput`) keeps
+  `trueColor`, so test output does not change.
+- `example/color_profile.dart` shows the detected profile and background. The
+  new website guide "Colour and terminals" describes the rules.
+
 ### Fixes
 
 - **Inline programs no longer paint over shell history (#18).** Outside the

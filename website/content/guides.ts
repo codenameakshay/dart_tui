@@ -375,7 +375,115 @@ final banner = gradientBackground('  Welcome!  ', [
         md: "`CompleteColor` lets you specify one color per profile (true-color / 256 / ANSI) so output degrades gracefully on limited terminals.",
       },
     ],
-    related: ["styling", "text-and-layout"],
+    related: ["styling", "text-and-layout", "colour-and-terminals"],
+  },
+  {
+    slug: "colour-and-terminals",
+    name: "Colour and terminals",
+    category: "guides",
+    order: 6.5,
+    tagline: "Detect the colour profile and the light or dark background.",
+    description:
+      "A `Program` finds out how many colours the terminal supports and whether its background is light or dark. Every `Style` follows both, with no code in your model.",
+    gif: "color_profile.gif",
+    blocks: [
+      { type: "heading", text: "What the Program does" },
+      {
+        type: "prose",
+        md: "When a `Program` writes to the real stdout, it calls `detectColorProfile()` at startup and sets `Style.defaultProfile` for the run. Each `Style` without its own `profile` uses that value, so RGB colours step down to 256 colours, to 16 colours, or to no colour. Bold, italic and underline stay. Your model also gets the value as `ColorProfileMsg`. When the run ends, the previous value comes back, also when `update` throws or SIGTERM stops the program.",
+      },
+      { type: "heading", text: "Detection rules" },
+      {
+        type: "prose",
+        md: "The first rule that matches wins. The rules follow [charmbracelet/colorprofile](https://github.com/charmbracelet/colorprofile), plus `FORCE_COLOR` and `TERM_PROGRAM`.",
+      },
+      {
+        type: "table",
+        headers: ["Environment", "Profile"],
+        rows: [
+          ["`FORCE_COLOR=1` (or any non-zero value)", "at least `ansi`, also when output is not a terminal"],
+          ["`FORCE_COLOR=2` / `FORCE_COLOR=3`", "at least `ansi256` / `trueColor`"],
+          ["`NO_COLOR` set to any non-empty value", "`noColor`"],
+          ["`CLICOLOR_FORCE` (same levels as `FORCE_COLOR`)", "forces colour, but `NO_COLOR` wins"],
+          ["Output is not a terminal, or `TERM=dumb`", "`noColor`"],
+          ["`COLORTERM=truecolor` or `24bit`", "`trueColor`"],
+          ["kitty, Ghostty, WezTerm, Alacritty, iTerm2, VS Code, Windows Terminal (`WT_SESSION`)", "`trueColor`"],
+          ["`TERM` ending in `256color`, tmux, screen, Apple Terminal", "`ansi256`"],
+          ["Anything else", "`ansi`"],
+        ],
+      },
+      {
+        type: "callout",
+        variant: "note",
+        md: "`FORCE_COLOR` sets a minimum. `FORCE_COLOR=1` in a true-colour terminal still gives `trueColor`. `FORCE_COLOR=0` and `false` do not force anything.",
+      },
+      { type: "heading", text: "Light and dark backgrounds" },
+      {
+        type: "prose",
+        md: "`AdaptiveColor` picks its `light` or `dark` value. It uses the style's own background when the style has one. If not, it uses `Style.hasDarkBackground`. That value starts from `COLORFGBG` (for example `15;0` is dark) and is otherwise dark. The `Program` asks the terminal for its background colour at startup (OSC 11). When the reply arrives as `BackgroundColorMsg`, the `Program` updates `Style.hasDarkBackground` before your `update` sees the message, so the next frame uses the correct variant.",
+      },
+      {
+        type: "code",
+        lang: "dart",
+        code: `const accent = Style(
+  adaptiveForeground: AdaptiveColor(
+    light: RgbColor(30, 30, 160), // navy on a light terminal
+    dark: RgbColor(255, 220, 120), // gold on a dark terminal
+  ),
+);`,
+      },
+      { type: "heading", text: "Override the profile" },
+      {
+        type: "prose",
+        md: "Pin a profile for the whole run with `withColorProfile`, or for one style with `Style(profile: ...)`. A style's own profile always wins.",
+      },
+      {
+        type: "code",
+        lang: "dart",
+        code: `await Program(options: [
+  withColorProfile(ColorProfile.ansi256),
+]).run(MyModel());
+
+final plain = Style(profile: ColorProfile.noColor).bold();`,
+      },
+      {
+        type: "prose",
+        md: "Outside a `Program`, styles use `trueColor`, or `noColor` when `NO_COLOR` is set. A script that prints styled text can opt in to detection:",
+      },
+      {
+        type: "code",
+        lang: "dart",
+        code: `Style.defaultProfile = detectColorProfile();
+print(const Style().foregroundColorRgb(107, 80, 255).render('Hello'));`,
+      },
+      { type: "heading", text: "Pin a profile in tests" },
+      {
+        type: "prose",
+        md: "A `Program` that writes to a custom sink (`withOutput`) does not detect anything. It uses `trueColor`, so golden frames do not change with the machine that runs them. To test another profile, add `withColorProfile`. To test detection itself, call `detectColorProfile` with an explicit environment:",
+      },
+      {
+        type: "code",
+        lang: "dart",
+        code: `expect(
+  detectColorProfile(
+    environment: {'TERM': 'xterm-256color'},
+    isTerminal: true,
+  ),
+  ColorProfile.ansi256,
+);
+
+await Program(options: [
+  withOutput(sink),
+  withColorProfile(ColorProfile.noColor),
+]).run(MyModel());`,
+      },
+      {
+        type: "callout",
+        variant: "note",
+        md: "`Style.defaultProfile` and `Style.hasDarkBackground` are process-wide. A test that sets them must restore them, for example in `addTearDown`.",
+      },
+    ],
+    related: ["colors-and-gradients", "styling", "program-options"],
   },
   {
     slug: "text-and-layout",
