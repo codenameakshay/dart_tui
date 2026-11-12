@@ -95,6 +95,41 @@ void main() {
       expect(buf.toString(), '$prefix${cellRenderer ? cell : ansi}$suffix');
     });
 
+    for (final up in [true, false]) {
+      test(
+          '${cellRenderer ? 'CellRenderer' : 'AnsiRenderer'} scroll '
+          '${up ? 'up' : 'down'} invalidates an unchanged alternate frame', () {
+        final buf = StringBuffer();
+        final TeaRenderer renderer = cellRenderer
+            ? CellRenderer(
+                output: _StringSink(buf),
+                defaultAltScreen: true,
+                defaultHideCursor: true,
+              )
+            : AnsiRenderer(
+                output: _StringSink(buf),
+                defaultAltScreen: true,
+                defaultHideCursor: true,
+              );
+        renderer.render(newView('ab'));
+        buf.clear();
+        renderer.scroll(0, up: up);
+        renderer.scroll(-2, up: up);
+        renderer.render(newView('ab'));
+        expect(buf.toString(), isEmpty);
+
+        renderer.scroll(2, up: up);
+        expect(buf.toString(), up ? '\x1b[2S' : '\x1b[2T');
+        buf.clear();
+        renderer.render(newView('ab'));
+        expect(buf.toString(),
+            cellRenderer ? '\x1b[1;1H\x1b[K\x1b[1;1Hab' : '\x1b[1;1H\x1b[Kab');
+        buf.clear();
+        renderer.render(newView('ab'));
+        expect(buf.toString(), isEmpty);
+      });
+    }
+
     group(
       '${cellRenderer ? 'CellRenderer' : 'AnsiRenderer'} cursor caching',
       () {

@@ -81,6 +81,10 @@ void main() {
       test('shrinking erases the leftover rows once', () {
         renderer.render(newView('one\ntwo\nthree'));
         buf.clear();
+        renderer.scroll(2);
+        renderer.scroll(1, up: false);
+        expect(buf.toString(), isEmpty);
+        buf.clear();
         renderer.render(newView('one'));
         expect(buf.toString(), '\r\x1b[1A\x1b[J');
       });
@@ -205,9 +209,15 @@ void main() {
         renderer.scroll(2);
         renderer.scroll(1, up: false);
         expect(buf.toString(), isEmpty);
-        renderer.render(newView('A\nB'));
+        renderer.render(newView('a\nb'));
+        expect(buf.toString(), isEmpty);
+        renderer.render(View(
+          content: 'A\nB',
+          cursor: const Cursor(x: 1, y: 1),
+        ));
         expect(buf.toString(), isNot(contains('\x1b[3A')));
         expect(buf.toString(), contains('\r\x1b[1AA'));
+        expect(buf.toString(), endsWith('\x1b[2G'));
       });
 
       test('frame styling is reset before an erase on the next frame', () {

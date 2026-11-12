@@ -560,6 +560,39 @@ void main() {
     await runFuture.timeout(const Duration(seconds: 1));
   });
 
+  for (final cellRenderer in [false, true]) {
+    test('${cellRenderer ? 'cell' : 'ANSI'} scroll commands follow screen mode',
+        () async {
+      final sink = _StringSink();
+      final up = (await scrollUp(2)())!;
+      final down = (await scrollDown(3)())!;
+      await Program(options: [
+        withOutput(sink),
+        withInput(null),
+        if (cellRenderer) withCellRenderer(),
+      ])
+          .run(_DriverModel([
+            up,
+            down,
+            EnterAltScreenMsg(),
+            up,
+            down,
+            ExitAltScreenMsg(),
+            up,
+            down,
+          ]))
+          .timeout(const Duration(seconds: 5));
+
+      final output = sink.buf.toString();
+      expect('\x1b[2S'.allMatches(output), hasLength(1));
+      expect('\x1b[3T'.allMatches(output), hasLength(1));
+      expect(output.indexOf('\x1b[2S'),
+          greaterThan(output.indexOf('\x1b[?1049h')));
+      expect(
+          output.indexOf('\x1b[3T'), lessThan(output.indexOf('\x1b[?1049l')));
+    });
+  }
+
   test('applyMsg drives the terminal-control switch + renderer methods',
       () async {
     final sink = _StringSink();

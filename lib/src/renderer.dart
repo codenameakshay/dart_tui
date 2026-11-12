@@ -29,8 +29,8 @@ abstract interface class TeaRenderer {
   /// Imperatively hide or show the cursor.
   void setCursorVisibility(bool visible);
 
-  /// Emit ANSI scroll sequences: positive [n] scrolls up, negative scrolls down.
-  /// Only in the alternate screen; inline frames ignore it.
+  /// Scroll [n] lines up, or down when [up] is false.
+  /// Non-positive counts and calls outside the alternate screen do nothing.
   void scroll(int n, {bool up = true});
 }
 
