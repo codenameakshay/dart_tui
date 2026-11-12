@@ -21,10 +21,13 @@ const _lightFg = '\x1b[38;2;0;0;0m';
 const _darkFg = '\x1b[38;2;255;255;255m';
 
 void main() {
-  // Every test leaves the process-wide defaults as it found them.
+  // Every test starts from true colour on a dark terminal, whatever the
+  // shell's NO_COLOR or COLORFGBG, and leaves the defaults as it found them.
   setUp(() {
     final profile = Style.defaultProfile;
     final dark = Style.hasDarkBackground;
+    Style.defaultProfile = ColorProfile.trueColor;
+    Style.hasDarkBackground = true;
     addTearDown(() {
       Style.defaultProfile = profile;
       Style.hasDarkBackground = dark;
@@ -242,6 +245,37 @@ void main() {
     });
   });
 
+  group('additional environment cases', () {
+    for (final term in ['foot', 'foot-extra', 'contour']) {
+      test('$term supports true colour', () {
+        expect(
+          detectColorProfile(environment: {'TERM': term}, isTerminal: true),
+          _trueColor,
+        );
+      });
+    }
+    for (final term in ['tmux-custom', 'screen-custom']) {
+      test('$term supports 256 colours', () {
+        expect(
+          detectColorProfile(environment: {'TERM': term}, isTerminal: true),
+          _ansi256,
+        );
+      });
+    }
+    for (var background = 0; background < 16; background++) {
+      test('COLORFGBG palette index $background', () {
+        expect(darkBackgroundFromColorFgBg('15;$background'),
+            background <= 6 || background == 8);
+      });
+    }
+    test('COLORFGBG whitespace and malformed values', () {
+      expect(darkBackgroundFromColorFgBg('15; 7 '), isFalse);
+      for (final value in ['15;', '15;-1', '15;16', '15;unknown']) {
+        expect(darkBackgroundFromColorFgBg(value), isNull);
+      }
+    });
+  });
+
   group('Style defaults', () {
     test('Style.defaultProfile applies only to styles without a profile', () {
       Style.defaultProfile = _noColor;
@@ -274,7 +308,125 @@ void main() {
     });
   });
 
+  group('CompleteColor adaptive contrast', () {
+    for (final (profile, foreground) in [
+      (_trueColor, _darkFg),
+      (_ansi256, '\x1b[38;5;15m'),
+      (_ansi, '\x1b[37m'),
+    ]) {
+      for (final rawBackground in [null, const RgbColor(255, 255, 255)]) {
+        test('$profile complete background wins with raw $rawBackground', () {
+          Style.hasDarkBackground = false;
+          final style = _adaptive.copyWith(
+            profile: profile,
+            backgroundRgb: rawBackground,
+            backgroundComplete: const CompleteColor(
+              trueColor: RgbColor(0, 0, 0),
+              ansi256: 0,
+              ansi: 0,
+            ),
+          );
+          expect(style.render('x'), contains(foreground));
+        });
+      }
+    }
+  });
+
   group('Program', () {
+    test('a synthetic background reply preserves light COLORFGBG', () async {
+      Style.hasDarkBackground = true;
+      final (sink, text) = _sink();
+      final model = _BackgroundRequestModel();
+      await Program(options: [
+        withInput(null),
+        withOutput(sink),
+        withoutSignalHandler(),
+        withEnvironment({'COLORFGBG': '0;15'}),
+      ]).run(model);
+      expect(model.reply, 0x000000);
+      expect(model.darkInUpdate, isFalse);
+      expect(await text(), contains('\x1b]11;?\x07'));
+      expect(Style.hasDarkBackground, isTrue);
+    });
+
+    for (final reuse in [false, true]) {
+      test(
+          'kill then immediate ${reuse ? 'reuse' : 'next Program'} '
+          'restores defaults', () async {
+        Style.defaultProfile = _ansi256;
+        Style.hasDarkBackground = true;
+        final (sink, text) = _sink();
+        Program makeProgram() => Program(options: [
+              withInput(null),
+              withOutput(sink),
+              withoutSignalHandler(),
+              withColorProfile(_ansi),
+              withEnvironment({'COLORFGBG': '0;15'}),
+            ]);
+        final first = makeProgram();
+        final firstModel = _WaitingProfileModel();
+        final firstRun = first.run(firstModel);
+        await firstModel.ready.future;
+        first.kill();
+        final second = reuse ? first : makeProgram();
+        final secondModel = _WaitingProfileModel();
+        final secondRun = second.run(secondModel);
+        try {
+          await secondModel.ready.future;
+          await firstRun;
+          expect(Style.defaultProfile, _ansi);
+          expect(Style.hasDarkBackground, isFalse);
+        } finally {
+          second.quit();
+          await secondRun;
+          await text();
+        }
+        expect(Style.defaultProfile, _ansi256);
+        expect(Style.hasDarkBackground, isTrue);
+      });
+    }
+
+    test('a Program can run twice after normal completion', () async {
+      Style.defaultProfile = _ansi;
+      Style.hasDarkBackground = true;
+      final (sink, text) = _sink();
+      final program = Program(options: [
+        withInput(null),
+        withOutput(sink),
+        withoutSignalHandler(),
+        withColorProfile(_ansi256),
+        withEnvironment({'COLORFGBG': '0;15'}),
+      ]);
+      for (var run = 0; run < 2; run++) {
+        final model = _ProbeModel(_adaptive);
+        await program.run(model);
+        expect(model.profiles, [_ansi256]);
+        expect(model.darkDuringView, everyElement(isFalse));
+        expect(Style.defaultProfile, _ansi);
+        expect(Style.hasDarkBackground, isTrue);
+      }
+      await text();
+    });
+
+    test('defaults are restored when init throws', () async {
+      Style.defaultProfile = _ansi;
+      Style.hasDarkBackground = true;
+      final (sink, text) = _sink();
+      await expectLater(
+        Program(options: [
+          withInput(null),
+          withOutput(sink),
+          withoutSignalHandler(),
+          withColorProfile(_noColor),
+          withEnvironment({'COLORFGBG': '0;15'}),
+        ]).run(_ThrowingInitModel()),
+        throwsA(isA<StateError>()),
+      );
+      expect(Style.defaultProfile, _ansi);
+      expect(Style.hasDarkBackground, isTrue);
+      await text();
+    });
+
     test('detects NO_COLOR on stdout: no colour, bold and underline stay',
         () async {
       final fake = _FakeStdout();
@@ -371,6 +523,7 @@ void main() {
         withInput(null),
         withOutput(sink),
         withoutSignalHandler(),
+        withEnvironment(const {}),
       ]).run(model);
       expect(model.darkInUpdate, isFalse);
       expect(model.frames.first, contains(_darkFg));
@@ -503,4 +656,49 @@ final class _FakeStdout implements Stdout {
   Future<void> get done async {}
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _BackgroundRequestModel extends Model {
+  int? reply;
+  bool? darkInUpdate;
+
+  @override
+  Cmd? init() => requestBackgroundColor;
+
+  @override
+  (Model, Cmd?) update(Msg msg) {
+    if (msg is BackgroundColorMsg) {
+      reply = msg.rgb;
+      darkInUpdate = Style.hasDarkBackground;
+      return (this, () => QuitMsg());
+    }
+    return (this, null);
+  }
+
+  @override
+  View view() => newView(_adaptive.render('x'));
+}
+
+final class _WaitingProfileModel extends Model {
+  final ready = Completer<void>();
+
+  @override
+  (Model, Cmd?) update(Msg msg) {
+    if (msg is ColorProfileMsg) ready.complete();
+    return (this, null);
+  }
+
+  @override
+  View view() => newView(_adaptive.render('x'));
+}
+
+final class _ThrowingInitModel extends Model {
+  @override
+  Cmd? init() => throw StateError('init failed');
+
+  @override
+  (Model, Cmd?) update(Msg msg) => (this, null);
+
+  @override
+  View view() => newView('x');
 }

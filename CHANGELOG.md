@@ -29,6 +29,8 @@
 
 ### Fixes
 
+- `AdaptiveColor` foregrounds now use a `CompleteColor` background
+  (`backgroundComplete`) to pick light or dark. Before, they ignored it.
 - **Inline programs no longer paint over shell history (#18).** Outside the
   alternate screen, both renderers now draw the view where the cursor is and
   move only relative to the view's top row. They send no absolute row moves

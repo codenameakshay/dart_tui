@@ -407,6 +407,7 @@ final class Program {
   Model? _runningModel;
   final _msgs = StreamController<Msg>.broadcast(sync: true);
   bool _running = false;
+  void Function()? _restoreStyleDefaults;
   bool _killed = false;
   Completer<void>? _finished;
   Completer<void>? _activityWake;
@@ -543,6 +544,7 @@ final class Program {
     bench('start');
 
     final queue = Queue<Msg>();
+    final syntheticBackgroundReplies = Set<BackgroundColorMsg>.identity();
 
     void enqueue(Msg msg) {
       queue.add(msg);
@@ -670,6 +672,7 @@ final class Program {
     // Returns true when the view may have changed and a re-render is needed.
     // Does NOT call render() — the event loop renders once per drained batch.
     Future<bool> applyMsg(Msg rawMsg) async {
+      final syntheticBackground = syntheticBackgroundReplies.remove(rawMsg);
       var msg = rawMsg;
       final model = runModel;
       if (_filter != null) {
@@ -708,7 +711,11 @@ final class Program {
           return false;
         case RequestBackgroundColorMsg():
           _output.write('\x1b]11;?\x07');
-          if (_disableInput) enqueue(BackgroundColorMsg(0x000000));
+          if (_disableInput) {
+            final reply = BackgroundColorMsg(0x000000);
+            syntheticBackgroundReplies.add(reply);
+            enqueue(reply);
+          }
           return false;
         case RequestCursorColorMsg():
           _output.write('\x1b]12;?\x07');
@@ -878,7 +885,8 @@ final class Program {
         }
       }
       // The view that answers this message already follows the terminal.
-      if (msg is BackgroundColorMsg) {
+      if (msg is BackgroundColorMsg &&
+          (!syntheticBackground || !identical(msg, rawMsg))) {
         Style.hasDarkBackground = isDarkRgb(msg.rgb);
       }
       final (nextModel, cmd) = model.update(msg);
@@ -895,6 +903,16 @@ final class Program {
     // it ends.
     final previousProfile = Style.defaultProfile;
     final previousDarkBackground = Style.hasDarkBackground;
+    var defaultsRestored = false;
+    void restoreStyleDefaults() {
+      if (defaultsRestored) return;
+      defaultsRestored = true;
+      Style.defaultProfile = previousProfile;
+      Style.hasDarkBackground = previousDarkBackground;
+      _restoreStyleDefaults = null;
+    }
+
+    _restoreStyleDefaults = restoreStyleDefaults;
     try {
       final profile = _profile ??
           (identical(_output, stdout)
@@ -1059,8 +1077,7 @@ final class Program {
         }
       }
     } finally {
-      Style.defaultProfile = previousProfile;
-      Style.hasDarkBackground = previousDarkBackground;
+      restoreStyleDefaults();
       if (runId == _runs) _shutdown();
       for (final timer in commandTimers) {
         timer.cancel();
@@ -1083,6 +1100,7 @@ final class Program {
 
   void _shutdown() {
     if (!_running && (_finished?.isCompleted ?? true)) return;
+    _restoreStyleDefaults?.call();
     _running = false;
     final activityWake = _activityWake;
     _activityWake = null;

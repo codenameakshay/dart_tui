@@ -853,7 +853,17 @@ final class Style {
     int? idx256;
 
     if (adaptive != null) {
-      final bgRgb = backgroundRgb ??
+      final completeBackground = backgroundComplete;
+      final completeIndex = activeProfile == ColorProfile.ansi
+          ? completeBackground?.ansi
+          : completeBackground?.ansi256;
+      final completeRgb = activeProfile == ColorProfile.trueColor
+          ? completeBackground?.trueColor
+          : completeIndex == null
+              ? null
+              : _ansi256ToRgb(completeIndex);
+      final bgRgb = completeRgb ??
+          backgroundRgb ??
           (background256 != null ? _ansi256ToRgb(background256!) : null);
       final isDark =
           bgRgb == null ? hasDarkBackground : _isDarkBackground(bgRgb);
