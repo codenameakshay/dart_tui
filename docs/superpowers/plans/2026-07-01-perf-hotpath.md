@@ -36,7 +36,7 @@ The regex `stripAnsi` runs on every `_visibleWidth` call, and `_visibleWidth` is
 - Modify: `lib/src/bubbles/style.dart:1026` (`stripAnsi`), `:1087` (`_visibleWidth`), `:1132` (`_truncateVisible`), `:1060` & `:1077` (`truncateLeft`)
 - Test: `test/perf_hotpath_test.dart`
 
-- [ ] **Step 1: Write the behavior-pinning + correctness test**
+- [x] **Step 1: Write the behavior-pinning + correctness test**
 
 Create `test/perf_hotpath_test.dart`:
 
@@ -76,12 +76,12 @@ void main() {
 }
 ```
 
-- [ ] **Step 2: Run the test against current code to establish the baseline**
+- [x] **Step 2: Run the test against current code to establish the baseline**
 
 Run: `dart test test/perf_hotpath_test.dart -n "style width"`
 Expected: PASS (these assertions hold on the current implementation — they exist to catch any regression the refactor introduces).
 
-- [ ] **Step 3: Apply the fast-path + helper**
+- [x] **Step 3: Apply the fast-path + helper**
 
 In `lib/src/bubbles/style.dart`, replace `stripAnsi`:
 
@@ -118,12 +118,12 @@ In `truncateLeft`, change line 1060 (`consumed += _visibleWidth(char);`) and lin
     final w = _graphemeWidth(char);
 ```
 
-- [ ] **Step 4: Run tests + analyze**
+- [x] **Step 4: Run tests + analyze**
 
 Run: `dart test test/perf_hotpath_test.dart -n "style width" && dart test test/style_test.dart test/style_properties_test.dart test/style_wordwrap_test.dart && dart analyze lib/src/bubbles/style.dart`
 Expected: all PASS, no analyzer issues.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/src/bubbles/style.dart test/perf_hotpath_test.dart
@@ -140,7 +140,7 @@ Currently every scroll rebuilds the model through the public constructor, which 
 - Modify: `lib/src/bubbles/viewport.dart` (add `_withWrapped` ctor; `_clamp`, xOffset path, `_computeWrapped`)
 - Test: `test/perf_hotpath_test.dart`
 
-- [ ] **Step 1: Write the behavior-pinning test**
+- [x] **Step 1: Write the behavior-pinning test**
 
 Append to `test/perf_hotpath_test.dart` inside `main()`:
 
@@ -170,12 +170,12 @@ Append to `test/perf_hotpath_test.dart` inside `main()`:
   });
 ```
 
-- [ ] **Step 2: Run to establish baseline**
+- [x] **Step 2: Run to establish baseline**
 
 Run: `dart test test/perf_hotpath_test.dart -n "viewport wrap"`
 Expected: PASS on current code (behavior must be preserved by the refactor).
 
-- [ ] **Step 3: Add the private ctor and thread memoized lines through scroll**
+- [x] **Step 3: Add the private ctor and thread memoized lines through scroll**
 
 In `lib/src/bubbles/viewport.dart`, add a private constructor immediately after the public constructor (after line 16):
 
@@ -254,12 +254,12 @@ Fast-path the per-line ANSI strip in `_computeWrapped` (lines 33-34):
 
 `setContent` (line 109-110) already routes through `_rebuild` → public constructor, which correctly re-wraps. Leave it as-is. `_rebuild` remains for `setContent`; only the scroll/xOffset paths now bypass it.
 
-- [ ] **Step 4: Run tests + analyze**
+- [x] **Step 4: Run tests + analyze**
 
 Run: `dart test test/perf_hotpath_test.dart -n "viewport wrap" && dart test test/viewport_test.dart && dart analyze lib/src/bubbles/viewport.dart`
 Expected: all PASS, no analyzer issues.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/src/bubbles/viewport.dart test/perf_hotpath_test.dart
@@ -276,7 +276,7 @@ git commit -m "perf(viewport): reuse wrapped lines across scroll; fast-path ANSI
 - Modify: `lib/src/renderer.dart:303-313` (add `_lastContent` field + guard)
 - Test: `test/perf_hotpath_test.dart`
 
-- [ ] **Step 1: Write the test (uses a StringBuffer-backed sink like the existing renderer tests)**
+- [x] **Step 1: Write the test (uses a StringBuffer-backed sink like the existing renderer tests)**
 
 Append to `test/perf_hotpath_test.dart`. Add these imports at the top of the file:
 
@@ -350,12 +350,12 @@ void rendererTests() {
 
 Call `rendererTests();` at the end of `main()`.
 
-- [ ] **Step 2: Run — expect PASS on current code**
+- [x] **Step 2: Run — expect PASS on current code**
 
 Run: `dart test test/perf_hotpath_test.dart -n "CellRenderer identical"`
 Expected: PASS (the cell diff already emits nothing for identical grids; this test pins that the CPU-saving guard we add does not change output).
 
-- [ ] **Step 3: Add the guard**
+- [x] **Step 3: Add the guard**
 
 In `lib/src/renderer.dart`, add a field to `CellRenderer` next to `_lastGrid` (line 301):
 
@@ -390,12 +390,12 @@ Invalidate `_lastContent` everywhere `_lastGrid` is set to `null` (in `clearScre
     _lastContent = null;
 ```
 
-- [ ] **Step 4: Run tests + analyze**
+- [x] **Step 4: Run tests + analyze**
 
 Run: `dart test test/perf_hotpath_test.dart -n "CellRenderer" && dart test test/cell_renderer_test.dart && dart analyze lib/src/renderer.dart`
 Expected: all PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/src/renderer.dart test/perf_hotpath_test.dart
@@ -412,7 +412,7 @@ git commit -m "perf(renderer): skip CellRenderer rebuild+diff on identical frame
 - Modify: `lib/src/renderer.dart:80-108` (add `_lastContent`, early-return before split, drop copy)
 - Test: `test/perf_hotpath_test.dart`
 
-- [ ] **Step 1: Extend the renderer test group**
+- [x] **Step 1: Extend the renderer test group**
 
 Append inside `rendererTests()`:
 
@@ -446,12 +446,12 @@ Append inside `rendererTests()`:
   });
 ```
 
-- [ ] **Step 2: Run — expect PASS**
+- [x] **Step 2: Run — expect PASS**
 
 Run: `dart test test/perf_hotpath_test.dart -n "AnsiRenderer identical"`
 Expected: PASS (AnsiRenderer already short-circuits identical frames via `_linesEqual`; this pins that behavior before the refactor).
 
-- [ ] **Step 3: Add `_lastContent` guard + drop the copy**
+- [x] **Step 3: Add `_lastContent` guard + drop the copy**
 
 In `AnsiRenderer`, add next to `_lastLines` (line 76):
 
@@ -484,12 +484,12 @@ In `clearScreen` and `release`, where `_lastLines = const <String>[];` appears, 
 
 (and in `setAltScreen`/`scroll`/`insertAbove` where `_hasRenderedFrame = false;` is set, `_lastContent` staleness is harmless because the guard also checks `_hasRenderedFrame`; leaving it is safe.)
 
-- [ ] **Step 4: Run tests + analyze**
+- [x] **Step 4: Run tests + analyze**
 
 Run: `dart test test/perf_hotpath_test.dart -n "AnsiRenderer" && dart test test/renderer_test.dart test/renderer_sync_test.dart && dart analyze lib/src/renderer.dart`
 Expected: all PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/src/renderer.dart test/perf_hotpath_test.dart
@@ -506,7 +506,7 @@ git commit -m "perf(renderer): guard AnsiRenderer on raw content; drop redundant
 - Modify: `lib/src/bubbles/list.dart:179-185`
 - Test: `test/perf_hotpath_test.dart`
 
-- [ ] **Step 1: Write the memoization test (genuine red→green)**
+- [x] **Step 1: Write the memoization test (genuine red→green)**
 
 Append to `main()` in `test/perf_hotpath_test.dart`:
 
@@ -538,12 +538,12 @@ Append to `main()` in `test/perf_hotpath_test.dart`:
   });
 ```
 
-- [ ] **Step 2: Run — expect the identity test to FAIL**
+- [x] **Step 2: Run — expect the identity test to FAIL**
 
 Run: `dart test test/perf_hotpath_test.dart -n "list filter"`
 Expected: `filteredItems returns the identical cached list` FAILS (getter currently returns a new list each call); the results test PASSES.
 
-- [ ] **Step 3: Convert the getter to a memoized `late final` field**
+- [x] **Step 3: Convert the getter to a memoized `late final` field**
 
 In `lib/src/bubbles/list.dart`, replace the `filteredItems` getter (lines 178-185):
 
@@ -562,12 +562,12 @@ In `lib/src/bubbles/list.dart`, replace the `filteredItems` getter (lines 178-18
   }
 ```
 
-- [ ] **Step 4: Run — both pass now**
+- [x] **Step 4: Run — both pass now**
 
 Run: `dart test test/perf_hotpath_test.dart -n "list filter" && dart test test/list_model_test.dart && dart analyze lib/src/bubbles/list.dart`
 Expected: all PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/src/bubbles/list.dart test/perf_hotpath_test.dart
@@ -584,7 +584,7 @@ git commit -m "perf(list): memoize filteredItems as late final"
 - Modify: `lib/src/bubbles/tree.dart:114-122` (add `_withFlat` ctor), `:251-263` (`_copyWith`)
 - Test: `test/perf_hotpath_test.dart`
 
-- [ ] **Step 1: Write the behavior test**
+- [x] **Step 1: Write the behavior test**
 
 Append to `main()`:
 
@@ -632,12 +632,12 @@ Use this corrected first test body:
     });
 ```
 
-- [ ] **Step 2: Run — expect PASS on current code**
+- [x] **Step 2: Run — expect PASS on current code**
 
 Run: `dart test test/perf_hotpath_test.dart -n "tree flatten"`
 Expected: PASS (behavior baseline).
 
-- [ ] **Step 3: Add `_withFlat` and reuse it in `_copyWith`**
+- [x] **Step 3: Add `_withFlat` and reuse it in `_copyWith`**
 
 In `lib/src/bubbles/tree.dart`, add a private constructor after the public one (after line 122):
 
@@ -684,12 +684,12 @@ Replace `_copyWith` (lines 251-263) so an unchanged root reuses `_flat`:
   }
 ```
 
-- [ ] **Step 4: Run tests + analyze**
+- [x] **Step 4: Run tests + analyze**
 
 Run: `dart test test/perf_hotpath_test.dart -n "tree flatten" && dart test test/tree_test.dart && dart analyze lib/src/bubbles/tree.dart`
 Expected: all PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/src/bubbles/tree.dart test/perf_hotpath_test.dart
@@ -706,12 +706,12 @@ git commit -m "perf(tree): reuse flattened node list on cursor-only copyWith"
 - Modify: `lib/src/program.dart:268-282`
 - Test: covered by existing `test/program_options_test.dart` (no behavior change); no new assertion needed, but verify the suite still passes.
 
-- [ ] **Step 1: Confirm the existing program tests pass (baseline)**
+- [x] **Step 1: Confirm the existing program tests pass (baseline)**
 
 Run: `dart test test/program_options_test.dart test/program_requests_test.dart`
 Expected: PASS.
 
-- [ ] **Step 2: Precompute the budget and switch to a Stopwatch**
+- [x] **Step 2: Precompute the budget and switch to a Stopwatch**
 
 In `lib/src/program.dart`, inside `_runCore`, just before the `render` closure (before line 268 `var lastRenderMicros = 0;`), add:
 
@@ -739,12 +739,12 @@ Replace the `render` closure (lines 268-282):
     }
 ```
 
-- [ ] **Step 3: Run the program suite + analyze**
+- [x] **Step 3: Run the program suite + analyze**
 
 Run: `dart test test/program_options_test.dart test/program_requests_test.dart && dart analyze lib/src/program.dart`
 Expected: all PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add lib/src/program.dart
@@ -755,17 +755,17 @@ git commit -m "perf(program): precompute frame budget, use monotonic Stopwatch i
 
 ### Task 8: Full-suite verification
 
-- [ ] **Step 1: Run the entire suite, analyzer, and formatter**
+- [x] **Step 1: Run the entire suite, analyzer, and formatter**
 
 Run: `dart analyze && dart format --output=none --set-exit-if-changed . && dart test`
 Expected: analyzer clean, formatter reports no changes, all tests PASS (existing count + the new `perf_hotpath_test.dart` cases).
 
-- [ ] **Step 2: Run the PTY smoke test to confirm interactive examples still render**
+- [x] **Step 2: Run the PTY smoke test to confirm interactive examples still render**
 
 Run: `python3 tool/pty_examples_smoke.py`
 Expected: PASS (exit 0).
 
-- [ ] **Step 3: Commit any formatting fixups if needed**
+- [x] **Step 3: Commit any formatting fixups if needed**
 
 ```bash
 git add -A

@@ -199,14 +199,14 @@ return newView(canvas.render());`,
         code: `# JIT (source)
 dart run example/showcase.dart
 
-# Or the pre-built kernel snapshot (~2× faster startup)
+# Or the pre-built kernel snapshot (~3× faster startup)
 make kernel EXAMPLE=showcase && dart run tool/bin/showcase.dill`,
       },
     ],
     blocks: [
       {
         type: "prose",
-        md: "See also `example/all_features.dart` for a component-integration demo, and the [Examples](/guides/examples) guide for the full catalogue of 60+ runnable programs.",
+        md: "See also `example/all_features.dart` for a component-integration demo, and the [Examples](/guides/examples) guide for the full catalogue of 60 runnable programs.",
       },
     ],
     related: ["canvas", "styling"],
