@@ -19,9 +19,15 @@ final class ResumeMsg extends Msg {}
 
 /// Tick signal for timers/animation.
 final class TickMsg extends Msg {
-  TickMsg(this.when, {this.id});
+  TickMsg(this.when, {this.id, this.tag = 0});
   final DateTime when;
   final Object? id;
+
+  /// Chain counter for models that run their own tick loop, such as
+  /// `SpinnerModel` with an id. `0` means untagged. A model drops a tagged
+  /// tick whose tag is not its current one, so a second chain cannot double
+  /// its speed.
+  final int tag;
 }
 
 /// Window resize event.

@@ -47,16 +47,22 @@ Future<String?> filter(
 /// its result (or rethrowing its error). The spinner is torn down as soon as
 /// [task] settles.
 ///
+/// Pass a preset such as [Spinner.moon] as [spinner] to change the frames and
+/// speed. The default is the [Spinner.miniDot] frames every 80 ms.
+///
 /// In plain mode (see [withPlainMode]) it writes `label…` when it starts,
 /// then `✓ label` or `✗ label: error` when [task] settles.
 Future<T> spin<T>(
   Future<T> task, {
   String label = 'Loading…',
+  Spinner? spinner,
   List<ProgramOption> options = const [],
 }) async {
   final program = Program(
     options: [
-      withTickInterval(const Duration(milliseconds: 80)),
+      withTickInterval(
+        spinner?.interval ?? const Duration(milliseconds: 80),
+      ),
       ...options,
     ],
   );
@@ -73,7 +79,7 @@ Future<T> spin<T>(
       rethrow;
     }
   }
-  final run = program.run(_SpinModel(SpinnerModel(), label));
+  final run = program.run(_SpinModel(SpinnerModel(spinner: spinner), label));
 
   T? value;
   Object? error;
