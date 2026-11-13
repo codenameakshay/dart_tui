@@ -219,10 +219,9 @@ void main() {
   });
 
   group('environment defaults', () {
-    test('detectColorProfile respects an IOOverrides terminal stdout',
-        () async {
+    test('detectColorProfile respects an IOOverrides terminal stdout', () {
       final fake = _FakeStdout(terminal: true);
-      await IOOverrides.runZoned(() {
+      IOOverrides.runZoned(() {
         expect(
           detectColorProfile(environment: {'TERM': 'xterm-256color'}),
           _ansi256,
@@ -230,10 +229,9 @@ void main() {
       }, stdout: () => fake);
     });
 
-    test('detectColorProfile respects a non-terminal IOOverrides stdout',
-        () async {
+    test('detectColorProfile respects a non-terminal IOOverrides stdout', () {
       final fake = _FakeStdout();
-      await IOOverrides.runZoned(() {
+      IOOverrides.runZoned(() {
         expect(
           detectColorProfile(environment: {'TERM': 'xterm-256color'}),
           _noColor,
