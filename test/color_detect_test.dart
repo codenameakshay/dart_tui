@@ -219,6 +219,28 @@ void main() {
   });
 
   group('environment defaults', () {
+    test('detectColorProfile respects an IOOverrides terminal stdout',
+        () async {
+      final fake = _FakeStdout(terminal: true);
+      await IOOverrides.runZoned(() {
+        expect(
+          detectColorProfile(environment: {'TERM': 'xterm-256color'}),
+          _ansi256,
+        );
+      }, stdout: () => fake);
+    });
+
+    test('detectColorProfile respects a non-terminal IOOverrides stdout',
+        () async {
+      final fake = _FakeStdout();
+      await IOOverrides.runZoned(() {
+        expect(
+          detectColorProfile(environment: {'TERM': 'xterm-256color'}),
+          _noColor,
+        );
+      }, stdout: () => fake);
+    });
+
     test('profile is true colour unless NO_COLOR asks for none', () {
       expect(environmentDefaultProfile({}), _trueColor);
       expect(environmentDefaultProfile({'TERM': 'dumb'}), _trueColor);
@@ -716,6 +738,21 @@ void main() {
       expect(fake.text, contains('\x1b[38;5;'));
     });
 
+    test('Program respects terminal status from IOOverrides stdout', () async {
+      final fake = _FakeStdout(terminal: true);
+      final model = _ProbeModel(const Style().foregroundColorRgb(255, 0, 0));
+      await IOOverrides.runZoned(
+        () => Program(options: [
+          withInput(null),
+          withoutSignalHandler(),
+          withEnvironment({'TERM': 'xterm-256color'}),
+        ]).run(model),
+        stdout: () => fake,
+      );
+      expect(model.profiles, [_ansi256]);
+      expect(fake.text, contains('\x1b[38;5;'));
+    });
+
     test('a custom sink keeps true colour, even with NO_COLOR', () async {
       final (sink, text) = _sink();
       final model = _ProbeModel(const Style().foregroundColorRgb(255, 0, 0));
@@ -879,13 +916,20 @@ final class _BackgroundModel extends Model {
 
 /// Stands in for the process stdout, so Program takes its detection path.
 final class _FakeStdout implements Stdout {
+  _FakeStdout({this.terminal = false});
+
+  final bool terminal;
   final _buffer = StringBuffer();
   String get text => _buffer.toString();
 
   @override
-  bool get hasTerminal => false;
+  bool get hasTerminal => terminal;
   @override
   bool get supportsAnsiEscapes => true;
+  @override
+  int get terminalColumns => 80;
+  @override
+  int get terminalLines => 24;
   @override
   Encoding encoding = utf8;
   @override

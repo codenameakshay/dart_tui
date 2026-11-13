@@ -1,3 +1,4 @@
+import 'dart:ffi';
 import 'dart:io';
 
 import 'msg.dart';
@@ -49,8 +50,22 @@ ColorProfile detectColorProfile({
 /// Whether stdout is a terminal.
 ///
 /// `stdout.hasTerminal` is false for a terminal whose window size is 0×0,
-/// such as a new pseudo-terminal, so this checks the file type instead.
-bool stdoutIsTerminal() => stdioType(stdout) == StdioType.terminal;
+/// such as a new pseudo-terminal. On Linux and macOS, native stdout is also
+/// checked with `isatty`, which ignores size and rejects non-TTY devices.
+bool stdoutIsTerminal() {
+  final output = stdout;
+  if (output.hasTerminal) return true;
+  if (!identical(output, _NativeIO().stdout) ||
+      !(Platform.isLinux || Platform.isMacOS)) {
+    return false;
+  }
+  return DynamicLibrary.process()
+          .lookupFunction<Int32 Function(Int32), int Function(int)>(
+              'isatty')(1) ==
+      1;
+}
+
+final class _NativeIO extends IOOverrides {}
 
 /// Whether output cannot take escape codes: it is not a terminal, or
 /// `TERM=dumb`. Colour detection and plain mode share this rule.
