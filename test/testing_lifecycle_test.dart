@@ -130,6 +130,16 @@ void main() {
     expect(Style.hasDarkBackground, isFalse);
   });
 
+  test('dispose also stops programs the body starts later', () async {
+    final t = TuiTester.run(() async => [
+          await promptSelect(['a', 'b']),
+          await promptSelect(['c', 'd']),
+        ]);
+    await t.dispose();
+    expect(t.isRunning, isFalse);
+    expect((await t.done(timeout: Duration.zero)).value, [null, null]);
+  });
+
   for (final phase in ['init', 'view', 'update']) {
     test('model $phase errors reach done and waitFor and allow dispose',
         () async {

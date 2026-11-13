@@ -210,6 +210,7 @@ final class TuiTester {
   late final ColorProfile _savedProfile;
   late final bool _savedDark;
   bool _restored = false;
+  bool _disposed = false;
   bool _running = true;
   Program? _program;
   bool _programRunning = false;
@@ -372,8 +373,10 @@ final class TuiTester {
   /// Stops the running program, waits for the run to end, and restores the
   /// [Style] defaults. Safe to call more than once; never throws.
   ///
-  /// A body that goes on to start another program is not stopped again.
+  /// A program the body starts after this is stopped as soon as it starts,
+  /// so a prompt helper returns null and the body can finish.
   Future<void> dispose() async {
+    _disposed = true;
     if (_programRunning) _program?.kill();
     try {
       await _run.timeout(const Duration(seconds: 2));
@@ -396,6 +399,9 @@ final class _Hook implements ProgramTestHook {
       .._program = program
       .._programRunning = true
       .._notify();
+    // After dispose, stop it once run() has started it (kill is a no-op
+    // before that).
+    if (tester._disposed) scheduleMicrotask(program.kill);
     return _Recorder(model, tester);
   }
 
