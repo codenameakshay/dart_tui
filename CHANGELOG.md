@@ -22,6 +22,19 @@
   writes the files. `CaptureSink` is a public in-memory `IOSink`. The library
   imports no test framework and nothing is added to `dart_tui.dart`. There is
   no fake clock: timers run in real time.
+- **Spinner presets.** The new `Spinner(frames, interval)` type has the 12
+  presets from Bubble Tea's `bubbles/spinner`: `line`, `dot`, `miniDot`,
+  `jump`, `pulse`, `points`, `globe`, `moon`, `monkey`, `meter`, `hamburger`
+  and `ellipsis`, with the same frames and speeds. All frames of a preset have
+  one display width, so text after the spinner does not move. `SpinnerModel`
+  takes a preset as `spinner` (the `frames` argument still works) and a new
+  `id`. A spinner with an `id` runs its own tick chain: return `tick()` from
+  `init` and the `Cmd` from each `update`, and it advances at its own speed with
+  no `withTickInterval`. `TickMsg` has a new optional `tag`, so a tick from an
+  older chain is dropped and calling `tick()` twice does not double the speed.
+  `spin()` takes an optional `spinner`; the default is unchanged.
+  `example/spinners.dart` now shows all 12 presets at once, each at its own
+  speed.
 - **Plain mode.** The new `withPlainMode([bool on = true])` makes
   `promptSelect`, `promptConfirm`, `promptInput`, `filter`, `spin`, `pager` and
   `Form.run` ask plain line questions and write no escape codes. It is for
@@ -65,6 +78,11 @@
 
 ### Fixes
 
+- **Spinners no longer step on other models' ticks.** A `SpinnerModel` without
+  an `id` advanced on every `TickMsg`, including a timer's `tickWithId`, so a
+  timer moved every spinner on screen. It now ignores a `TickMsg` that has an
+  id. The global tick from `withTickInterval` still moves it. No example or
+  test relied on the old behaviour.
 - **`promptConfirm` defaults to no.** Its label said `[y/N]`, but Enter
   returned `true`. Enter now returns `false`, as the label says, and plain
   mode asks `(y/N)`. Type `y` to confirm.

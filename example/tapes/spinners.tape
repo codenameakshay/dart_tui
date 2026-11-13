@@ -2,7 +2,7 @@ Output example/tapes/output/spinners.gif
 
 Set FontSize 14
 Set Width 700
-Set Height 400
+Set Height 460
 Set Theme "Dracula"
 Set PlaybackSpeed 1.0
 

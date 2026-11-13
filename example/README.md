@@ -246,7 +246,7 @@ dart run example/spinner.dart
 
 ### spinners
 
-Displays all built-in spinner styles side-by-side so you can compare their animation patterns. Press `q` to quit.
+Shows all 12 `Spinner` presets at once. Each spinner has an `id` and runs its own tick chain at its preset's speed, with no `withTickInterval`. Press `q` to quit.
 
 ![spinners](https://dart-tui.vercel.app/gifs/spinners.gif)
 
