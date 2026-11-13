@@ -1,47 +1,14 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:dart_tui/src/renderer.dart';
 import 'package:dart_tui/src/view.dart';
 import 'package:test/test.dart';
-
-/// Minimal [IOSink] that captures everything written into a [StringBuffer].
-class _CaptureSink implements IOSink {
-  _CaptureSink(this._buf);
-  final StringBuffer _buf;
-  @override
-  void write(Object? obj) => _buf.write(obj);
-  @override
-  void writeln([Object? obj = '']) => _buf.writeln(obj);
-  @override
-  void writeAll(Iterable<dynamic> objects, [String separator = '']) =>
-      _buf.writeAll(objects, separator);
-  @override
-  void writeCharCode(int charCode) => _buf.writeCharCode(charCode);
-  @override
-  Future<void> flush() async {}
-  @override
-  Future<void> close() async {}
-  @override
-  Future<void> get done async {}
-  @override
-  void add(List<int> data) {}
-  @override
-  void addError(Object error, [StackTrace? stackTrace]) {}
-  @override
-  Future<void> addStream(Stream<List<int>> stream) async {}
-  @override
-  Encoding get encoding => utf8;
-  @override
-  set encoding(Encoding value) {}
-}
+import 'package:dart_tui/testing.dart' show CaptureSink;
 
 /// Erase-to-end-of-line (EL). Emitted after a full-width line, it lands on the
 /// pending-wrap last column and wipes the just-painted cell — issue #7.
 const _el = '\x1b[K';
 
 AnsiRenderer _renderer(StringBuffer buf) => AnsiRenderer(
-      output: _CaptureSink(buf),
+      output: CaptureSink(buf),
       defaultAltScreen: false,
       defaultHideCursor: false,
     );
@@ -98,12 +65,12 @@ void main() {
     // column of a full-width line and wipes it (same defect as render()).
     final renderers = <String, TeaRenderer Function(StringBuffer)>{
       'AnsiRenderer': (buf) => AnsiRenderer(
-            output: _CaptureSink(buf),
+            output: CaptureSink(buf),
             defaultAltScreen: false,
             defaultHideCursor: false,
           ),
       'CellRenderer': (buf) => CellRenderer(
-            output: _CaptureSink(buf),
+            output: CaptureSink(buf),
             defaultAltScreen: false,
             defaultHideCursor: false,
           ),

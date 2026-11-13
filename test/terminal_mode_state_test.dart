@@ -1,9 +1,7 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:dart_tui/src/terminal_mode_state.dart';
 import 'package:dart_tui/src/view.dart';
 import 'package:test/test.dart';
+import 'package:dart_tui/testing.dart' show CaptureSink;
 
 void main() {
   group('TerminalModeState', () {
@@ -19,11 +17,11 @@ void main() {
     });
 
     test('applies defaults once and then remains idempotent', () {
-      expect(state.apply(_StringSink(buffer), newView('value')), isFalse);
+      expect(state.apply(CaptureSink(buffer), newView('value')), isFalse);
       expect(buffer.toString(), equals('\x1b[?25l\x1b[?2004h'));
 
       buffer.clear();
-      expect(state.apply(_StringSink(buffer), newView('value')), isFalse);
+      expect(state.apply(CaptureSink(buffer), newView('value')), isFalse);
       expect(buffer.toString(), isEmpty);
     });
 
@@ -35,7 +33,7 @@ void main() {
         defaultReportFocus: true,
       );
 
-      state.apply(_StringSink(buffer), newView('value'));
+      state.apply(CaptureSink(buffer), newView('value'));
 
       expect(buffer.toString(), contains('\x1b[?1004h'));
       expect(
@@ -46,7 +44,7 @@ void main() {
     });
 
     test('reports alternate-screen changes for cache invalidation', () {
-      final sink = _StringSink(buffer);
+      final sink = CaptureSink(buffer);
 
       expect(state.apply(sink, View(content: 'x', altScreen: true)), isTrue);
       expect(state.altScreenEnabled, isTrue);
@@ -56,7 +54,7 @@ void main() {
     });
 
     test('imperative cursor visibility is idempotent', () {
-      final sink = _StringSink(buffer);
+      final sink = CaptureSink(buffer);
 
       expect(state.setCursorVisibility(sink, false), isTrue);
       expect(state.setCursorVisibility(sink, false), isFalse);
@@ -65,7 +63,7 @@ void main() {
     });
 
     test('reset emits one complete terminal-mode teardown', () {
-      final sink = _StringSink(buffer);
+      final sink = CaptureSink(buffer);
       state.apply(
         sink,
         View(
@@ -94,7 +92,7 @@ void main() {
     });
 
     test('reset skips alt-screen exit when it was never entered', () {
-      final sink = _StringSink(buffer);
+      final sink = CaptureSink(buffer);
       state.apply(sink, newView('value'));
       buffer.clear();
 
@@ -112,39 +110,4 @@ void main() {
       expect(state.altScreenEnabled, isFalse);
     });
   });
-}
-
-final class _StringSink implements IOSink {
-  _StringSink(this.buffer);
-
-  final StringBuffer buffer;
-
-  @override
-  Encoding encoding = utf8;
-  @override
-  void add(List<int> data) => buffer.write(encoding.decode(data));
-  @override
-  void addError(Object error, [StackTrace? stackTrace]) {}
-  @override
-  Future<void> addStream(Stream<List<int>> stream) async {
-    await for (final data in stream) {
-      add(data);
-    }
-  }
-
-  @override
-  Future<void> close() async {}
-  @override
-  Future<void> get done async {}
-  @override
-  Future<void> flush() async {}
-  @override
-  void write(Object? object) => buffer.write(object);
-  @override
-  void writeAll(Iterable<Object?> objects, [String separator = '']) =>
-      buffer.writeAll(objects, separator);
-  @override
-  void writeCharCode(int charCode) => buffer.writeCharCode(charCode);
-  @override
-  void writeln([Object? object = '']) => buffer.writeln(object);
 }

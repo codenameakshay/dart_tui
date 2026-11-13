@@ -61,7 +61,7 @@ help:
 # Unset NO_COLOR: outside a Program it switches every Style to no colour,
 # and the suite pins true-colour output.
 test:
-	env -u NO_COLOR $(DART) test
+	env -u NO_COLOR $(DART) test test example/test
 
 analyze:
 	$(DART) analyze

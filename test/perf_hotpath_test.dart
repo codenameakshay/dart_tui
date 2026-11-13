@@ -1,42 +1,7 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:dart_tui/dart_tui.dart';
 import 'package:dart_tui/src/renderer.dart';
 import 'package:test/test.dart';
-
-/// Buffer-backed IOSink mirroring test/renderer_test.dart: the renderers emit
-/// strings via `write`/`writeln`, so capturing those into a StringBuffer gives
-/// the full output. `add(List<int>)` is unused by the renderers.
-class _StringSink implements IOSink {
-  _StringSink(this._buf);
-  final StringBuffer _buf;
-  @override
-  void write(Object? obj) => _buf.write(obj);
-  @override
-  void writeln([Object? obj = '']) => _buf.writeln(obj);
-  @override
-  void writeAll(Iterable<dynamic> objects, [String separator = '']) =>
-      _buf.writeAll(objects, separator);
-  @override
-  void writeCharCode(int charCode) => _buf.writeCharCode(charCode);
-  @override
-  Future<void> flush() async {}
-  @override
-  Future<void> close() async {}
-  @override
-  Future<void> get done async {}
-  @override
-  void add(List<int> data) {}
-  @override
-  void addError(Object error, [StackTrace? stackTrace]) {}
-  @override
-  Future<void> addStream(Stream<List<int>> stream) async {}
-  @override
-  Encoding get encoding => utf8;
-  @override
-  set encoding(Encoding value) {}
-}
+import 'package:dart_tui/testing.dart' show CaptureSink;
 
 void main() {
   group('style width/strip fast-path (Task 1)', () {
@@ -161,7 +126,7 @@ void rendererTests() {
     test('large rows are parsed within a linear rendering budget', () {
       final buf = StringBuffer();
       final renderer = CellRenderer(
-        output: _StringSink(buf),
+        output: CaptureSink(buf),
         defaultAltScreen: false,
         defaultHideCursor: false,
       );
@@ -181,7 +146,7 @@ void rendererTests() {
     test('second identical render emits no new output', () {
       final buf = StringBuffer();
       final r = CellRenderer(
-        output: _StringSink(buf),
+        output: CaptureSink(buf),
         defaultAltScreen: false,
         defaultHideCursor: false,
       );
@@ -195,7 +160,7 @@ void rendererTests() {
     test('changed frame still emits', () {
       final buf = StringBuffer();
       final r = CellRenderer(
-        output: _StringSink(buf),
+        output: CaptureSink(buf),
         defaultAltScreen: false,
         defaultHideCursor: false,
       );
@@ -210,7 +175,7 @@ void rendererTests() {
     test('second identical render emits no new output', () {
       final buf = StringBuffer();
       final r = AnsiRenderer(
-        output: _StringSink(buf),
+        output: CaptureSink(buf),
         defaultAltScreen: false,
         defaultHideCursor: false,
       );
@@ -223,7 +188,7 @@ void rendererTests() {
     test('changed line is re-emitted', () {
       final buf = StringBuffer();
       final r = AnsiRenderer(
-        output: _StringSink(buf),
+        output: CaptureSink(buf),
         defaultAltScreen: false,
         defaultHideCursor: false,
       );

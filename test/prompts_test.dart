@@ -1,35 +1,30 @@
-import 'dart:convert';
-
 import 'package:dart_tui/dart_tui.dart';
+import 'package:dart_tui/testing.dart';
 import 'package:test/test.dart';
 
-/// Input stream that emits each keystroke as its own event. Multi-byte escape
-/// sequences (arrows) stay grouped; single printable bytes are separate events
-/// so [parseKeyFromBuffer] doesn't greedily fold them into one multi-char rune.
-Stream<List<int>> _seq(List<List<int>> chunks) => Stream.fromIterable(chunks);
-
-const _enter = [0x0d];
-const _ctrlC = [0x03];
-const _backspace = [0x7f];
-const _down = [0x1b, 0x5b, 0x42]; // ESC [ B
-
-List<ProgramOption> _opts(List<List<int>> chunks) =>
-    [withoutRenderer(), withInput(_seq(chunks))];
-
-const _timeout = Timeout(Duration(seconds: 5));
+/// Drives [body] (a prompt helper) with the test harness.
+TuiTester _drive(Future<Object?> Function() body) {
+  final t = TuiTester.run(body);
+  addTearDown(t.dispose);
+  return t;
+}
 
 void main() {
   group('promptSelect', () {
     test('down + enter selects the second choice', () async {
-      final r =
-          await promptSelect(['a', 'b', 'c'], options: _opts([_down, _enter]));
-      expect(r, 'b');
-    }, timeout: _timeout);
+      final t = _drive(() => promptSelect(['a', 'b', 'c']));
+      expectScreen(t.screen, 'test/goldens/prompt_select.txt');
+      await t.press('down');
+      expectScreen(t.screen, 'test/goldens/prompt_select_down.txt');
+      await t.press('enter');
+      expect((await t.done()).value, 'b');
+    });
 
     test('ctrl+c cancels and returns null', () async {
-      final r = await promptSelect(['a', 'b', 'c'], options: _opts([_ctrlC]));
-      expect(r, isNull);
-    }, timeout: _timeout);
+      final t = _drive(() => promptSelect(['a', 'b', 'c']));
+      await t.press('ctrl+c');
+      expect((await t.done()).value, isNull);
+    });
 
     test('empty choices returns null immediately', () async {
       expect(await promptSelect([]), isNull);
@@ -37,119 +32,87 @@ void main() {
   });
 
   group('promptConfirm', () {
-    test('y returns true', () async {
-      final r = await promptConfirm('ok?',
-          options: _opts([
-            [0x79]
-          ]));
-      expect(r, isTrue);
-    }, timeout: _timeout);
+    for (final (key, want) in [
+      ('y', true),
+      ('n', false),
+      ('enter', false), // the default is no
+      ('ctrl+c', null),
+    ]) {
+      test('$key returns $want', () async {
+        final t = _drive(() => promptConfirm('ok?'));
+        expectScreen(t.screen, 'test/goldens/prompt_confirm.txt');
+        await t.press(key);
+        expect((await t.done()).value, want);
+      });
+    }
 
-    test('n returns false', () async {
-      final r = await promptConfirm('ok?',
-          options: _opts([
-            [0x6e]
-          ]));
-      expect(r, isFalse);
-    }, timeout: _timeout);
-
-    test('enter takes the default, no', () async {
-      expect(await promptConfirm('ok?', options: _opts([_enter])), isFalse);
-    }, timeout: _timeout);
-
-    test('ctrl+j takes the default, no', () async {
-      expect(
-          await promptConfirm('ok?',
-              options: _opts([
-                [0x0a]
-              ])),
-          isFalse);
-    }, timeout: _timeout);
-
-    test('ctrl+c cancels', () async {
-      final r = await promptConfirm('ok?', options: _opts([_ctrlC]));
-      expect(r, isNull);
-    }, timeout: _timeout);
+    test('LF (ctrl+j on some terminals) takes the default, no', () async {
+      final t = _drive(() => promptConfirm('ok?'));
+      await t.type('\n');
+      expect((await t.done()).value, isFalse);
+    });
   });
 
-  test('Form.run submits the current confirm value on Enter and ctrl+j',
-      () async {
+  test('Form.run submits the current confirm value on Enter and LF', () async {
     for (final initial in [true, false]) {
-      for (final key in [
-        _enter,
-        [0x0a]
-      ]) {
+      for (final key in ['\r', '\n']) {
         final form = Form([
           Group([Field.confirm(key: 'ok', title: 'OK?', initial: initial)]),
         ]);
-        final values = await form.run(options: [
-          withoutRenderer(),
-          withEnvironment(const {}),
-          withInput(_seq([key])),
-        ]);
-        expect(values!.get<bool>('ok'), initial,
-            reason: 'initial: $initial, key: $key');
+        final t = _drive(form.run);
+        await t.type(key);
+        final values = (await t.done()).value as FormValues;
+        expect(values.get<bool>('ok'), initial,
+            reason: 'initial: $initial, key: ${key.codeUnits}');
       }
     }
-  }, timeout: _timeout);
+  });
 
   group('promptInput', () {
     test('accepts and backspaces an entire emoji grapheme', () async {
-      final r = await promptInput('name',
-          options: _opts([
-            [0x61],
-            utf8.encode('😀'),
-            _backspace,
-            _enter,
-          ]));
-      expect(r, 'a');
-    }, timeout: _timeout);
+      final t = _drive(() => promptInput('name'));
+      await t.type('a😀');
+      expect(t.screen, 'name a😀█');
+      await t.press('backspace');
+      await t.press('enter');
+      expect((await t.done()).value, 'a');
+    });
 
     test('typing then enter returns the value', () async {
-      final r = await promptInput('name',
-          options: _opts([
-            [0x68],
-            [0x69],
-            _enter
-          ]));
-      expect(r, 'hi');
-    }, timeout: _timeout);
+      final t = _drive(() => promptInput('name'));
+      await t.type('hi');
+      expectScreen(t.screen, 'test/goldens/prompt_input.txt');
+      await t.press('enter');
+      expect((await t.done()).value, 'hi');
+    });
 
     test('backspace deletes before enter', () async {
-      final r = await promptInput('name',
-          options: _opts([
-            [0x68],
-            [0x69],
-            _backspace,
-            _enter
-          ]));
-      expect(r, 'h');
-    }, timeout: _timeout);
+      final t = _drive(() => promptInput('name'));
+      await t.type('hi');
+      await t.press('backspace');
+      await t.press('enter');
+      expect((await t.done()).value, 'h');
+    });
 
     test('accepts a space between words', () async {
-      final r = await promptInput('name',
-          options: _opts([
-            [0x61],
-            [0x20],
-            [0x62],
-            _enter
-          ]));
-      expect(r, 'a b');
-    }, timeout: _timeout);
+      final t = _drive(() => promptInput('name'));
+      await t.type('a b');
+      await t.press('enter');
+      expect((await t.done()).value, 'a b');
+    });
 
     test('accepts bracketed paste and sanitizes line breaks and controls',
         () async {
-      final r = await promptInput('name',
-          options: _opts([
-            utf8.encode('\x1b[200~a\r\nb\tc\x00\x07\x7f\u0085d\x1b[201~'),
-            _enter,
-          ]));
-      expect(r, 'a b cd');
-    }, timeout: _timeout);
+      final t = _drive(() => promptInput('name'));
+      await t.paste('a\r\nb\tc\x00\x07\x7f\u0085d');
+      await t.press('enter');
+      expect((await t.done()).value, 'a b cd');
+    });
 
     test('ctrl+c cancels', () async {
-      final r = await promptInput('name', options: _opts([_ctrlC]));
-      expect(r, isNull);
-    }, timeout: _timeout);
+      final t = _drive(() => promptInput('name'));
+      await t.press('ctrl+c');
+      expect((await t.done()).value, isNull);
+    });
   });
 }

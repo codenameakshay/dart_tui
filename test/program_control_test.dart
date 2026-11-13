@@ -1,38 +1,9 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:dart_tui/dart_tui.dart';
 import 'package:test/test.dart';
-
-class _StringSink implements IOSink {
-  final StringBuffer buf = StringBuffer();
-  @override
-  void write(Object? obj) => buf.write(obj);
-  @override
-  void writeln([Object? obj = '']) => buf.writeln(obj);
-  @override
-  void writeAll(Iterable<dynamic> objects, [String separator = '']) =>
-      buf.writeAll(objects, separator);
-  @override
-  void writeCharCode(int charCode) => buf.writeCharCode(charCode);
-  @override
-  Future<void> flush() async {}
-  @override
-  Future<void> close() async {}
-  @override
-  Future<void> get done async {}
-  @override
-  void add(List<int> data) => buf.write(utf8.decode(data));
-  @override
-  void addError(Object error, [StackTrace? stackTrace]) {}
-  @override
-  Future<void> addStream(Stream<List<int>> stream) async {}
-  @override
-  Encoding get encoding => utf8;
-  @override
-  set encoding(Encoding value) {}
-}
+import 'package:dart_tui/testing.dart' show CaptureSink;
 
 /// Runs [msgs] in order through a real Program + AnsiRenderer, then quits.
 final class _DriverModel extends Model {
@@ -57,7 +28,7 @@ void main() {
     test(
         '${cellRenderer ? 'cell' : 'ANSI'} cursor survives actual resizing '
         'without output on repeated size reports', () async {
-      final sink = _StringSink();
+      final sink = CaptureSink();
       final frames = StreamController<WindowSizeMsg>();
       final rendered = StreamIterator(frames.stream);
       final program = Program(
@@ -90,23 +61,23 @@ void main() {
       try {
         // Wait for the initial WindowSizeMsg to be rendered.
         await waitForFrame();
-        sink.buf.clear();
+        sink.buffer.clear();
 
         program.send(WindowSizeMsg(80, 24));
         await waitForFrame();
-        expect(sink.buf.toString(), isEmpty);
+        expect(sink.buffer.toString(), isEmpty);
 
         for (final size in [(80, 20), (60, 20)]) {
-          sink.buf.clear();
+          sink.buffer.clear();
           program.send(WindowSizeMsg(size.$1, size.$2));
           await waitForFrame();
-          expect(sink.buf.toString(), contains('value'));
-          expect(sink.buf.toString(), endsWith('\x1b[3;4H'));
+          expect(sink.buffer.toString(), contains('value'));
+          expect(sink.buffer.toString(), endsWith('\x1b[3;4H'));
 
-          sink.buf.clear();
+          sink.buffer.clear();
           program.send(WindowSizeMsg(size.$1, size.$2));
           await waitForFrame();
-          expect(sink.buf.toString(), isEmpty);
+          expect(sink.buffer.toString(), isEmpty);
         }
       } finally {
         program.quit();
@@ -118,7 +89,7 @@ void main() {
   }
 
   test('SetWindowTitleMsg strips OSC control characters', () async {
-    final sink = _StringSink();
+    final sink = CaptureSink();
     await Program(options: [
       withOutput(sink),
       withInput(null),
@@ -126,13 +97,13 @@ void main() {
       SetWindowTitleMsg('safe\x07\x1b]2;owned\x07\x9c\x7fevil'),
     ]));
 
-    final output = sink.buf.toString();
+    final output = sink.buffer.toString();
     expect(output, contains('\x1b]0;safe]2;ownedevil\x07'));
     expect(output, isNot(contains('\x1b]2;owned')));
   });
 
   test('the frame for the update before quit is rendered', () async {
-    final sink = _StringSink();
+    final sink = CaptureSink();
     final ready = Completer<void>();
     final program = Program(options: [withOutput(sink), withInput(null)]);
     final run = program.run(_ReadyModel(ready));
@@ -141,14 +112,14 @@ void main() {
       ..send(_LabelMsg('final'))
       ..send(QuitMsg());
     await run;
-    expect(sink.buf.toString(), contains('label=final'));
+    expect(sink.buffer.toString(), contains('label=final'));
   });
 
   test('a running sequence does not block other messages', () async {
     final log = <String>[];
     final ready = Completer<void>();
     final program =
-        Program(options: [withOutput(_StringSink()), withInput(null)]);
+        Program(options: [withOutput(CaptureSink()), withInput(null)]);
     final run = program.run(_ReadyModel(ready, log: log));
     await ready.future;
     program.send(SequenceMsg([
@@ -172,7 +143,7 @@ void main() {
     final ready = Completer<void>();
     var laterCommandRan = false;
     final program =
-        Program(options: [withOutput(_StringSink()), withInput(null)]);
+        Program(options: [withOutput(CaptureSink()), withInput(null)]);
     final run = program.run(_ReadyModel(ready));
     await ready.future;
     program.send(SequenceMsg([
@@ -190,7 +161,7 @@ void main() {
     final ready = Completer<void>();
     var laterCommandRan = false;
     final program =
-        Program(options: [withOutput(_StringSink()), withInput(null)]);
+        Program(options: [withOutput(CaptureSink()), withInput(null)]);
     final run = program.run(_ReadyModel(ready));
     await ready.future;
     program.send(SequenceMsg([
@@ -211,7 +182,7 @@ void main() {
     final log = <String>[];
     var laterCommandRan = false;
     final program =
-        Program(options: [withOutput(_StringSink()), withInput(null)]);
+        Program(options: [withOutput(CaptureSink()), withInput(null)]);
     final firstRun = program.run(_ReadyModel(firstReady, log: log));
     await firstReady.future;
     program.send(SequenceMsg([
@@ -245,7 +216,7 @@ void main() {
     Future<Model>? secondRun;
     late final Program program;
     program = Program(options: [
-      withOutput(_StringSink()),
+      withOutput(CaptureSink()),
       withInput(null),
       withFilter((model, msg) {
         if (!replaced && msg is _LabelMsg && msg.label == 'replace') {
@@ -276,7 +247,7 @@ void main() {
   test('a model update cannot overwrite a replacement run model', () async {
     final firstReady = Completer<void>();
     final secondReady = Completer<void>();
-    final sink = _StringSink();
+    final sink = CaptureSink();
     final secondModel = _ReadyModel(secondReady);
     Future<Model>? secondRun;
     var restartedFromUpdate = false;
@@ -299,10 +270,10 @@ void main() {
     program.send(_LabelMsg('restart'));
     await secondReady.future;
     expect(restartedFromUpdate, isTrue);
-    final restorationOffset = sink.buf.length;
+    final restorationOffset = sink.buffer.length;
     await program.releaseTerminal();
     await program.restoreTerminal();
-    final restoredOutput = sink.buf.toString().substring(restorationOffset);
+    final restoredOutput = sink.buffer.toString().substring(restorationOffset);
     expect(restoredOutput, contains('label=start'));
     expect(restoredOutput, isNot(contains('label=old-updated')));
     program.kill();
@@ -311,16 +282,16 @@ void main() {
   });
 
   test('input errors quit cleanly and restore the renderer', () async {
-    final sink = _StringSink();
+    final sink = CaptureSink();
     final input = Stream<List<int>>.error(const StdinException('input failed'));
     await Program(options: [withOutput(sink), withInput(input)])
         .run(_IdleModel(Completer<void>()))
         .timeout(const Duration(seconds: 1));
-    expect(sink.buf.toString(), contains('\x1b[?25h'));
+    expect(sink.buffer.toString(), contains('\x1b[?25h'));
   });
 
   test('a throttled frame is not written after terminal release', () async {
-    final sink = _StringSink();
+    final sink = CaptureSink();
     final ready = Completer<void>();
     final log = <String>[];
     final program = Program(options: [
@@ -335,16 +306,16 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 1));
     }
     await program.releaseTerminal();
-    final releasedOutputLength = sink.buf.length;
+    final releasedOutputLength = sink.buffer.length;
     await Future<void>.delayed(const Duration(milliseconds: 1100));
-    expect(sink.buf.length, releasedOutputLength);
+    expect(sink.buffer.length, releasedOutputLength);
     await program.restoreTerminal();
     program.quit();
     await run;
   }, timeout: const Timeout(Duration(seconds: 5)));
 
   test('kill during a throttled frame suppresses the pending render', () async {
-    final sink = _StringSink();
+    final sink = CaptureSink();
     final ready = Completer<void>();
     final log = <String>[];
     final program = Program(options: [
@@ -360,11 +331,11 @@ void main() {
     }
     program.kill();
     await run;
-    expect(sink.buf.toString(), isNot(contains('label=killed')));
+    expect(sink.buffer.toString(), isNot(contains('label=killed')));
   }, timeout: const Timeout(Duration(seconds: 5)));
 
   test('a killed run cannot render into a subsequent run', () async {
-    final sink = _StringSink();
+    final sink = CaptureSink();
     final firstReady = Completer<void>();
     final secondReady = Completer<void>();
     final firstLog = <String>[];
@@ -384,7 +355,7 @@ void main() {
     final secondRun = program.run(_ReadyModel(secondReady));
     await secondReady.future;
     await Future<void>.delayed(const Duration(milliseconds: 1050));
-    expect(sink.buf.toString(), isNot(contains('label=stale-first-run')));
+    expect(sink.buffer.toString(), isNot(contains('label=stale-first-run')));
     program.quit();
     await Future.wait([firstRun, secondRun]);
   }, timeout: const Timeout(Duration(seconds: 5)));
@@ -392,7 +363,7 @@ void main() {
   test('an exec from a killed run cannot continue into a subsequent run',
       () async {
     if (Platform.isWindows) return;
-    final sink = _StringSink();
+    final sink = CaptureSink();
     final firstReady = Completer<void>();
     final secondReady = Completer<void>();
     final cancelStarted = Completer<void>();
@@ -419,7 +390,7 @@ void main() {
     ]);
     final firstRun = program.run(firstModel);
     await firstReady.future;
-    final initialOutputLength = sink.buf.length;
+    final initialOutputLength = sink.buffer.length;
     program.send(ExecMsg(
       cmd: '/bin/sh',
       args: [
@@ -435,8 +406,8 @@ void main() {
         return _LabelMsg('stale-exec-follow-up');
       },
     ));
-    while (sink.buf.length == initialOutputLength ||
-        !sink.buf
+    while (sink.buffer.length == initialOutputLength ||
+        !sink.buffer
             .toString()
             .substring(initialOutputLength)
             .contains('\x1b[?1049l')) {
@@ -474,7 +445,7 @@ void main() {
     var fired = false;
     final ready = Completer<void>();
     final program =
-        Program(options: [withOutput(_StringSink()), withInput(null)]);
+        Program(options: [withOutput(CaptureSink()), withInput(null)]);
     final run = program.run(_ReadyModel(ready));
     await ready.future;
     program.send(BatchMsg([
@@ -493,10 +464,10 @@ void main() {
 
   test('leaving the alt screen does not print a blank line', () async {
     Future<String> runWith(List<ProgramOption> options) async {
-      final sink = _StringSink();
+      final sink = CaptureSink();
       await Program(options: [withOutput(sink), withInput(null), ...options])
           .run(_DriverModel(const []));
-      return sink.buf.toString();
+      return sink.buffer.toString();
     }
 
     expect(await runWith([withAltScreen()]), isNot(endsWith('\n')));
@@ -508,11 +479,11 @@ void main() {
       const <ProgramOption>[],
       [withCellRenderer()],
     ]) {
-      final sink = _StringSink();
+      final sink = CaptureSink();
       await Program(options: [withOutput(sink), withInput(null), ...options])
           .run(_DriverModel(const []));
 
-      final output = sink.buf.toString();
+      final output = sink.buffer.toString();
       expect(output, endsWith('\x1b[?2004l\r\n'));
       expect(output, isNot(contains(RegExp(r'\x1b\[\d+;\d+H'))));
     }
@@ -538,7 +509,7 @@ void main() {
     final ready = Completer<void>();
     final handled = Completer<Mouse>();
     final program = Program(options: [
-      withOutput(_StringSink()),
+      withOutput(CaptureSink()),
       withInput(null),
     ]);
     final runFuture = program.run(_MouseCallbackModel(ready, handled));
@@ -563,7 +534,7 @@ void main() {
   for (final cellRenderer in [false, true]) {
     test('${cellRenderer ? 'cell' : 'ANSI'} scroll commands follow screen mode',
         () async {
-      final sink = _StringSink();
+      final sink = CaptureSink();
       final up = (await scrollUp(2)())!;
       final down = (await scrollDown(3)())!;
       await Program(options: [
@@ -583,7 +554,7 @@ void main() {
           ]))
           .timeout(const Duration(seconds: 5));
 
-      final output = sink.buf.toString();
+      final output = sink.buffer.toString();
       expect('\x1b[2S'.allMatches(output), hasLength(1));
       expect('\x1b[3T'.allMatches(output), hasLength(1));
       expect(output.indexOf('\x1b[2S'),
@@ -595,7 +566,7 @@ void main() {
 
   test('applyMsg drives the terminal-control switch + renderer methods',
       () async {
-    final sink = _StringSink();
+    final sink = CaptureSink();
     final controls = <Msg>[
       RequestWindowSizeMsg(),
       RequestForegroundColorMsg(),
@@ -625,7 +596,7 @@ void main() {
       withInput(null),
     ]).run(_DriverModel(controls)).timeout(const Duration(seconds: 5));
 
-    final out = sink.buf.toString();
+    final out = sink.buffer.toString();
     expect(out, contains('\x1b]0;T\x07')); // window title
     expect(out, contains('\x1b[?1049h')); // enter alt-screen
     // ScrollMsg arrives on the normal screen, where it is a no-op (#18).
@@ -636,7 +607,7 @@ void main() {
 
   test('Unicode Core support enables mode 2027 and resets it at shutdown',
       () async {
-    final sink = _StringSink();
+    final sink = CaptureSink();
 
     await Program(options: [
       withOutput(sink),
@@ -645,13 +616,13 @@ void main() {
       ModeReportMsg(mode: 2027, value: 3),
     ]));
 
-    final output = sink.buf.toString();
+    final output = sink.buffer.toString();
     expect(output, contains('\x1b[?2027h'));
     expect(output, contains('\x1b[?2027l'));
   });
 
   test('ExecMsg runs a subprocess and fires onExit', () async {
-    final sink = _StringSink();
+    final sink = CaptureSink();
     // A model whose init execs `true` (exit 0), then quits on the callback.
     final model = _ExecModel();
     await Program(options: [

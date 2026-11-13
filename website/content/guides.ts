@@ -598,6 +598,174 @@ expect(choice, 'b');`,
     related: ["colour-and-terminals", "program-options", "examples"],
   },
   {
+    slug: "testing",
+    name: "Testing your app",
+    category: "guides",
+    order: 6.7,
+    tagline: "Press keys, read the screen, compare with golden files.",
+    description:
+      "`package:dart_tui/testing.dart` runs your model in a real `Program`, headless, so a test can press keys, wait for the screen and compare it with a golden file. It is the dart_tui answer to Bubble Tea's teatest and Textual's snapshot tests.",
+    gif: "testing.gif",
+    blocks: [
+      { type: "heading", text: "What the tester does" },
+      {
+        type: "prose",
+        md: "`TuiTester(model)` runs the real `Program`, so commands, batches, sequences and quitting behave as they do in your app. Each program gets a fixed size (80x24 by default, also sent as the first `WindowSizeMsg`), an empty environment, plain mode off, no renderer and no stdin. The colour profile is pinned to `noColor` (pass `profile: ColorProfile.trueColor` for colour), and `Style.defaultProfile` and `Style.hasDarkBackground` are restored when the run ends, also when your model throws.",
+      },
+      {
+        type: "prose",
+        md: "The library imports no test framework. It returns plain values and throws `TuiTestFailure`, so it works with `package:test` or any other runner. It is not exported from `dart_tui.dart`.",
+      },
+      { type: "heading", text: "Test a counter" },
+      {
+        type: "code",
+        lang: "dart",
+        code: `import 'package:dart_tui/dart_tui.dart';
+import 'package:dart_tui/testing.dart';
+import 'package:test/test.dart';
+
+final class CounterModel extends Model {
+  CounterModel([this.count = 0]);
+  final int count;
+
+  @override
+  (Model, Cmd?) update(Msg msg) => switch (msg) {
+        KeyMsg(key: 'up') => (CounterModel(count + 1), null),
+        KeyMsg(key: 'q') => (this, () => quit()),
+        _ => (this, null),
+      };
+
+  @override
+  View view() => newView('Count: $count');
+}
+
+void main() {
+  test('up counts, q quits', () async {
+    final t = TuiTester(CounterModel());
+    addTearDown(t.dispose);
+
+    await t.press('up');
+    await t.press('up');
+    expect(t.screen, 'Count: 2');
+
+    await t.press('q');
+    final result = await t.done();
+    expect((result.model! as CounterModel).count, 2);
+  });
+}`,
+      },
+      {
+        type: "table",
+        headers: ["Call", "What it does"],
+        rows: [
+          ["`press('enter')`", "One key by its keystroke name: `ctrl+c`, `shift+tab`, `alt+left`, `pgdown`, `f5`, `space`, `a`. It goes through the real input decoder, so your model gets the same `KeyPressMsg` as from a keyboard."],
+          ["`type('héllo👋')`", "One key per Unicode scalar, as a terminal sends text."],
+          ["`paste(text)`", "A bracketed paste: `PasteStartMsg`, `PasteMsg`, `PasteEndMsg`."],
+          ["`send(msg)`, `resize(w, h)`", "Any message, or a `WindowSizeMsg`."],
+          ["`screen`, `styledScreen`, `model`", "The current view as plain text (escape codes removed, trailing spaces trimmed), with its escape codes, and the current model."],
+          ["`waitFor(test, timeout:)`", "Waits until `test(screen)` is true (default 2 s). On timeout it throws with the last screen."],
+          ["`quit()`, `done()`", "End the run (or wait for it to end) and return the final model, screen and outcome."],
+        ],
+      },
+      {
+        type: "callout",
+        variant: "note",
+        md: "Each input call completes once the program has handled the message, so `screen` is current right after `await t.press(...)`. Commands still run asynchronously: use `waitFor` for what they send back.",
+      },
+      { type: "heading", text: "Test a form or a prompt" },
+      {
+        type: "prose",
+        md: "A `Form` is a model, so `TuiTester(form)` works and `(await t.done()).outcome` is its `FormValues`. For code that makes its own `Program`, such as `promptSelect`, `filter` or `Form.run`, use `TuiTester.run`: it drives programs constructed inside the body, and `(await t.done()).value` is what the body returns. Construct the `Program` inside the body rather than reusing one created earlier.",
+      },
+      {
+        type: "code",
+        lang: "dart",
+        code: `test('the signup form', () async {
+  final t = TuiTester(Form([
+    Group([
+      Field.input(key: 'name', title: 'Name'),
+      Field.confirm(key: 'ok', title: 'Subscribe?', initial: true),
+    ]),
+  ]));
+  addTearDown(t.dispose);
+
+  await t.type('Ada');
+  await t.press('tab');
+  expectScreen(t.screen, 'test/goldens/signup.txt');
+  await t.press('enter');
+
+  final values = (await t.done()).outcome as FormValues;
+  expect(values.get<String>('name'), 'Ada');
+});
+
+test('promptSelect', () async {
+  final t = TuiTester.run(() => promptSelect(['a', 'b', 'c']));
+  addTearDown(t.dispose);
+  await t.press('down');
+  await t.press('enter');
+  expect((await t.done()).value, 'b');
+});`,
+      },
+      { type: "heading", text: "Golden files" },
+      {
+        type: "prose",
+        md: "`expectScreen(t.screen, 'test/goldens/name.txt')` compares the screen with a file. A missing file throws a `TuiTestFailure` that names the path. A different file throws one that names the first differing line, with the expected and actual text. Pass `t.styledScreen` to keep the colours in the golden.",
+      },
+      {
+        type: "code",
+        lang: "text",
+        code: `TuiTestFailure: screen does not match golden file example/test/goldens/simple_start.txt
+first difference at line 3 (expected 3 lines, got 3):
+  expected: "Press q to quit."
+  actual:   "Press q to stop."
+Run with DART_TUI_UPDATE_GOLDENS=1 to accept the new screen.`,
+      },
+      { type: "heading", text: "Update golden files" },
+      {
+        type: "prose",
+        md: "When a screen changes on purpose, write the new files, read the diff and commit them:",
+      },
+      {
+        type: "code",
+        lang: "bash",
+        code: `DART_TUI_UPDATE_GOLDENS=1 dart test
+git diff test/goldens`,
+      },
+      { type: "heading", text: "Timers and spinners" },
+      {
+        type: "callout",
+        variant: "warn",
+        md: "There is no fake clock. Ticks and `tick()` commands run in real time. Give the program a short `withTickInterval` through `options`, and wait for the screen to change with `waitFor`.",
+      },
+      {
+        type: "code",
+        lang: "dart",
+        code: `final t = TuiTester(SpinnerApp(),
+    options: [withTickInterval(const Duration(milliseconds: 5))]);
+final first = t.screen;
+await t.waitFor((screen) => screen != first);`,
+      },
+      { type: "heading", text: "Run it in CI" },
+      {
+        type: "prose",
+        md: "The tester needs no terminal, so a plain `dart test` step is enough. Goldens are compared with `\\n` line endings, so a Windows checkout with CRLF still matches. A missing golden fails unless updates are enabled. Keep `DART_TUI_UPDATE_GOLDENS` unset in CI, or pass `update: false` to prevent writes.",
+      },
+      {
+        type: "code",
+        lang: "yaml",
+        code: `- uses: dart-lang/setup-dart@v1
+- run: dart pub get
+- run: dart test`,
+      },
+      {
+        type: "callout",
+        variant: "note",
+        md: "`Style` defaults are process-wide, so run one tester at a time in an isolate (the default within one test file) and always `addTearDown(t.dispose)`. `CaptureSink` is an in-memory `IOSink` for tests that pass `withOutput`.",
+      },
+    ],
+    related: ["plain-mode", "program-options", "examples"],
+  },
+  {
     slug: "text-and-layout",
     name: "Text & layout",
     category: "guides",

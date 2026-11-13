@@ -1,0 +1,7 @@
+Choose one
+
+> a
+  b
+  c
+
+↑/↓ navigate, Enter confirm, Esc cancel

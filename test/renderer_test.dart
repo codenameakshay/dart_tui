@@ -5,36 +5,7 @@ import 'dart:io';
 import 'package:dart_tui/src/renderer.dart';
 import 'package:dart_tui/src/view.dart';
 import 'package:test/test.dart';
-
-class _StringSink implements IOSink {
-  _StringSink(this._buf);
-  final StringBuffer _buf;
-  @override
-  void write(Object? obj) => _buf.write(obj);
-  @override
-  void writeln([Object? obj = '']) => _buf.writeln(obj);
-  @override
-  void writeAll(Iterable<dynamic> objects, [String separator = '']) =>
-      _buf.writeAll(objects, separator);
-  @override
-  void writeCharCode(int charCode) => _buf.writeCharCode(charCode);
-  @override
-  Future<void> flush() async {}
-  @override
-  Future<void> close() async {}
-  @override
-  Future<void> get done async {}
-  @override
-  void add(List<int> data) {}
-  @override
-  void addError(Object error, [StackTrace? stackTrace]) {}
-  @override
-  Future<void> addStream(Stream<List<int>> stream) async {}
-  @override
-  Encoding get encoding => utf8;
-  @override
-  set encoding(Encoding value) {}
-}
+import 'package:dart_tui/testing.dart' show CaptureSink;
 
 void main() {
   for (final cellRenderer in [false, true]) {
@@ -44,12 +15,12 @@ void main() {
       final buf = StringBuffer();
       final TeaRenderer renderer = cellRenderer
           ? CellRenderer(
-              output: _StringSink(buf),
+              output: CaptureSink(buf),
               defaultAltScreen: true,
               defaultHideCursor: true,
             )
           : AnsiRenderer(
-              output: _StringSink(buf),
+              output: CaptureSink(buf),
               defaultAltScreen: true,
               defaultHideCursor: true,
             );
@@ -102,12 +73,12 @@ void main() {
         final buf = StringBuffer();
         final TeaRenderer renderer = cellRenderer
             ? CellRenderer(
-                output: _StringSink(buf),
+                output: CaptureSink(buf),
                 defaultAltScreen: true,
                 defaultHideCursor: true,
               )
             : AnsiRenderer(
-                output: _StringSink(buf),
+                output: CaptureSink(buf),
                 defaultAltScreen: true,
                 defaultHideCursor: true,
               );
@@ -143,12 +114,12 @@ void main() {
           // inline cursor placement is covered by the inline groups below.
           renderer = cellRenderer
               ? CellRenderer(
-                  output: _StringSink(buf),
+                  output: CaptureSink(buf),
                   defaultAltScreen: true,
                   defaultHideCursor: true,
                 )
               : AnsiRenderer(
-                  output: _StringSink(buf),
+                  output: CaptureSink(buf),
                   defaultAltScreen: true,
                   defaultHideCursor: true,
                 );
@@ -277,12 +248,12 @@ void main() {
         test('a declarative screen change restores cursor position', () {
           final inline = cellRenderer
               ? CellRenderer(
-                  output: _StringSink(buf),
+                  output: CaptureSink(buf),
                   defaultAltScreen: false,
                   defaultHideCursor: true,
                 )
               : AnsiRenderer(
-                  output: _StringSink(buf),
+                  output: CaptureSink(buf),
                   defaultAltScreen: false,
                   defaultHideCursor: true,
                 );
@@ -309,7 +280,7 @@ void main() {
   test('AnsiRenderer clears unknown initial row content before writing', () {
     final buf = StringBuffer();
     final renderer = AnsiRenderer(
-      output: _StringSink(buf),
+      output: CaptureSink(buf),
       defaultAltScreen: false,
       defaultHideCursor: false,
     );
@@ -323,7 +294,7 @@ void main() {
   test('AnsiRenderer strips controls from window titles', () {
     final buf = StringBuffer();
     final renderer = AnsiRenderer(
-      output: _StringSink(buf),
+      output: CaptureSink(buf),
       defaultAltScreen: false,
       defaultHideCursor: true,
     );
@@ -340,7 +311,7 @@ void main() {
   test('AnsiRenderer applies cursor position, shape, blink, and color', () {
     final buf = StringBuffer();
     final renderer = AnsiRenderer(
-      output: _StringSink(buf),
+      output: CaptureSink(buf),
       defaultAltScreen: false,
       defaultHideCursor: true,
     );
@@ -365,7 +336,7 @@ void main() {
   test('AnsiRenderer updates cursor state when frame content is unchanged', () {
     final buf = StringBuffer();
     final renderer = AnsiRenderer(
-      output: _StringSink(buf),
+      output: CaptureSink(buf),
       defaultAltScreen: false,
       defaultHideCursor: true,
     );
@@ -396,7 +367,7 @@ void main() {
   test('AnsiRenderer applies and resets terminal colors and progress', () {
     final buf = StringBuffer();
     final renderer = AnsiRenderer(
-      output: _StringSink(buf),
+      output: CaptureSink(buf),
       defaultAltScreen: false,
       defaultHideCursor: false,
     );
@@ -430,7 +401,7 @@ void main() {
   test('AnsiRenderer release resets active terminal colors and progress', () {
     final buf = StringBuffer();
     final renderer = AnsiRenderer(
-      output: _StringSink(buf),
+      output: CaptureSink(buf),
       defaultAltScreen: false,
       defaultHideCursor: false,
     );
@@ -454,7 +425,7 @@ void main() {
   test('AnsiRenderer negotiates and resets keyboard enhancements', () {
     final buf = StringBuffer();
     final renderer = AnsiRenderer(
-      output: _StringSink(buf),
+      output: CaptureSink(buf),
       defaultAltScreen: false,
       defaultHideCursor: false,
     );
@@ -493,7 +464,7 @@ void main() {
       () {
     final buf = StringBuffer();
     final renderer = AnsiRenderer(
-      output: _StringSink(buf),
+      output: CaptureSink(buf),
       defaultAltScreen: false,
       defaultHideCursor: false,
     );
@@ -551,7 +522,7 @@ void main() {
   test('AnsiRenderer repaints unchanged content after a screen change', () {
     final buf = StringBuffer();
     final renderer = AnsiRenderer(
-      output: _StringSink(buf),
+      output: CaptureSink(buf),
       defaultAltScreen: false,
       defaultHideCursor: false,
     );
@@ -568,7 +539,7 @@ void main() {
     test('emits save-cursor, scroll-up, and restore-cursor escape sequences',
         () {
       final buf = StringBuffer();
-      final sink = _StringSink(buf);
+      final sink = CaptureSink(buf);
       final renderer = AnsiRenderer(
         output: sink,
         logSink: null,
@@ -593,7 +564,7 @@ void main() {
     setUp(() {
       buf = StringBuffer();
       renderer = AnsiRenderer(
-        output: _StringSink(buf),
+        output: CaptureSink(buf),
         defaultAltScreen: false,
         defaultHideCursor: false,
       );
@@ -630,7 +601,7 @@ void main() {
 
     test('a line wider than the terminal is truncated, so it never wraps', () {
       final wrapping = AnsiRenderer(
-        output: _StringSink(buf),
+        output: CaptureSink(buf),
         defaultAltScreen: false,
         defaultHideCursor: false,
         terminalColumns: () => 10,
