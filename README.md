@@ -637,6 +637,27 @@ printf '2\ny\nAkshay\n' | dart run example/prompts_chain.dart
 
 End of input cancels: the helper returns `null`, like `Esc`. A custom `Program` in plain mode draws nothing while it runs and writes its final frame once, as plain text. In tests, use `withPlainMode()` with `withInput` and `withOutput`.
 
+### Testing your app
+
+`package:dart_tui/testing.dart` runs your model in a real `Program`, headless, at a fixed size (80x24 by default) with a pinned colour profile. It does not import a test framework, so it works with `package:test` or any runner.
+
+```dart
+import 'package:dart_tui/testing.dart';
+import 'package:test/test.dart';
+
+test('counter goes up', () async {
+  final t = TuiTester(CounterModel());
+  addTearDown(t.dispose);
+  await t.press('up');                      // same KeyPressMsg as a keyboard
+  await t.waitFor((screen) => screen.contains('Count: 1'));
+  expectScreen(t.screen, 'test/goldens/counter.txt');
+  final result = await t.quit();            // final model and screen
+  expect((result.model! as CounterModel).count, 1);
+});
+```
+
+`TuiTester.run(() => promptSelect([...]))` drives helpers and `Form.run` the same way, and `done()` returns their value. A golden mismatch throws with the first differing line; run `DART_TUI_UPDATE_GOLDENS=1 dart test` to accept new screens. There is no fake clock: test timers with a short `withTickInterval` and `waitFor`. `CaptureSink` is an in-memory `IOSink` for `withOutput`.
+
 ### Readline editing keys
 
 `TextInputModel` and `TextAreaModel` understand the common emacs/readline bindings:

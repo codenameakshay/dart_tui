@@ -4,6 +4,24 @@
 
 ### Features
 
+- **Test harness.** The new `package:dart_tui/testing.dart` tests apps the way
+  teatest and Textual snapshot tests do. `TuiTester(model)` runs the real
+  `Program` headless at a fixed size (80x24 by default, also sent as the first
+  `WindowSizeMsg`), with an empty environment, plain mode off and a pinned
+  colour profile (`noColor` by default). It saves `Style.defaultProfile` and
+  `Style.hasDarkBackground` and restores them when the run ends, also when the
+  model throws. `press('shift+tab')` builds its `KeyPressMsg` with the real
+  input decoder; `type` sends one key per Unicode scalar; `paste` sends a
+  bracketed paste; `resize` and `send` send messages. Each call completes once
+  the program has handled it. `screen` (plain text), `styledScreen` and `model`
+  follow every update. `waitFor` throws with the last screen on timeout;
+  `quit` and `done` return the final model, screen and outcome.
+  `TuiTester.run(body)` drives code that makes its own `Program`, such as
+  `promptSelect` or `Form.run`. `expectScreen(screen, path)` compares with a
+  golden file and names the first differing line; `DART_TUI_UPDATE_GOLDENS=1`
+  writes the files. `CaptureSink` is a public in-memory `IOSink`. The library
+  imports no test framework and nothing is added to `dart_tui.dart`. There is
+  no fake clock: timers run in real time.
 - **Plain mode.** The new `withPlainMode([bool on = true])` makes
   `promptSelect`, `promptConfirm`, `promptInput`, `filter`, `spin`, `pager` and
   `Form.run` ask plain line questions and write no escape codes. It is for
