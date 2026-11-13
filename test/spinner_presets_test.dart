@@ -3,67 +3,94 @@ import 'dart:async';
 import 'package:dart_tui/dart_tui.dart';
 import 'package:test/test.dart';
 
+// charmbracelet/bubbles spinner/spinner.go, with Ellipsis padded to three cells.
 const _presets = {
-  'line': Spinner.line,
-  'dot': Spinner.dot,
-  'miniDot': Spinner.miniDot,
-  'jump': Spinner.jump,
-  'pulse': Spinner.pulse,
-  'points': Spinner.points,
-  'globe': Spinner.globe,
-  'moon': Spinner.moon,
-  'monkey': Spinner.monkey,
-  'meter': Spinner.meter,
-  'hamburger': Spinner.hamburger,
-  'ellipsis': Spinner.ellipsis,
+  'line': (Spinner.line, ['|', '/', '-', r'\'], 10),
+  'dot': (Spinner.dot, ['⣾ ', '⣽ ', '⣻ ', '⢿ ', '⡿ ', '⣟ ', '⣯ ', '⣷ '], 10),
+  'miniDot': (
+    Spinner.miniDot,
+    ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'],
+    12,
+  ),
+  'jump': (Spinner.jump, ['⢄', '⢂', '⢁', '⡁', '⡈', '⡐', '⡠'], 10),
+  'pulse': (Spinner.pulse, ['█', '▓', '▒', '░'], 8),
+  'points': (Spinner.points, ['∙∙∙', '●∙∙', '∙●∙', '∙∙●'], 7),
+  'globe': (Spinner.globe, ['🌍', '🌎', '🌏'], 4),
+  'moon': (Spinner.moon, ['🌑', '🌒', '🌓', '🌔', '🌕', '🌖', '🌗', '🌘'], 8),
+  'monkey': (Spinner.monkey, ['🙈', '🙉', '🙊'], 3),
+  'meter': (
+    Spinner.meter,
+    ['▱▱▱', '▰▱▱', '▰▰▱', '▰▰▰', '▰▰▱', '▰▱▱', '▱▱▱'],
+    7
+  ),
+  'hamburger': (Spinner.hamburger, ['☱', '☲', '☴', '☲'], 3),
+  'ellipsis': (Spinner.ellipsis, ['   ', '.  ', '.. ', '...'], 3),
 };
 
-/// Many frames, so `index` counts the frames advanced.
-Spinner _counter(int ms) =>
-    Spinner(List.generate(10000, (i) => '$i'), Duration(milliseconds: ms));
+final class _ManualTimer implements Timer {
+  _ManualTimer(this.callback);
 
-/// Two id'd spinners that forward every tick and return the next tick.
-final class _Pair extends Model {
-  _Pair(this.a, this.b, {this.startTwice = false});
+  final void Function() callback;
+  bool _active = true;
+  int _tick = 0;
 
-  final SpinnerModel a;
-  final SpinnerModel b;
-  final bool startTwice;
-
-  @override
-  Cmd? init() => batch([a.tick(), b.tick(), if (startTwice) a.tick()]);
-
-  @override
-  (Model, Cmd?) update(Msg msg) {
-    if (msg is! TickMsg) return (this, null);
-    final (na, ca) = a.update(msg);
-    final (nb, cb) = b.update(msg);
-    return (
-      _Pair(na as SpinnerModel, nb as SpinnerModel, startTwice: startTwice),
-      batch([ca, cb]),
-    );
+  void fire() {
+    if (!_active) return;
+    _active = false;
+    _tick++;
+    callback();
   }
 
   @override
-  View view() => newView('');
+  bool get isActive => _active;
+
+  @override
+  int get tick => _tick;
+
+  @override
+  void cancel() => _active = false;
 }
 
-Future<_Pair> _run(_Pair initial, Duration runFor) async {
-  final program = Program(options: [withoutRenderer(), withInput(null)]);
-  Timer(runFor, program.quit);
-  return await program.run(initial) as _Pair;
+Future<TickMsg> _runTick(Cmd command, Duration interval) async {
+  late _ManualTimer timer;
+  Duration? scheduled;
+  final result = runZoned(
+    () async => await command() as TickMsg,
+    zoneSpecification: ZoneSpecification(
+      createTimer: (self, parent, zone, duration, callback) {
+        expect(scheduled, isNull);
+        scheduled = duration;
+        return timer = _ManualTimer(callback);
+      },
+    ),
+  );
+  expect(scheduled, interval);
+  timer.fire();
+  return result;
 }
 
 void main() {
+  setUp(() {
+    final profile = Style.defaultProfile;
+    final dark = Style.hasDarkBackground;
+    Style.defaultProfile = ColorProfile.noColor;
+    Style.hasDarkBackground = true;
+    addTearDown(() {
+      Style.defaultProfile = profile;
+      Style.hasDarkBackground = dark;
+    });
+  });
+
   group('Spinner presets', () {
     test('there are 12, as in Bubble Tea', () {
       expect(_presets, hasLength(12));
     });
 
-    for (final MapEntry(key: name, value: s) in _presets.entries) {
-      test('$name has frames, a positive interval and one width', () {
-        expect(s.frames, isNotEmpty);
-        expect(s.interval, greaterThan(Duration.zero));
+    for (final MapEntry(key: name, value: (s, frames, fps))
+        in _presets.entries) {
+      test('$name matches Bubble Tea frames and interval with one width', () {
+        expect(s.frames, frames);
+        expect(s.interval, Duration(microseconds: 1000000 ~/ fps));
         final widths = s.frames.map(getWidth).toSet();
         expect(widths, hasLength(1), reason: '$name widths: $widths');
         expect(widths.single, greaterThan(0));
@@ -80,6 +107,50 @@ void main() {
       expect(s.frames, ['a', 'b']);
       expect(s.spinner.interval, Spinner.globe.interval);
     });
+  });
+
+  group('spin helper', () {
+    for (final (name, spinner, interval, frame) in [
+      ('default', null, const Duration(milliseconds: 80), '⠋'),
+      (
+        'custom',
+        const Spinner(['X', 'Y'], Duration(milliseconds: 41)),
+        const Duration(milliseconds: 41),
+        'X'
+      ),
+    ]) {
+      test('$name uses its frames and interval', () async {
+        Duration? scheduled;
+        final views = <String>[];
+        final result = await runZoned(
+          () => spin(
+            Future.value(42),
+            spinner: spinner,
+            options: [
+              withoutRenderer(),
+              withoutSignalHandler(),
+              withInput(null),
+              withColorProfile(ColorProfile.noColor),
+              withFilter((model, msg) {
+                views.add(stripAnsi(model.view().content));
+                return msg;
+              }),
+            ],
+          ),
+          zoneSpecification: ZoneSpecification(
+            createPeriodicTimer: (self, parent, zone, duration, callback) {
+              expect(scheduled, isNull);
+              scheduled = duration;
+              late _ManualTimer timer;
+              return timer = _ManualTimer(() => callback(timer));
+            },
+          ),
+        );
+        expect(result, 42);
+        expect(scheduled, interval);
+        expect(views, contains('$frame Loading…'));
+      });
+    }
   });
 
   group('SpinnerModel ids', () {
@@ -106,60 +177,41 @@ void main() {
       );
     });
 
-    test('an id spinner returns its next tick after its interval', () async {
-      final s = SpinnerModel(id: 'a', spinner: _counter(30));
-      final first = await s.tick()();
-      final (next, cmd) = s.update(first!);
-      expect((next as SpinnerModel).index, 1);
-      final sw = Stopwatch()..start();
-      final msg = await cmd!() as TickMsg;
-      expect(sw.elapsedMilliseconds, greaterThanOrEqualTo(25));
-      expect(msg.id, 'a');
-      expect((next.update(msg).$1 as SpinnerModel).index, 2);
+    test('an id spinner schedules its interval and keeps advancing', () async {
+      var s = SpinnerModel(id: 'a', spinner: Spinner.moon);
+      var msg = await s.tick()() as TickMsg;
+      for (var index = 1; index <= 4; index++) {
+        final (next, command) = s.update(msg);
+        s = next as SpinnerModel;
+        expect(s.index, index);
+        msg = await _runTick(command!, const Duration(milliseconds: 125));
+        expect(msg.id, 'a');
+      }
     });
 
-    test('calling tick() twice does not double the speed', () async {
-      final s = SpinnerModel(id: 'a', spinner: _counter(1));
-      final m1 = await s.tick()();
-      final m2 = await s.tick()();
-      final (s1, c1) = s.update(m1!);
-      final (s2, c2) = s1.update(m2!);
-      // Only the newest chain survives: the first chain's next tick is stale.
-      final stale = await c1!();
-      final (s3, c3) = s2.update(stale!);
-      expect(identical(s3, s2), isTrue);
-      expect(c3, isNull);
-      final live = await c2!();
-      expect((s2.update(live!).$1 as SpinnerModel).index, 3);
+    test('two ids schedule independently and ignore each other', () async {
+      var fast = SpinnerModel(id: 'fast', spinner: Spinner.line);
+      var slow = SpinnerModel(id: 'slow', spinner: Spinner.globe);
+      var fastTick = await fast.tick()() as TickMsg;
+      var slowTick = await slow.tick()() as TickMsg;
+      for (var i = 0; i < 3; i++) {
+        expect(slow.update(fastTick).$1, same(slow));
+        expect(fast.update(slowTick).$1, same(fast));
+        final (nextFast, fastCommand) = fast.update(fastTick);
+        final (nextSlow, slowCommand) = slow.update(slowTick);
+        fast = nextFast as SpinnerModel;
+        slow = nextSlow as SpinnerModel;
+        expect(fast.index, (i + 1) % 4);
+        expect(slow.index, (i + 1) % 3);
+        fastTick = await _runTick(
+          fastCommand!,
+          const Duration(milliseconds: 100),
+        );
+        slowTick = await _runTick(
+          slowCommand!,
+          const Duration(milliseconds: 250),
+        );
+      }
     });
-
-    test('two ids advance independently at their own intervals', () async {
-      final end = await _run(
-        _Pair(
-          SpinnerModel(id: 'fast', spinner: _counter(20)),
-          SpinnerModel(id: 'slow', spinner: _counter(80)),
-        ),
-        const Duration(milliseconds: 800),
-      );
-      final fast = end.a.index;
-      final slow = end.b.index;
-      // About 40 vs 10 frames; allow for a slow machine.
-      expect(slow, inInclusiveRange(4, 12));
-      expect(fast, lessThanOrEqualTo(42));
-      expect(fast, greaterThan(slow * 2));
-    }, timeout: const Timeout(Duration(seconds: 10)));
-
-    test('a second tick() in a running program does not speed it up', () async {
-      final end = await _run(
-        _Pair(
-          SpinnerModel(id: 'a', spinner: _counter(50)),
-          SpinnerModel(id: 'b', spinner: _counter(50)),
-          startTwice: true,
-        ),
-        const Duration(milliseconds: 600),
-      );
-      // One chain gives about 12 frames; two would give about 24.
-      expect(end.a.index, lessThanOrEqualTo(end.b.index + 2));
-    }, timeout: const Timeout(Duration(seconds: 10)));
   });
 }
