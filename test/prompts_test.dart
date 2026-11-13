@@ -57,11 +57,41 @@ void main() {
       expect(await promptConfirm('ok?', options: _opts([_enter])), isFalse);
     }, timeout: _timeout);
 
+    test('ctrl+j takes the default, no', () async {
+      expect(
+          await promptConfirm('ok?',
+              options: _opts([
+                [0x0a]
+              ])),
+          isFalse);
+    }, timeout: _timeout);
+
     test('ctrl+c cancels', () async {
       final r = await promptConfirm('ok?', options: _opts([_ctrlC]));
       expect(r, isNull);
     }, timeout: _timeout);
   });
+
+  test('Form.run submits the current confirm value on Enter and ctrl+j',
+      () async {
+    for (final initial in [true, false]) {
+      for (final key in [
+        _enter,
+        [0x0a]
+      ]) {
+        final form = Form([
+          Group([Field.confirm(key: 'ok', title: 'OK?', initial: initial)]),
+        ]);
+        final values = await form.run(options: [
+          withoutRenderer(),
+          withEnvironment(const {}),
+          withInput(_seq([key])),
+        ]);
+        expect(values!.get<bool>('ok'), initial,
+            reason: 'initial: $initial, key: $key');
+      }
+    }
+  }, timeout: _timeout);
 
   group('promptInput', () {
     test('accepts and backspaces an entire emoji grapheme', () async {

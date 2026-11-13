@@ -88,6 +88,21 @@ void main() {
   });
 
   group('promptConfirm', () {
+    test('terminal prompt labels Enter as no', () async {
+      final out = _Out();
+      expect(
+          await promptConfirm('Ship?', options: [
+            withEnvironment(const {}),
+            withInput(Stream.value([0x0d])),
+            withOutput(out.sink),
+          ]),
+          isFalse);
+      final rendered = stripAnsi(await out.text())
+          .replaceAll('\r\n', '\n')
+          .replaceAll('\r', '');
+      expect(rendered, 'Ship? [y/N]\nY = yes, N or Enter = no, Esc = cancel\n');
+    }, timeout: _timeout);
+
     test('empty input takes the default, no', () async {
       final out = _Out();
       expect(await promptConfirm('Ship?', options: _plain('\n', out)), isFalse);
@@ -102,6 +117,20 @@ void main() {
       }
     }, timeout: _timeout);
 
+    test('yes is true regardless of case and surrounding whitespace', () async {
+      for (final answer in ['y', 'Y', 'yes', 'YES', ' Yes ']) {
+        expect(
+            await promptConfirm('Ship?', options: _plain('$answer\n', _Out())),
+            isTrue,
+            reason: 'answer: $answer');
+      }
+    }, timeout: _timeout);
+
+    test('whitespace-only input takes the default, no', () async {
+      expect(await promptConfirm('Ship?', options: _plain(' \t\n', _Out())),
+          isFalse);
+    }, timeout: _timeout);
+
     test('asks again on other text', () async {
       final out = _Out();
       expect(await promptConfirm('Ship?', options: _plain('maybe\ny\n', out)),
@@ -113,6 +142,11 @@ void main() {
     test('end of input cancels', () async {
       final out = _Out();
       expect(await promptConfirm('Ship?', options: _plain('', out)), isNull);
+    }, timeout: _timeout);
+
+    test('end of input after an invalid answer cancels', () async {
+      expect(await promptConfirm('Ship?', options: _plain('maybe\n', _Out())),
+          isNull);
     }, timeout: _timeout);
   });
 
@@ -293,6 +327,19 @@ void main() {
       ]).run(options: _plain('\nAda\n', out));
       expect(values!.get<String>('name'), 'Ada');
       expect(await _noEscapes(out), 'Name [x]: \n✗ Too short\nName [x]: Ada\n');
+    }, timeout: _timeout);
+
+    test('confirm keeps either initial value on empty plain input', () async {
+      for (final initial in [true, false]) {
+        final out = _Out();
+        final values = await Form([
+          Group([
+            Field.confirm(key: 'ok', title: 'OK?', initial: initial),
+          ]),
+        ]).run(options: _plain('\n', out));
+        expect(values!.get<bool>('ok'), initial, reason: 'initial: $initial');
+        expect(await _noEscapes(out), 'OK? ${initial ? '(Y/n)' : '(y/N)'} \n');
+      }
     }, timeout: _timeout);
 
     test('multi-select honours its limit and keeps defaults on empty input',

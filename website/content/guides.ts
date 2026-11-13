@@ -537,7 +537,7 @@ await Program(options: [
       { type: "heading", text: "Forms" },
       {
         type: "prose",
-        md: "`Form.run` shows group titles as headings and notes as text. It skips hidden fields. Input fields show `Name [default]: ` or `Name (placeholder): `. Select fields show numbered options and `Enter a number [2]: `, and empty input keeps the current choice. Multi-select fields take numbers with commas, and empty input keeps the defaults. Confirm fields show `Title (y/N) `. A failed validator prints `✗ message` and asks again. Dynamic titles and options follow the answers so far. A multi-line text field takes one line. A file field takes a path. A password input does not echo on a terminal. The values are the same as the terminal form gives for the same answers.",
+        md: "`Form.run` shows group titles as headings and notes as text. It skips hidden fields. Input fields show `Name [default]: ` or `Name (placeholder): `. Select fields show numbered options and `Enter a number [2]: `, and empty input keeps the current choice. Multi-select fields take numbers with commas, and empty input keeps the defaults. Confirm fields show `Title (Y/n) ` or `Title (y/N) ` based on the current value; empty input keeps that value. A failed validator prints `✗ message` and asks again. Dynamic titles and options follow the answers so far. A multi-line text field takes one line. A file field takes a path. A password input does not echo on a terminal. The values are the same as the terminal form gives for the same answers.",
       },
       { type: "heading", text: "Pipe the answers" },
       {
