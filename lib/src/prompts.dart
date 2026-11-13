@@ -7,34 +7,63 @@ import 'program.dart';
 import 'view.dart';
 
 /// Prompt helpers built on [Program] + [OutcomeModel] (optional sugar).
+///
+/// Each one works without a terminal too: in plain mode (see [withPlainMode])
+/// it asks a plain line question and writes no escape codes. The end of input
+/// cancels, like Esc.
 
 /// Single-choice list; returns the selected string, or `null` if cancelled.
+///
+/// In plain mode it writes [title] and the numbered choices, then reads a
+/// number from 1 to N, asking again until the answer is valid.
 Future<String?> promptSelect(
   List<String> choices, {
   List<ProgramOption> options = const [],
   String title = 'Choose one',
 }) async {
   if (choices.isEmpty) return null;
+  final program = Program(options: options);
+  final plain = PlainSession.open(program);
+  if (plain != null) {
+    return plain.run((io) async {
+      final i = await io.askChoice([title], choices);
+      return i == null ? null : choices[i];
+    });
+  }
   final model = _SelectPromptModel(choices: choices, title: title);
-  return Program(options: options).runForResult(model);
+  return program.runForResult(model);
 }
 
-/// Yes / no; returns `null` on cancel.
+/// Yes / no; returns `null` on cancel. The default is no: Enter returns
+/// `false`.
+///
+/// In plain mode it asks `question (y/N)`; empty input means no.
 Future<bool?> promptConfirm(
   String question, {
   List<ProgramOption> options = const [],
 }) async {
+  final program = Program(options: options);
+  final plain = PlainSession.open(program);
+  if (plain != null) return plain.run((io) => io.askConfirm(question, false));
   final model = _ConfirmPromptModel(question: question);
-  return Program(options: options).runForResult(model);
+  return program.runForResult(model);
 }
 
 /// Single-line text; returns `null` on cancel.
+///
+/// In plain mode it writes [label] and reads one line.
 Future<String?> promptInput(
   String label, {
   List<ProgramOption> options = const [],
 }) async {
+  final program = Program(options: options);
+  final plain = PlainSession.open(program);
+  if (plain != null) {
+    final prompt = label.isEmpty || label.endsWith(' ') ? label : '$label ';
+    return plain.run((io) => io.askText(prompt));
+  }
   final model = _InputPromptModel(label: label);
-  return Program(options: options).runForResult(model);
+  return program.runForResult(model);
 }
 
 final class _SelectPromptModel extends Model implements OutcomeModel<String> {
@@ -158,7 +187,7 @@ final class _ConfirmPromptModel extends Model implements OutcomeModel<bool> {
       case 'enter':
       case 'ctrl+j':
         return (
-          _ConfirmPromptModel(question: question, result: true),
+          _ConfirmPromptModel(question: question, result: false),
           null,
         );
       case 'esc':
@@ -174,7 +203,7 @@ final class _ConfirmPromptModel extends Model implements OutcomeModel<bool> {
 
   @override
   View view() =>
-      newView('$question [y/N]\nY or Enter = yes, N = no, Esc = cancel');
+      newView('$question [y/N]\nY = yes, N or Enter = no, Esc = cancel');
 }
 
 final class _InputPromptModel extends Model implements OutcomeModel<String> {

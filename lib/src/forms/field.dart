@@ -1,10 +1,14 @@
+import 'dart:io' show File;
+
 import 'package:characters/characters.dart';
+import 'package:path/path.dart' as p;
 
 import '../bubbles/file_picker.dart';
 import '../bubbles/text_area.dart';
 import '../bubbles/text_input.dart';
 import '../cmd.dart';
 import '../msg.dart';
+import '../program.dart';
 import 'form_styles.dart';
 import 'values.dart';
 
@@ -313,6 +317,134 @@ void _requireUniqueOptionValues<T>(List<Option<T>> options) {
         'multi-select option values must be unique',
       );
     }
+  }
+}
+
+/// Asks [field] as a plain line question (plain mode, see [withPlainMode]).
+/// Validators ask again with their message. Returns the answered field, or
+/// null at the end of input. Internal: the barrel hides it.
+Future<FormField?> askPlainField(
+  FormField field,
+  PlainSession io,
+  FormValues values,
+) async {
+  final title = field.titleText(values);
+  final description = field.descriptionText(values);
+  final heading = [title, if (description != null) description];
+  void describe() {
+    if (description != null && description.isNotEmpty) io.writeln(description);
+  }
+
+  String inline(String shown, [String placeholder = '']) {
+    final hint = shown.isNotEmpty
+        ? ' [$shown]'
+        : placeholder.isNotEmpty
+            ? ' ($placeholder)'
+            : '';
+    return '${title.isEmpty ? '>' : title}$hint: ';
+  }
+
+  FormField? checked(FormField next) {
+    final error = next.validate();
+    if (error == null) return next;
+    io.writeln('✗ $error');
+    return null;
+  }
+
+  switch (field) {
+    case _NoteField():
+      for (final line in heading) {
+        if (line.isNotEmpty) io.writeln(line);
+      }
+      return field;
+    case _InputField(:final input):
+      describe();
+      final secret = input.echoMode == EchoMode.password;
+      while (true) {
+        final answer = await io.askText(
+          inline(secret ? '' : input.value, input.placeholder),
+          initial: input.value,
+          secret: secret,
+        );
+        if (answer == null) return null;
+        final next = checked(field._copy(
+          input: input.copyWith(
+              value: answer, cursorPos: answer.characters.length),
+        ));
+        if (next != null) return next;
+      }
+    case _TextField(:final area):
+      describe();
+      while (true) {
+        final answer = await io.askText(
+          inline(area.value.contains('\n') ? '' : area.value),
+          initial: area.value,
+        );
+        if (answer == null) return null;
+        final lines = answer.split('\n');
+        final next = checked(field._copy(
+          area: area.copyWith(
+            value: answer,
+            cursorRow: lines.length - 1,
+            cursorCol: lines.last.characters.length,
+          ),
+        ));
+        if (next != null) return next;
+      }
+    case _FileField(:final picker):
+      describe();
+      final allowed = picker.allowedExtensions;
+      while (true) {
+        final answer = await io.askText(
+          inline(picker.selected ?? '', 'file path'),
+          initial: picker.selected ?? '',
+        );
+        if (answer == null) return null;
+        if (answer.isEmpty) return field;
+        if (!File(answer).existsSync()) {
+          io.writeln('✗ No file at $answer.');
+        } else if (allowed.isNotEmpty &&
+            !allowed.contains(p.extension(answer).toLowerCase())) {
+          io.writeln('✗ Choose a ${allowed.join(', ')} file.');
+        } else {
+          return field._copy(picker: picker.copyWith(selected: answer));
+        }
+      }
+    case _SelectField():
+      if (field.options.isEmpty) return field;
+      while (true) {
+        final i = await io.askChoice(
+          heading,
+          [for (final o in field.options) o.label],
+          defaultIndex: field.index,
+        );
+        if (i == null) return null;
+        final next = checked(field._pick(i));
+        if (next != null) return next;
+      }
+    case _MultiSelectField():
+      if (field.options.isEmpty) return field;
+      final picks = await io.askMany(
+        heading,
+        [for (final o in field.options) o.label],
+        defaults: {
+          for (var i = 0; i < field.options.length; i++)
+            if (field.selected.contains(field.options[i].value)) i,
+        },
+        limit: field.limit,
+      );
+      return picks == null ? null : field._pickAll(picks);
+    case _ConfirmField():
+      describe();
+      final answer = await io.askConfirm(
+        title,
+        field.state,
+        yes: field.affirmative,
+        no: field.negative,
+      );
+      return answer == null ? null : field._copy(state: answer);
+    default:
+      return field;
   }
 }
 
@@ -632,6 +764,9 @@ final class _SelectField<T> extends FormField with _FieldCommon {
     }
   }
 
+  _SelectField<T> _pick(int i) =>
+      _copy(index: i, selectedValue: options[i].value);
+
   @override
   FormField recompute(FormValues values) {
     if (optionsForFn == null) return this;
@@ -755,6 +890,9 @@ final class _MultiSelectField<T> extends FormField with _FieldCommon {
         return this;
     }
   }
+
+  _MultiSelectField<T> _pickAll(Set<int> picks) =>
+      _copy(selected: {for (final i in picks) options[i].value});
 
   @override
   FormField recompute(FormValues values) {

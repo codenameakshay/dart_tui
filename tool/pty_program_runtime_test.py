@@ -234,6 +234,36 @@ class ProgramRuntimePtyTest(unittest.TestCase):
         self.assert_terminal_restored(probe.finish())
         self.assert_cooked_mode(probe)
 
+    def test_plain_password_restores_disabled_echo(self) -> None:
+        probe = self._probe("plain-password-echo")
+        probe.read_until(b"SECRET")
+        probe.send(b"private\r")
+        output = probe.finish()
+        self.assertIn(b"ECHO_RESTORED=false", output)
+        self.assertNotIn(b"private", output)
+        self.assertNotIn(b"\x1b", output)
+
+    def test_plain_prompt_pushback_reaches_tui_program(self) -> None:
+        probe = self._probe("plain-then-tui")
+        probe.read_until(b"PLAIN_NAME:")
+        probe.send(b"Ada\rq\r")
+        output = probe.finish()
+        self.assertIn(b"PLAIN_ANSWER=Ada", output)
+        self.assertIn(b"PLAIN_TUI_DONE", output)
+        self.assert_terminal_restored(output)
+        self.assert_cooked_mode(probe)
+
+    def test_plain_prompt_then_tui_program_share_stdin(self) -> None:
+        probe = self._probe("plain-then-tui")
+        probe.read_until(b"PLAIN_NAME:")
+        probe.send(b"Ada\r")
+        probe.read_until(b"PLAIN_TUI_READY")
+        self.assertIn(b"PLAIN_ANSWER=Ada", bytes(probe.data))
+        probe.send(b"q")
+        probe.read_until(b"PLAIN_TUI_DONE")
+        self.assert_terminal_restored(probe.finish())
+        self.assert_cooked_mode(probe)
+
     def test_sequential_default_stdin_programs_share_input_and_exit(self) -> None:
         probe = self._probe("default-chain")
         probe.read_until(b"CHAIN_ONE_READY")
@@ -415,6 +445,39 @@ class ProgramRuntimePtyTest(unittest.TestCase):
         os.kill(probe.pid, signal.SIGTERM)
         self.assert_terminal_restored(probe.finish())
         self.assert_cooked_mode(probe)
+
+
+class PlainPipeTest(unittest.TestCase):
+    """Helpers work without a terminal: piped stdin and stdout."""
+
+    def _run(self, script: str, stdin: bytes) -> str:
+        result = subprocess.run(
+            ["dart", "run", script],
+            cwd=ROOT, input=stdin, capture_output=True, timeout=120,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn(b"\x1b", result.stdout)
+        return result.stdout.decode()
+
+    def test_prompts_chain_answers_from_a_pipe(self) -> None:
+        out = self._run("example/prompts_chain.dart", b"2\ny\nAkshay\n")
+        self.assertIn("1. Vanilla\n2. Chocolate\n3. Strawberry\n", out)
+        self.assertIn("Enter a number: 2\nSelected: Chocolate", out)
+        self.assertIn("Confirmed: true", out)
+        self.assertIn("Notes: Akshay", out)
+
+    def test_end_of_input_cancels_without_hanging(self) -> None:
+        out = self._run("example/prompts_chain.dart", b"")
+        self.assertIn("flavor = null", out)
+        self.assertIn("confirmed = null", out)
+        self.assertIn("notes = null", out)
+
+    def test_form_answers_from_a_pipe(self) -> None:
+        out = self._run("example/form.dart", b"billing-api\n2\n\n1,3\n")
+        self.assertIn("name    = billing-api", out)
+        self.assertIn("runtime = Go", out)
+        self.assertIn("deploy  = true", out)
+        self.assertIn("regions = [iad, sfo]", out)
 
 
 class _Tmux:

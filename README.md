@@ -627,6 +627,16 @@ await pager(longText);                                       // scrollable viewe
 
 All prompts and `filter` return `null` when cancelled with `Esc` / `Ctrl+C`.
 
+### Plain mode (CI, pipes, screen readers, agents)
+
+In plain mode, every one-shot helper and `Form.run` ask plain line questions (`1. a`, `Enter a number: `) and write no escape codes. It is on when you pass `withPlainMode()`, when `DART_TUI_ACCESSIBLE` or `ACCESSIBLE` is set to a true value, or when the helper uses the real stdin and stdout and either is not a terminal (or `TERM=dumb`). `withPlainMode(false)` turns it off. A helper with `withInput` or `withOutput` keeps the terminal UI unless you force plain mode.
+
+```bash
+printf '2\ny\nAkshay\n' | dart run example/prompts_chain.dart
+```
+
+End of input cancels: the helper returns `null`, like `Esc`. A custom `Program` in plain mode draws nothing while it runs and writes its final frame once, as plain text. In tests, use `withPlainMode()` with `withInput` and `withOutput`.
+
 ### Readline editing keys
 
 `TextInputModel` and `TextAreaModel` understand the common emacs/readline bindings:

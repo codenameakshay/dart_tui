@@ -24,7 +24,7 @@ Down
 Sleep 400ms
 Enter
 Sleep 700ms
-Enter
+Type "y"
 Sleep 700ms
 Type "ship it"
 Sleep 500ms

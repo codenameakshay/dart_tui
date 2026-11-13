@@ -486,6 +486,118 @@ await Program(options: [
     related: ["colors-and-gradients", "styling", "program-options"],
   },
   {
+    slug: "plain-mode",
+    name: "Plain mode: CI, pipes, screen readers and agents",
+    category: "guides",
+    order: 6.6,
+    tagline: "Line questions and plain text, with no escape codes.",
+    description:
+      "In plain mode the one-shot helpers and `Form.run` ask plain line questions and write no escape codes. Use it for pipes, CI, screen readers and AI agents.",
+    gif: "plain_mode.gif",
+    blocks: [
+      { type: "heading", text: "What plain mode does" },
+      {
+        type: "prose",
+        md: "In plain mode, `promptSelect`, `promptConfirm`, `promptInput`, `filter`, `spin`, `pager` and `Form.run` do not draw a terminal UI. They write a question, read one line, and go on. They write no escape codes at all. The output is plain text that a log, a screen reader or an AI agent can read.",
+      },
+      { type: "heading", text: "When it turns on" },
+      {
+        type: "prose",
+        md: "The first rule that matches wins.",
+      },
+      {
+        type: "table",
+        headers: ["Rule", "Result"],
+        rows: [
+          ["`withPlainMode()`", "plain mode on"],
+          ["`withPlainMode(false)`", "plain mode off, over everything else"],
+          ["`DART_TUI_ACCESSIBLE` or `ACCESSIBLE` set to a true value (for example `1`)", "plain mode on"],
+          ["The helper uses the real stdin and stdout, and either is not a terminal", "plain mode on"],
+          ["The helper uses the real stdin and stdout, and `TERM=dumb`", "plain mode on"],
+          ["The helper has `withInput` or `withOutput`", "terminal UI, unless you force plain mode"],
+        ],
+      },
+      {
+        type: "callout",
+        variant: "note",
+        md: "`0`, `false` and an empty value do not count as true. The environment comes from `withEnvironment`, or from the process environment. The `TERM=dumb` rule is the same rule that colour detection uses. Existing tests that pass `withInput` or `withOutput` do not change.",
+      },
+      { type: "heading", text: "What each helper writes" },
+      {
+        type: "table",
+        headers: ["Helper", "Output and input"],
+        rows: [
+          ["`promptSelect`, `filter`", "The title, then `1. a`, `2. b` ... lines, then `Enter a number: `. A wrong answer prints `Enter a number from 1 to N.` and asks again. `filter` also takes text that matches exactly one option."],
+          ["`promptConfirm`", "`Ship? (y/N) `. The capital letter is the default, no. Empty input takes it. `y`, `yes`, `n` and `no` work."],
+          ["`promptInput`", "The label, then one line. Empty input gives an empty string."],
+          ["`spin`", "`Working…` at the start, then `✓ Working` or `✗ Working: <error>`. It returns the value or throws again."],
+          ["`pager`", "The content, as it is."],
+        ],
+      },
+      { type: "heading", text: "Forms" },
+      {
+        type: "prose",
+        md: "`Form.run` shows group titles as headings and notes as text. It skips hidden fields. Input fields show `Name [default]: ` or `Name (placeholder): `. Select fields show numbered options and `Enter a number [2]: `, and empty input keeps the current choice. Multi-select fields take numbers with commas, and empty input keeps the defaults. Confirm fields show `Title (Y/n) ` or `Title (y/N) ` based on the current value; empty input keeps that value. A failed validator prints `✗ message` and asks again. Dynamic titles and options follow the answers so far. A multi-line text field takes one line. A file field takes a path. A password input does not echo on a terminal. The values are the same as the terminal form gives for the same answers.",
+      },
+      { type: "heading", text: "Pipe the answers" },
+      {
+        type: "prose",
+        md: "When the input is not a terminal, the helper writes each answer to the output. A log then reads like a transcript.",
+      },
+      {
+        type: "code",
+        lang: "bash",
+        code: `printf '2\\ny\\nAkshay\\n' | dart run example/prompts_chain.dart
+
+# stdout is a pipe: the form is plain, and you type the answers
+dart run example/form.dart | cat`,
+      },
+      { type: "heading", text: "Force it on or off" },
+      {
+        type: "code",
+        lang: "dart",
+        code: `final pick = await promptSelect(
+  ['apple', 'banana'],
+  title: 'Pick one',
+  options: [withPlainMode()], // withPlainMode(false) keeps the terminal UI
+);`,
+      },
+      {
+        type: "prose",
+        md: "Or set the variable for the whole process: `DART_TUI_ACCESSIBLE=1 dart run app.dart`.",
+      },
+      {
+        type: "callout",
+        variant: "warn",
+        md: "End of input cancels. When stdin closes, a helper returns `null`, like `Esc`, and `Form.run` returns `null`. It does not hang and it does not loop. Check for `null` in scripts.",
+      },
+      { type: "heading", text: "Custom programs" },
+      {
+        type: "prose",
+        md: "A custom `Program` is in plain mode when you pass `withPlainMode()`, or when it uses the default stdin and its real stdout is not a terminal. It then writes no cursor, erase or query codes while it runs. It prints `println` lines as plain text at once. On exit it writes the final frame once, as plain text. Input is read as usual.",
+      },
+      {
+        type: "prose",
+        md: "Plain prompts read through the same stdin owner as `Program`. A plain prompt and a full `Program` can run one after the other in one process. Input that the first reader did not use goes to the next reader.",
+      },
+      { type: "heading", text: "Test plain mode" },
+      {
+        type: "code",
+        lang: "dart",
+        code: `final choice = await promptSelect(
+  ['a', 'b'],
+  options: [
+    withPlainMode(),
+    withInput(Stream.value(utf8.encode('2\\n'))),
+    withOutput(sink),
+  ],
+);
+expect(choice, 'b');`,
+      },
+    ],
+    related: ["colour-and-terminals", "program-options", "examples"],
+  },
+  {
     slug: "text-and-layout",
     name: "Text & layout",
     category: "guides",

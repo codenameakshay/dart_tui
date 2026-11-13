@@ -30,6 +30,43 @@ Future<void> main(List<String> arguments) async {
     }
     return;
   }
+  if (scenario == 'plain-chain') {
+    final first = await promptInput('FIRST:',
+        options: [withPlainMode(), withEnvironment(const {})]);
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    final second = await promptInput('SECOND:',
+        options: [withPlainMode(), withEnvironment(const {})]);
+    final third = await promptInput('THIRD:',
+        options: [withPlainMode(), withEnvironment(const {})]);
+    stdout.writeln('ANSWERS=$first|$second|$third');
+    return;
+  }
+  if (scenario == 'plain-password-echo') {
+    stdin.echoMode = false;
+    try {
+      await Form([
+        Group([Field.password(key: 'secret', title: 'SECRET')]),
+      ]).run(options: [withPlainMode(), withEnvironment(const {})]);
+      stdout.writeln('ECHO_RESTORED=${stdin.echoMode}');
+    } finally {
+      stdin.echoMode = true;
+    }
+    return;
+  }
+  if (scenario == 'plain-then-tui') {
+    // A plain prompt reads a line through the shared stdin owner, then a full
+    // program still gets keys from the same stdin.
+    final name = await promptInput('PLAIN_NAME:',
+        options: [withPlainMode(), withEnvironment(const {})]);
+    stdout.writeln('PLAIN_ANSWER=$name');
+    await Program(options: [
+      withAltScreen(),
+      withHideCursor(),
+      withEnvironment(const {}),
+    ]).run(const _ProbeModel('plain-then-tui'));
+    stdout.writeln('PLAIN_TUI_DONE');
+    return;
+  }
   if (scenario == 'default-chain') {
     // Sequential programs share the implicit process stdin.
     for (final step in ['chain-one', 'chain-two']) {
@@ -116,6 +153,9 @@ Future<void> main(List<String> arguments) async {
 }
 
 const _scenarios = {
+  'plain-then-tui',
+  'plain-chain',
+  'plain-password-echo',
   'kill',
   'cancel',
   'resize',
@@ -273,6 +313,7 @@ final class _ProbeModel implements Model {
     if ((scenario == 'default-quit' ||
             scenario == 'explicit-exec' ||
             scenario == 'exec-followup' ||
+            scenario == 'plain-then-tui' ||
             scenario.startsWith('chain-')) &&
         msg is KeyMsg &&
         msg.key == 'q') {
@@ -342,6 +383,7 @@ final class _ProbeModel implements Model {
               'stdin-quit' => 'STDIN_QUIT_READY',
               'stdin-ctrl-c' => 'STDIN_CTRL_C_READY',
               'default-quit' => 'DEFAULT_QUIT_READY',
+              'plain-then-tui' => 'PLAIN_TUI_READY',
               'chain-one' => 'CHAIN_ONE_READY',
               'chain-two' => 'CHAIN_TWO_READY',
               'default-keys' => 'DEFAULT_KEYS_READY',

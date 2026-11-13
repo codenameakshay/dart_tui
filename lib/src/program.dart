@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 
+import 'ansi_state.dart' show stripAnsiSequences;
 import 'bubbles/style.dart';
 import 'cmd.dart';
 import 'color_detect.dart';
@@ -16,6 +17,8 @@ import 'renderer.dart';
 import 'terminal_control.dart';
 import 'view.dart';
 import 'windows_terminal.dart';
+
+part 'plain.dart';
 
 typedef ProgramOption = void Function(Program program);
 
@@ -49,12 +52,39 @@ final class _SharedStdin {
   bool _pinHelperAlive = false;
   bool _stdinExecResetting = false;
 
+  /// Bytes a plain-mode reader read past its last line, plus bytes that
+  /// arrived after it stopped. The next reader gets them first.
+  final List<int> _pending = [];
+  bool _holdOrphans = false;
+
+  /// Gives [bytes] back so the next reader, plain or not, gets them first.
+  /// Bytes that arrive while no reader listens are kept too, until then.
+  void unread(List<int> bytes) {
+    _pending.insertAll(0, bytes);
+    _holdOrphans = true;
+  }
+
+  List<int>? _takePending() {
+    _holdOrphans = false;
+    if (_pending.isEmpty) return null;
+    final bytes = List<int>.of(_pending);
+    _pending.clear();
+    return bytes;
+  }
+
   Stream<List<int>> claim() {
-    if (_closed) return const Stream<List<int>>.empty();
+    if (_closed) {
+      final rest = _takePending();
+      return rest == null
+          ? const Stream<List<int>>.empty()
+          : Stream<List<int>>.value(rest);
+    }
     late final StreamController<List<int>> reader;
     reader = StreamController<List<int>>(
       onListen: () {
         _readers.add(reader);
+        final rest = _takePending();
+        if (rest != null) reader.add(rest);
         _sync();
       },
       onPause: _sync,
@@ -231,6 +261,8 @@ final class _SharedStdin {
         if (token == _execCancelToken && ack != null && !ack.isCompleted) {
           ack.completeError(StateError('stdin reader cancel failed: $error'));
         }
+      case List<int>() when _readers.isEmpty && _holdOrphans:
+        _pending.addAll(message);
       case List<int>():
         for (final reader in [..._readers]) {
           reader.add(message);
@@ -318,6 +350,20 @@ ProgramOption withEnvironment(Map<String, String> env) {
   };
 }
 
+/// Forces plain mode on or off for this program.
+///
+/// In plain mode the one-shot helpers ([promptSelect], [promptConfirm],
+/// [promptInput], [filter], [spin], [pager] and `Form.run`) ask plain line
+/// questions and write no escape codes, for pipes, CI, screen readers and AI
+/// agents. Without this option plain mode is on when `DART_TUI_ACCESSIBLE` or
+/// `ACCESSIBLE` is set (see [withEnvironment]), or when the helper uses the
+/// real stdin and stdout and either is not a terminal, or `TERM=dumb`. A
+/// forced `false` wins over all of these.
+///
+/// A custom [Program] in plain mode renders nothing while it runs and writes
+/// its final frame as plain text once on exit.
+ProgramOption withPlainMode([bool on = true]) => (p) => p._plain = on;
+
 ProgramOption withoutSignalHandler() => (p) => p._disableSignalHandler = true;
 ProgramOption withoutCatchPanics() => (p) => p._disableCatchPanics = true;
 ProgramOption withoutRenderer() => (p) => p._disableRenderer = true;
@@ -374,6 +420,14 @@ ProgramOption withMouseAllMotion() =>
 /// Enable terminal focus/blur reporting at startup.
 ProgramOption withReportFocus() => (p) => p._defaultReportFocus = true;
 
+/// Runs a [Model]: reads input, sends messages to `update`, and renders
+/// `view` to the terminal.
+///
+/// When the program uses the real stdin and stdout and stdout is not a
+/// terminal (a pipe, a file, CI), or when [withPlainMode] forces it, it
+/// writes no cursor, erase or query codes while it runs. On exit it writes
+/// its final frame once, as plain text; lines from [println] go out at once.
+/// Input is read as usual.
 final class Program {
   Program({List<ProgramOption> options = const []}) {
     for (final opt in options) {
@@ -387,6 +441,7 @@ final class Program {
   Msg? Function(Model model, Msg msg)? _filter;
   Future<void> Function()? _externalCancellation;
   ColorProfile? _profile;
+  bool? _plain;
   int _fps = 60;
   int? _width;
   int? _height;
@@ -505,13 +560,11 @@ final class Program {
     await _finished?.future;
   }
 
-  Future<(Object?, Model)> _runCore(Model initial) async {
-    if (_running) {
-      throw StateError('Program is already running');
-    }
-    if (!_disableInput &&
-        (_input == null || identical(_input, stdin)) &&
-        Isolate.current.debugName != 'main') {
+  bool get _usesSharedStdin =>
+      !_disableInput && (_input == null || identical(_input, stdin));
+
+  void _checkStdinIsolate() {
+    if (_usesSharedStdin && Isolate.current.debugName != 'main') {
       // Each isolate would start its own reader on fd 0, and readers in
       // different isolates race for input and for the descriptor itself.
       throw StateError(
@@ -520,6 +573,13 @@ final class Program {
         'for no input.',
       );
     }
+  }
+
+  Future<(Object?, Model)> _runCore(Model initial) async {
+    if (_running) {
+      throw StateError('Program is already running');
+    }
+    _checkStdinIsolate();
     _running = true;
     _killed = false;
     _endedInAltScreen = false;
@@ -668,6 +728,18 @@ final class Program {
       enqueue(WindowSizeMsg(width, height));
     }
 
+    // Plain output (real stdout that is not a terminal, or plain mode
+    // forced) gets no control sequences: only the final frame, as text, on
+    // exit. A custom input or output keeps the terminal behaviour.
+    final plainOutput = (_plain ??
+        (_input == null &&
+            !_disableInput &&
+            identical(_output, stdout) &&
+            !stdoutIsTerminal()));
+    void control(String sequence) {
+      if (!plainOutput) _output.write(sequence);
+    }
+
     // Process one message: update model / fire side-effects.
     // Returns true when the view may have changed and a re-render is needed.
     // Does NOT call render() — the event loop renders once per drained batch.
@@ -706,11 +778,11 @@ final class Program {
           scheduleResizeMsg();
           return false;
         case RequestForegroundColorMsg():
-          _output.write('\x1b]10;?\x07');
+          control('\x1b]10;?\x07');
           if (_disableInput) enqueue(ForegroundColorMsg(0xFFFFFF));
           return false;
         case RequestBackgroundColorMsg():
-          _output.write('\x1b]11;?\x07');
+          control('\x1b]11;?\x07');
           if (_disableInput) {
             final reply = BackgroundColorMsg(0x000000);
             syntheticBackgroundReplies.add(reply);
@@ -718,33 +790,33 @@ final class Program {
           }
           return false;
         case RequestCursorColorMsg():
-          _output.write('\x1b]12;?\x07');
+          control('\x1b]12;?\x07');
           if (_disableInput) enqueue(CursorColorMsg(0xFFFFFF));
           return false;
         case RequestCursorPositionMsg():
-          _output.write('\x1b[6n');
+          control('\x1b[6n');
           if (_disableInput) enqueue(CursorPositionMsg(x: 0, y: 0));
           return false;
         case RequestTerminalVersionMsg():
-          _output.write('\x1b[>0c');
+          control('\x1b[>0c');
           if (_disableInput) enqueue(TerminalVersionMsg('unknown'));
           return false;
         case RequestCapabilityMsg():
           final encoded = _hexEncode(msg.name);
-          _output.write('\x1bP+q$encoded\x1b\\');
+          control('\x1bP+q$encoded\x1b\\');
           if (_disableInput) enqueue(CapabilityMsg('${msg.name}=unknown'));
           return false;
         case SetClipboardMsg():
-          _output.write('\x1b]52;c;${_base64(msg.value)}\x07');
+          control('\x1b]52;c;${_base64(msg.value)}\x07');
           return false;
         case ReadClipboardMsg():
-          _output.write('\x1b]52;c;?\x07');
+          control('\x1b]52;c;?\x07');
           return false;
         case SetPrimaryClipboardMsg():
-          _output.write('\x1b]52;p;${_base64(msg.value)}\x07');
+          control('\x1b]52;p;${_base64(msg.value)}\x07');
           return false;
         case ReadPrimaryClipboardMsg():
-          _output.write('\x1b]52;p;?\x07');
+          control('\x1b]52;p;?\x07');
           return false;
         case ClearScreenMsg():
           _renderer?.clearScreen();
@@ -762,7 +834,7 @@ final class Program {
           _renderer?.setCursorVisibility(true);
           return false;
         case SetWindowTitleMsg():
-          _output.write(windowTitleSequence(msg.title));
+          control(windowTitleSequence(msg.title));
           return false;
         case ClearScrollAreaMsg():
           // The renderer clears once: the alternate screen, or only the
@@ -920,7 +992,7 @@ final class Program {
           (identical(_output, stdout)
               ? detectColorProfile(
                   environment: _environment,
-                  isTerminal: stdout.hasTerminal,
+                  isTerminal: stdoutIsTerminal(),
                 )
               : ColorProfile.trueColor);
       Style.defaultProfile = profile;
@@ -932,23 +1004,25 @@ final class Program {
       runLogSink = _logSink;
       _renderer = _disableRenderer
           ? NilRenderer()
-          : _useCellRenderer
-              ? CellRenderer(
-                  output: _output,
-                  logSink: _logSink,
-                  defaultAltScreen: _altScreen,
-                  defaultHideCursor: _hideCursor,
-                  defaultMouseMode: _defaultMouseMode,
-                  defaultReportFocus: _defaultReportFocus,
-                )
-              : AnsiRenderer(
-                  output: _output,
-                  logSink: _logSink,
-                  defaultAltScreen: _altScreen,
-                  defaultHideCursor: _hideCursor,
-                  defaultMouseMode: _defaultMouseMode,
-                  defaultReportFocus: _defaultReportFocus,
-                );
+          : plainOutput
+              ? PlainRenderer(_output)
+              : _useCellRenderer
+                  ? CellRenderer(
+                      output: _output,
+                      logSink: _logSink,
+                      defaultAltScreen: _altScreen,
+                      defaultHideCursor: _hideCursor,
+                      defaultMouseMode: _defaultMouseMode,
+                      defaultReportFocus: _defaultReportFocus,
+                    )
+                  : AnsiRenderer(
+                      output: _output,
+                      logSink: _logSink,
+                      defaultAltScreen: _altScreen,
+                      defaultHideCursor: _hideCursor,
+                      defaultMouseMode: _defaultMouseMode,
+                      defaultReportFocus: _defaultReportFocus,
+                    );
       if (!_disableRenderer) {
         _setRawMode(true);
       }
@@ -1034,7 +1108,7 @@ final class Program {
 
       // Send capability queries AFTER the first frame so the first visible
       // output reaches the terminal without being delayed by query bytes.
-      if (!_disableInput) {
+      if (!_disableInput && !plainOutput) {
         pendingReplies.addAll(const [2026, 2027, 11]);
         _output.write('\x1b[?2026\$p');
         _output.write('\x1b[?2027\$p');

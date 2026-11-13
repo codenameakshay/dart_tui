@@ -1,3 +1,4 @@
+import 'dart:ffi';
 import 'dart:io';
 
 import 'msg.dart';
@@ -5,7 +6,7 @@ import 'msg.dart';
 /// Detects the [ColorProfile] of the terminal from environment variables.
 ///
 /// [environment] defaults to [Platform.environment] and [isTerminal] to
-/// `stdout.hasTerminal`. Pass both to get a pure, repeatable result.
+/// [stdoutIsTerminal]. Pass both to get a pure, repeatable result.
 ///
 /// The rules, first match wins:
 ///
@@ -40,11 +41,36 @@ ColorProfile detectColorProfile({
   if (_isSet(env['NO_COLOR'])) return ColorProfile.noColor;
   final cliForced = _forcedProfile(env['CLICOLOR_FORCE']);
   if (cliForced != null) return _max(cliForced, _terminalProfile(env));
-  if (!(isTerminal ?? stdout.hasTerminal) || env['TERM'] == 'dumb') {
+  if (isPlainOutput(env, isTerminal ?? stdoutIsTerminal())) {
     return ColorProfile.noColor;
   }
   return _terminalProfile(env);
 }
+
+/// Whether stdout is a terminal.
+///
+/// `stdout.hasTerminal` is false for a terminal whose window size is 0×0,
+/// such as a new pseudo-terminal. On Linux and macOS, native stdout is also
+/// checked with `isatty`, which ignores size and rejects non-TTY devices.
+bool stdoutIsTerminal() {
+  final output = stdout;
+  if (output.hasTerminal) return true;
+  if (!identical(output, _NativeIO().stdout) ||
+      !(Platform.isLinux || Platform.isMacOS)) {
+    return false;
+  }
+  return DynamicLibrary.process()
+          .lookupFunction<Int32 Function(Int32), int Function(int)>(
+              'isatty')(1) ==
+      1;
+}
+
+final class _NativeIO extends IOOverrides {}
+
+/// Whether output cannot take escape codes: it is not a terminal, or
+/// `TERM=dumb`. Colour detection and plain mode share this rule.
+bool isPlainOutput(Map<String, String> environment, bool isTerminal) =>
+    !isTerminal || environment['TERM'] == 'dumb';
 
 /// The [ColorProfile] styles use outside a Program: true colour, unless
 /// `NO_COLOR` asks for none.

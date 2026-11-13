@@ -61,6 +61,48 @@ final class NilRenderer implements TeaRenderer {
   void scroll(int n, {bool up = true}) {}
 }
 
+/// Renders for output that is not a terminal: nothing while the program
+/// runs, then the final frame once, as plain text, on [close]. Printed lines
+/// go out at once, also as plain text.
+final class PlainRenderer implements TeaRenderer {
+  PlainRenderer(this._output);
+  final IOSink _output;
+  String? _last;
+
+  @override
+  bool get altScreenActive => false;
+  @override
+  void render(View view) => _last = view.content;
+  @override
+  void insertAbove(String line) => _output.writeln(_plainText(line));
+  @override
+  void close() {
+    final last = _last;
+    _last = null;
+    if (last != null) _output.write(_plainText(last));
+  }
+
+  static String _plainText(String text) =>
+      stripAnsiSequences(text).replaceAll('\x1b', '');
+
+  @override
+  void clearScreen() {}
+  @override
+  void setSyncUpdates(bool enabled) {}
+  @override
+  void setUnicodeCore(bool enabled) {}
+  @override
+  void release({bool reset = false}) {}
+  @override
+  void restore(View view) => render(view);
+  @override
+  void setAltScreen(bool enabled) {}
+  @override
+  void setCursorVisibility(bool visible) {}
+  @override
+  void scroll(int n, {bool up = true}) {}
+}
+
 /// The 1-based terminal row to park the cursor on at exit: the view's last
 /// row. A trailing newline ends the last line rather than adding an empty row,
 /// and a last line wider than [columns] soft-wraps onto more rows.
