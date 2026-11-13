@@ -16,12 +16,23 @@ import 'view.dart';
 /// Interactive fuzzy filter over [choices]. Type to narrow, `Enter` to pick the
 /// highlighted entry, `Esc`/`Ctrl+C` to cancel. Returns the chosen string, or
 /// `null` if cancelled or [choices] is empty.
+///
+/// In plain mode (see [withPlainMode]) it writes [title] and the numbered
+/// choices, then accepts a number, or text that matches exactly one choice.
 Future<String?> filter(
   List<String> choices, {
   List<ProgramOption> options = const [],
   String title = '',
 }) async {
   if (choices.isEmpty) return null;
+  final program = Program(options: options);
+  final plain = PlainSession.open(program);
+  if (plain != null) {
+    return plain.run((io) async {
+      final i = await io.askChoice([title], choices, matchText: true);
+      return i == null ? null : choices[i];
+    });
+  }
   final model = _FilterModel(
     ListModel(
       items: choices.map((o) => ListItem(title: o)).toList(),
@@ -29,12 +40,15 @@ Future<String?> filter(
       filterMode: true,
     ),
   );
-  return Program(options: options).runForResult(model);
+  return program.runForResult(model);
 }
 
 /// Render an animated spinner labelled [label] while awaiting [task], returning
 /// its result (or rethrowing its error). The spinner is torn down as soon as
 /// [task] settles.
+///
+/// In plain mode (see [withPlainMode]) it writes `label…` when it starts,
+/// then `✓ label` or `✗ label: error` when [task] settles.
 Future<T> spin<T>(
   Future<T> task, {
   String label = 'Loading…',
@@ -46,6 +60,19 @@ Future<T> spin<T>(
       ...options,
     ],
   );
+  final plain = PlainSession.open(program);
+  if (plain != null) {
+    final name = label.replaceFirst(RegExp(r'(…|\.\.\.)$'), '');
+    plain.writeln('$name…');
+    try {
+      final value = await task;
+      plain.writeln('✓ $name');
+      return value;
+    } catch (error) {
+      plain.writeln('✗ $name: $error');
+      rethrow;
+    }
+  }
   final run = program.run(_SpinModel(SpinnerModel(), label));
 
   T? value;
@@ -71,16 +98,24 @@ Future<T> spin<T>(
 
 /// Show [content] in a scrollable pager. Scroll with the usual viewport keys;
 /// press `q`/`Esc` to exit. Completes when the user quits.
+///
+/// In plain mode (see [withPlainMode]) it writes [content] as it is.
 Future<void> pager(
   String content, {
   int width = 80,
   int height = 20,
   List<ProgramOption> options = const [],
 }) async {
+  final program = Program(options: options);
+  final plain = PlainSession.open(program);
+  if (plain != null) {
+    plain.write(content.endsWith('\n') ? content : '$content\n');
+    return;
+  }
   final model = _PagerModel(
     ViewportModel(content: content, width: width, height: height),
   );
-  await Program(options: options).run(model);
+  await program.run(model);
 }
 
 // ── Models ───────────────────────────────────────────────────────────────────

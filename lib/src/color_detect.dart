@@ -40,11 +40,16 @@ ColorProfile detectColorProfile({
   if (_isSet(env['NO_COLOR'])) return ColorProfile.noColor;
   final cliForced = _forcedProfile(env['CLICOLOR_FORCE']);
   if (cliForced != null) return _max(cliForced, _terminalProfile(env));
-  if (!(isTerminal ?? stdout.hasTerminal) || env['TERM'] == 'dumb') {
+  if (isPlainOutput(env, isTerminal ?? stdout.hasTerminal)) {
     return ColorProfile.noColor;
   }
   return _terminalProfile(env);
 }
+
+/// Whether output cannot take escape codes: it is not a terminal, or
+/// `TERM=dumb`. Colour detection and plain mode share this rule.
+bool isPlainOutput(Map<String, String> environment, bool isTerminal) =>
+    !isTerminal || environment['TERM'] == 'dumb';
 
 /// The [ColorProfile] styles use outside a Program: true colour, unless
 /// `NO_COLOR` asks for none.

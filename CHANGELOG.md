@@ -4,6 +4,20 @@
 
 ### Features
 
+- **Plain mode.** The new `withPlainMode([bool on = true])` makes
+  `promptSelect`, `promptConfirm`, `promptInput`, `filter`, `spin`, `pager` and
+  `Form.run` ask plain line questions and write no escape codes. It is for
+  pipes, CI, screen readers and AI agents. Plain mode is on when you force it,
+  or when `DART_TUI_ACCESSIBLE` or `ACCESSIBLE` is set to a true value, or when
+  the helper uses the real stdin and stdout and either is not a terminal or
+  `TERM=dumb`. `withPlainMode(false)` wins over all of these. A helper with
+  `withInput` or `withOutput` keeps the terminal UI unless you force plain
+  mode, so existing tests do not change. End of input cancels: the helper
+  returns `null`, like `Esc`, and `Form.run` returns `null`. When input is not a
+  terminal, each answer is echoed to the output. A custom `Program` in plain
+  mode, or with a real stdout that is not a terminal, writes no cursor, erase
+  or query codes, prints `println` lines at once, and writes its final frame
+  once as plain text. The feature is additive.
 - **Colour profile detection.** The new `detectColorProfile()` reads
   `FORCE_COLOR`, `NO_COLOR`, `CLICOLOR_FORCE`, `TERM`, `COLORTERM`,
   `TERM_PROGRAM` and `WT_SESSION`, after

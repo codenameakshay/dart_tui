@@ -30,6 +30,16 @@ Future<void> main(List<String> arguments) async {
     }
     return;
   }
+  if (scenario == 'plain-then-tui') {
+    // A plain prompt reads a line through the shared stdin owner, then a full
+    // program still gets keys from the same stdin.
+    final name = await promptInput('PLAIN_NAME:', options: [withPlainMode()]);
+    stdout.writeln('PLAIN_ANSWER=$name');
+    await Program(options: [withAltScreen(), withHideCursor()])
+        .run(const _ProbeModel('plain-then-tui'));
+    stdout.writeln('PLAIN_TUI_DONE');
+    return;
+  }
   if (scenario == 'default-chain') {
     // Sequential programs share the implicit process stdin.
     for (final step in ['chain-one', 'chain-two']) {
@@ -116,6 +126,7 @@ Future<void> main(List<String> arguments) async {
 }
 
 const _scenarios = {
+  'plain-then-tui',
   'kill',
   'cancel',
   'resize',
@@ -273,6 +284,7 @@ final class _ProbeModel implements Model {
     if ((scenario == 'default-quit' ||
             scenario == 'explicit-exec' ||
             scenario == 'exec-followup' ||
+            scenario == 'plain-then-tui' ||
             scenario.startsWith('chain-')) &&
         msg is KeyMsg &&
         msg.key == 'q') {
@@ -342,6 +354,7 @@ final class _ProbeModel implements Model {
               'stdin-quit' => 'STDIN_QUIT_READY',
               'stdin-ctrl-c' => 'STDIN_CTRL_C_READY',
               'default-quit' => 'DEFAULT_QUIT_READY',
+              'plain-then-tui' => 'PLAIN_TUI_READY',
               'chain-one' => 'CHAIN_ONE_READY',
               'chain-two' => 'CHAIN_TWO_READY',
               'default-keys' => 'DEFAULT_KEYS_READY',

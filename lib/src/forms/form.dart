@@ -108,10 +108,58 @@ final class Form extends Model implements OutcomeModel<FormValues> {
 
   /// Run the form as a one-shot program; returns the values, or `null` if
   /// cancelled. Safe to call from a script.
+  ///
+  /// In plain mode (see [withPlainMode]) it asks one plain line question per
+  /// visible field, in order: group titles are headings, notes are text, and
+  /// hidden fields are skipped. Dynamic titles and options follow the answers
+  /// so far, and a multi-select takes comma-separated numbers. The values
+  /// equal what the terminal form returns for the same answers. The end of
+  /// input cancels.
   Future<FormValues?> run({List<ProgramOption> options = const []}) async {
-    final result = await Program(options: options).run(_FormRunner(this));
+    final program = Program(options: options);
+    final plain = PlainSession.open(program);
+    if (plain != null) return plain.run(_runPlain);
+    final result = await program.run(_FormRunner(this));
     final f = (result as _FormRunner).form;
     return f.submitted ? f.values : null;
+  }
+
+  Future<FormValues?> _runPlain(PlainSession io) async {
+    var form = this;
+    for (var gi = 0; gi < form.groups.length; gi++) {
+      if (form.groups[gi].hidden?.call(form._rawValues) ?? false) continue;
+      final title = form.groups[gi].title;
+      if (title != null && title.isNotEmpty) io.writeln(title);
+      for (var fi = 0; fi < form.groups[gi].fields.length; fi++) {
+        final values = form._rawValues;
+        final field = form.groups[gi].fields[fi];
+        if (field.isHidden(values)) continue;
+        final answered = await askPlainField(field, io, values);
+        if (answered == null) return null;
+        form = form._replace(gi, fi, answered)._recompute();
+      }
+    }
+    // As on submit in the terminal: a visible field that fails validation
+    // (one that was hidden when its turn came) is asked again.
+    while (true) {
+      final (submitted, _) = form._submit();
+      final result = submitted as Form;
+      if (result.submitted) return result.values;
+      final (gi, fi) = (result.groupIndex, result.fieldIndex);
+      final field = result.groups[gi].fields[fi];
+      io.writeln('✗ ${field.error}');
+      final answered = await askPlainField(field, io, form._rawValues);
+      if (answered == null) return null;
+      form = form._replace(gi, fi, answered)._recompute();
+    }
+  }
+
+  Form _replace(int gi, int fi, FormField field) {
+    final g = groups[gi];
+    final fields = [...g.fields]..[fi] = field;
+    final next = [...groups]..[gi] =
+        Group(fields, title: g.title, hidden: g.hidden);
+    return _withGroups(next);
   }
 
   /// Deliver a non-key message (file-picker loads, ticks) to every field.
