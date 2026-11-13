@@ -320,6 +320,25 @@ void _readStdin(SendPort events) {
   events.send(control.sendPort);
 }
 
+/// Internal: `TuiTester` (in `package:dart_tui/testing.dart`) drives every
+/// [Program] created in a zone that holds this key.
+final Object programTestHookKey = Object();
+
+/// Internal: see [programTestHookKey].
+abstract interface class ProgramTestHook {
+  /// Applied after the program's own options.
+  List<ProgramOption> get options;
+
+  /// Called when [program] starts; returns the model to run instead.
+  Model attach(Program program, Model model);
+
+  /// Turns the model [attach] returned, after the run, back into the app's.
+  Model unwrap(Model model);
+
+  /// Called when [program]'s run ends, also when it throws.
+  void detach(Program program);
+}
+
 ProgramOption withContext(Future<void> Function() cancellation) {
   return (p) {
     p._externalCancellation = cancellation;
@@ -433,7 +452,16 @@ final class Program {
     for (final opt in options) {
       opt(this);
     }
+    final hook = Zone.current[programTestHookKey];
+    if (hook is ProgramTestHook) {
+      _testHook = hook;
+      for (final opt in hook.options) {
+        opt(this);
+      }
+    }
   }
+
+  ProgramTestHook? _testHook;
 
   IOSink _output = stdout;
   Stream<List<int>>? _input;
@@ -500,18 +528,22 @@ final class Program {
   }
 
   Future<Model> run(Model initial) async {
+    final hook = _testHook;
     final runZone = Zone.current.fork(
       zoneValues: {_commandZoneOwnerKey: null},
     );
-    final (_, model) = await runZone.run(() => _runCore(initial));
-    return model;
+    try {
+      final (_, model) = await runZone.run(
+        () => _runCore(hook == null ? initial : hook.attach(this, initial)),
+      );
+      return hook == null ? model : hook.unwrap(model);
+    } finally {
+      hook?.detach(this);
+    }
   }
 
   Future<T?> runForResult<T>(OutcomeModel<T> initial) async {
-    final runZone = Zone.current.fork(
-      zoneValues: {_commandZoneOwnerKey: null},
-    );
-    final (_, model) = await runZone.run(() => _runCore(initial));
+    final model = await run(initial);
     if (model is OutcomeModel<T>) {
       return model.outcome;
     }

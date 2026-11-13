@@ -1,0 +1,3 @@
+Ticks: 5
+
+Press q to quit.

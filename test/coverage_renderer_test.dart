@@ -1,40 +1,9 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:dart_tui/dart_tui.dart';
 import 'package:dart_tui/src/renderer.dart';
 import 'package:test/test.dart';
+import 'package:dart_tui/testing.dart' show CaptureSink;
 
-class _Sink implements IOSink {
-  final StringBuffer buf = StringBuffer();
-  @override
-  void write(Object? o) => buf.write(o);
-  @override
-  void writeln([Object? o = '']) => buf.writeln(o);
-  @override
-  void writeAll(Iterable<dynamic> objs, [String sep = '']) =>
-      buf.writeAll(objs, sep);
-  @override
-  void writeCharCode(int c) => buf.writeCharCode(c);
-  @override
-  Future<void> flush() async {}
-  @override
-  Future<void> close() async {}
-  @override
-  Future<void> get done async {}
-  @override
-  void add(List<int> d) => buf.write(utf8.decode(d));
-  @override
-  void addError(Object e, [StackTrace? st]) {}
-  @override
-  Future<void> addStream(Stream<List<int>> s) async {}
-  @override
-  Encoding get encoding => utf8;
-  @override
-  set encoding(Encoding v) {}
-}
-
-void _driveModes(TeaRenderer r, _Sink sink) {
+void _driveModes(TeaRenderer r, CaptureSink sink) {
   r.setUnicodeCore(true);
   r.setUnicodeCore(true);
   // Flip every mode on...
@@ -70,31 +39,31 @@ void _driveModes(TeaRenderer r, _Sink sink) {
 
 void main() {
   test('AnsiRenderer drives all modes, sync updates, scroll, insertAbove', () {
-    final sink = _Sink();
+    final sink = CaptureSink();
     final r = AnsiRenderer(
         output: sink, defaultAltScreen: false, defaultHideCursor: true);
     r.setSyncUpdates(true);
     r.render(View(content: 'a\nb'));
     r.render(View(content: 'a\nB')); // changed → sync-wrapped diff
-    expect(sink.buf.toString(), contains('\x1b[?2026h'));
+    expect(sink.buffer.toString(), contains('\x1b[?2026h'));
     _driveModes(r, sink);
-    expect(sink.buf.toString(), contains('\x1b]0;Title\x07'));
+    expect(sink.buffer.toString(), contains('\x1b]0;Title\x07'));
     // Scrolling runs here on the normal screen, where it is a no-op (#18).
-    expect(sink.buf.toString(), isNot(contains('\x1b[2S')));
-    expect(sink.buf.toString(), contains('\x1b[?2027h'));
-    expect(sink.buf.toString(), contains('\x1b[?2027l'));
+    expect(sink.buffer.toString(), isNot(contains('\x1b[2S')));
+    expect(sink.buffer.toString(), contains('\x1b[?2027h'));
+    expect(sink.buffer.toString(), contains('\x1b[?2027l'));
   });
 
   test('CellRenderer drives modes + grid escape parsing (SGR/OSC/wide/lone)',
       () {
-    final sink = _Sink();
+    final sink = CaptureSink();
     final r = CellRenderer(
         output: sink, defaultAltScreen: false, defaultHideCursor: true);
     // content mixing SGR, an OSC sequence, a wide char, and a lone escape
     r.render(View(content: '\x1b[1;32mgreen\x1b[0m 你 \x1b]0;t\x07\x1b7end'));
     r.render(View(content: '\x1b[31mred\x1b[0m 世'));
     _driveModes(r, sink);
-    expect(sink.buf.toString(), isNotEmpty);
+    expect(sink.buffer.toString(), isNotEmpty);
   });
 
   test('NilRenderer is a total no-op across the interface', () {

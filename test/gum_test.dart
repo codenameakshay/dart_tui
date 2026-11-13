@@ -1,13 +1,16 @@
+import 'dart:async';
+
 import 'package:dart_tui/dart_tui.dart';
+import 'package:dart_tui/testing.dart';
 import 'package:test/test.dart';
 
-Stream<List<int>> _seq(List<List<int>> chunks) => Stream.fromIterable(chunks);
-List<ProgramOption> _opts(List<List<int>> chunks) =>
-    [withoutRenderer(), withInput(_seq(chunks))];
-
-const _enter = [0x0d];
-const _esc = [0x1b];
-const _timeout = Timeout(Duration(seconds: 5));
+/// Drives [body] (a gum helper) with the test harness.
+TuiTester _drive(Future<Object?> Function() body,
+    {List<ProgramOption> options = const []}) {
+  final t = TuiTester.run(body, width: 40, height: 10, options: options);
+  addTearDown(t.dispose);
+  return t;
+}
 
 void main() {
   group('filter', () {
@@ -16,64 +19,53 @@ void main() {
     });
 
     test('typing narrows and enter picks the match', () async {
-      final r = await filter(
-        ['apple', 'banana', 'apricot'],
-        options: _opts([
-          [0x62], // 'b' → only 'banana' matches
-          _enter,
-        ]),
-      );
-      expect(r, 'banana');
-    }, timeout: _timeout);
+      final t = _drive(() => filter(['apple', 'banana', 'apricot']));
+      await t.type('b'); // only 'banana' matches
+      await t.press('enter');
+      expect((await t.done()).value, 'banana');
+    });
 
     test('down moves the highlight before enter picks it', () async {
-      final r = await filter(
-        ['apple', 'apricot', 'banana'],
-        options: _opts([
-          [0x61, 0x70], // 'ap' → apple, apricot
-          [0x1b, 0x5b, 0x42], // down
-          _enter,
-        ]),
-      );
-      expect(r, 'apricot');
-    }, timeout: _timeout);
+      final t = _drive(() => filter(['apple', 'apricot', 'banana']));
+      await t.type('ap'); // apple, apricot
+      await t.press('down');
+      expectScreen(t.screen, 'test/goldens/gum_filter.txt');
+      await t.press('enter');
+      expect((await t.done()).value, 'apricot');
+    });
 
     test('esc cancels', () async {
-      // esc is a lone escape: the program schedules a short timer to deliver it.
-      final r = await filter(['a', 'b'], options: _opts([_esc]));
-      expect(r, isNull);
-    }, timeout: _timeout);
+      final t = _drive(() => filter(['a', 'b']));
+      await t.press('esc');
+      expect((await t.done()).value, isNull);
+    });
   });
 
   group('spin', () {
-    test('returns the task result', () async {
-      final r = await spin(
-        Future<int>.value(42),
-        options: [withoutRenderer(), withInput(null)],
-      );
-      expect(r, 42);
-    }, timeout: _timeout);
+    test('animates while the task runs and returns its result', () async {
+      final task = Completer<int>();
+      // No fake clock: a short tick interval and waitFor follow real time.
+      final t = _drive(() => spin(task.future, label: 'Working'),
+          options: [withTickInterval(const Duration(milliseconds: 5))]);
+      final first = t.screen;
+      expectScreen(first, 'test/goldens/gum_spin.txt');
+      await t.waitFor((screen) => screen != first);
+      task.complete(42);
+      expect((await t.done()).value, 42);
+    });
 
     test('rethrows the task error', () async {
-      await expectLater(
-        spin<int>(
-          Future<int>.error(StateError('boom')),
-          options: [withoutRenderer(), withInput(null)],
-        ),
-        throwsA(isA<StateError>()),
-      );
-    }, timeout: _timeout);
+      final t = _drive(() => spin<int>(Future<int>.error(StateError('boom'))));
+      await expectLater(t.done(), throwsStateError);
+    });
   });
 
   group('pager', () {
-    test('exits on q', () async {
-      await pager(
-        'line1\nline2\nline3',
-        options: _opts([
-          [0x71], // 'q'
-        ]),
-      );
-      expect(true, isTrue); // completed without hanging
-    }, timeout: _timeout);
+    test('shows the content and exits on q', () async {
+      final t = _drive(() => pager('line1\nline2\nline3', height: 5));
+      expectScreen(t.screen, 'test/goldens/gum_pager.txt');
+      await t.press('q');
+      await t.done();
+    });
   });
 }

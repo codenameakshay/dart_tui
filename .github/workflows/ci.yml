@@ -29,6 +29,8 @@ jobs:
       # Linux/macOS: run the suite with coverage and enforce the lib/ floor.
       - if: runner.os != 'Windows'
         run: bash tool/coverage.sh 90
+      # The example tests show package:dart_tui/testing.dart in use.
+      - run: dart test example/test
       # The PTY smoke test relies on Python's Unix-only `pty` module.
       - if: runner.os != 'Windows'
         run: python3 tool/pty_examples_smoke.py
@@ -48,6 +50,7 @@ jobs:
       - run: dart pub get
       - run: dart analyze --fatal-infos
       - run: dart test
+      - run: dart test example/test
 
   # Parse every VHS tape so a broken tape fails CI. Never records GIFs.
   tapes:

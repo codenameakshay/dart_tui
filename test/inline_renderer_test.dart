@@ -1,12 +1,11 @@
 // Inline (normal-screen) rendering, issue #18: frames start on the cursor's
 // row and move only relative to their top row, so shell history above the
 // frame is never painted over.
-import 'dart:convert';
-import 'dart:io';
 
 import 'package:dart_tui/src/renderer.dart';
 import 'package:dart_tui/src/view.dart';
 import 'package:test/test.dart';
+import 'package:dart_tui/testing.dart' show CaptureSink;
 
 final _absoluteRow = RegExp(r'\x1b\[\d*;\d*H|\x1b\[H|\x1b\[\d+d');
 
@@ -24,14 +23,14 @@ void main() {
         columns = 0;
         renderer = cell
             ? CellRenderer(
-                output: _StringSink(buf),
+                output: CaptureSink(buf),
                 defaultAltScreen: false,
                 defaultHideCursor: true,
                 terminalColumns: () => columns,
                 terminalLines: () => lines,
               )
             : AnsiRenderer(
-                output: _StringSink(buf),
+                output: CaptureSink(buf),
                 defaultAltScreen: false,
                 defaultHideCursor: true,
                 terminalColumns: () => columns,
@@ -275,12 +274,12 @@ void main() {
       final buf = StringBuffer();
       final renderer = cell
           ? CellRenderer(
-              output: _StringSink(buf),
+              output: CaptureSink(buf),
               defaultAltScreen: true,
               defaultHideCursor: true,
             )
           : AnsiRenderer(
-              output: _StringSink(buf),
+              output: CaptureSink(buf),
               defaultAltScreen: true,
               defaultHideCursor: true,
             );
@@ -292,34 +291,4 @@ void main() {
       expect(buf.toString(), endsWith('\x1b[?2004l\x1b[H\x1b[2J'));
     }
   });
-}
-
-class _StringSink implements IOSink {
-  _StringSink(this._buf);
-  final StringBuffer _buf;
-  @override
-  void write(Object? obj) => _buf.write(obj);
-  @override
-  void writeln([Object? obj = '']) => _buf.writeln(obj);
-  @override
-  void writeAll(Iterable<dynamic> objects, [String separator = '']) =>
-      _buf.writeAll(objects, separator);
-  @override
-  void writeCharCode(int charCode) => _buf.writeCharCode(charCode);
-  @override
-  Future<void> flush() async {}
-  @override
-  Future<void> close() async {}
-  @override
-  Future<void> get done async {}
-  @override
-  void add(List<int> data) {}
-  @override
-  void addError(Object error, [StackTrace? stackTrace]) {}
-  @override
-  Future<void> addStream(Stream<List<int>> stream) async {}
-  @override
-  Encoding get encoding => utf8;
-  @override
-  set encoding(Encoding value) {}
 }

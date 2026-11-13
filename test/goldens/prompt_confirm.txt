@@ -1,0 +1,2 @@
+ok? [y/N]
+Y = yes, N or Enter = no, Esc = cancel

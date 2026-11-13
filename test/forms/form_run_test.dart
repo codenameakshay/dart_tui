@@ -1,12 +1,14 @@
 import 'package:dart_tui/dart_tui.dart';
+import 'package:dart_tui/testing.dart';
 import 'package:test/test.dart';
 
-Stream<List<int>> _seq(List<List<int>> chunks) => Stream.fromIterable(chunks);
-List<ProgramOption> _opts(List<List<int>> chunks) =>
-    [withoutRenderer(), withInput(_seq(chunks))];
-const _enter = [0x0d];
-const _ctrlC = [0x03];
-const _timeout = Timeout(Duration(seconds: 5));
+/// Runs `form.run()` under the test harness, presses [key], returns the result.
+Future<FormValues?> _run(Form form, String key) async {
+  final t = TuiTester.run(form.run);
+  addTearDown(t.dispose);
+  await t.press(key);
+  return (await t.done()).value as FormValues?;
+}
 
 void main() {
   test('form rejects duplicate keys and empty groups at runtime', () {
@@ -24,10 +26,10 @@ void main() {
     final form = Form([
       Group([Field.confirm(key: 'ok', title: 'OK?', initial: true)]),
     ]);
-    final values = await form.run(options: _opts([_enter]));
+    final values = await _run(form, 'enter');
     expect(values, isNotNull);
     expect(values!.get<bool>('ok'), true);
-  }, timeout: _timeout);
+  });
 
   test('a paste edits only the active field', () {
     var form = Form([
@@ -45,12 +47,30 @@ void main() {
     expect(form.values.get<String>('c'), '');
   });
 
+  test('a two-field form, driven as a model, with goldens', () async {
+    final t = TuiTester(Form([
+      Group([
+        Field.input(key: 'name', title: 'Name'),
+        Field.confirm(key: 'ok', title: 'Subscribe?', initial: true),
+      ]),
+    ]));
+    addTearDown(t.dispose);
+    expectScreen(t.screen, 'test/goldens/form_empty.txt');
+    await t.type('Ada');
+    await t.press('tab');
+    expectScreen(t.screen, 'test/goldens/form_filled.txt');
+    await t.press('enter');
+    final values = (await t.done()).outcome as FormValues;
+    expect(values.get<String>('name'), 'Ada');
+    expect(values.get<bool>('ok'), isTrue);
+  });
+
   test('ctrl+c cancels → null', () async {
     final form = Form([
       Group([Field.input(key: 'name', title: 'Name')]),
     ]);
-    expect(await form.run(options: _opts([_ctrlC])), isNull);
-  }, timeout: _timeout);
+    expect(await _run(form, 'ctrl+c'), isNull);
+  });
 
   test('outcome is null until submitted; values reflect fields', () {
     final form = Form([

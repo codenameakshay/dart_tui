@@ -1,6 +1,3 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:test/test.dart';
 
 // Internal imports — use package paths to access src directly
@@ -8,16 +5,17 @@ import 'package:dart_tui/src/ansi_state.dart';
 import 'package:dart_tui/src/bubbles/style.dart';
 import 'package:dart_tui/src/renderer.dart';
 import 'package:dart_tui/src/view.dart';
+import 'package:dart_tui/testing.dart' show CaptureSink;
 
 void main() {
   group('CellRenderer', () {
     late StringBuffer buf;
-    late _StringSink sink;
+    late CaptureSink sink;
     late CellRenderer renderer;
 
     setUp(() {
       buf = StringBuffer();
-      sink = _StringSink(buf);
+      sink = CaptureSink(buf);
       renderer = CellRenderer(
         output: sink,
         logSink: null,
@@ -394,34 +392,4 @@ void main() {
       expect(buf.toString(), isNot(contains(';1H')));
     });
   });
-}
-
-class _StringSink implements IOSink {
-  _StringSink(this._buf);
-  final StringBuffer _buf;
-  @override
-  void write(Object? obj) => _buf.write(obj);
-  @override
-  void writeln([Object? obj = '']) => _buf.writeln(obj);
-  @override
-  void writeAll(Iterable<Object?> objects, [String separator = '']) =>
-      _buf.writeAll(objects, separator);
-  @override
-  void writeCharCode(int charCode) => _buf.writeCharCode(charCode);
-  @override
-  Future<void> flush() async {}
-  @override
-  Future<void> close() async {}
-  @override
-  Future<void> get done async {}
-  @override
-  void add(List<int> data) {}
-  @override
-  void addError(Object error, [StackTrace? stackTrace]) {}
-  @override
-  Future<void> addStream(Stream<List<int>> stream) async {}
-  @override
-  Encoding get encoding => utf8;
-  @override
-  set encoding(Encoding value) {}
 }

@@ -1,0 +1,5 @@
+› Name
+
+  Subscribe?
+    ‹Yes›   No
+tab next · shift+tab back · enter submit · esc cancel

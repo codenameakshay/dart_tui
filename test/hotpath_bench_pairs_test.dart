@@ -1,11 +1,11 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:characters/characters.dart';
 import 'package:dart_tui/dart_tui.dart';
 import 'package:dart_tui/src/input_decoder.dart';
 import 'package:dart_tui/src/renderer.dart';
 import 'package:test/test.dart';
+import 'package:dart_tui/testing.dart' show CaptureSink;
 
 int _naiveVisibleWidth(String s) => s.characters.fold<int>(
       0,
@@ -42,37 +42,6 @@ int _dartTuiDecoderChecksum(List<int> bytes) {
   return checksum;
 }
 
-class _StringSink implements IOSink {
-  _StringSink(this._buf);
-  final StringBuffer _buf;
-
-  @override
-  void write(Object? obj) => _buf.write(obj);
-  @override
-  void writeln([Object? obj = '']) => _buf.writeln(obj);
-  @override
-  void writeAll(Iterable<dynamic> objects, [String separator = '']) =>
-      _buf.writeAll(objects, separator);
-  @override
-  void writeCharCode(int charCode) => _buf.writeCharCode(charCode);
-  @override
-  Future<void> flush() async {}
-  @override
-  Future<void> close() async {}
-  @override
-  Future<void> get done async {}
-  @override
-  void add(List<int> data) {}
-  @override
-  void addError(Object error, [StackTrace? stackTrace]) {}
-  @override
-  Future<void> addStream(Stream<List<int>> stream) async {}
-  @override
-  Encoding get encoding => utf8;
-  @override
-  set encoding(Encoding value) {}
-}
-
 void main() {
   test('naive ANSI width matches getWidth on SGR string', () {
     const s = '\x1b[31mabc\x1b[0m';
@@ -83,7 +52,7 @@ void main() {
   test('CellRenderer second identical render does not grow sink', () {
     final buf = StringBuffer();
     final renderer = CellRenderer(
-      output: _StringSink(buf),
+      output: CaptureSink(buf),
       defaultAltScreen: false,
       defaultHideCursor: false,
     );
