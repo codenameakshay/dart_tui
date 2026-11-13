@@ -9,34 +9,31 @@ export const components: DocEntry[] = [
     featured: true,
     tagline: "Animated indeterminate activity indicator.",
     description:
-      "An indeterminate activity indicator driven by `TickMsg`. Supply any list of `frames` — Braille dots, a line spinner, moons, clocks — and forward ticks to advance it.",
-    gif: "spinner.gif",
+      "An indeterminate activity indicator driven by `TickMsg`. Pick one of 12 presets (`Spinner.line`, `dot`, `miniDot`, `jump`, `pulse`, `points`, `globe`, `moon`, `monkey`, `meter`, `hamburger`, `ellipsis`), the same frames and speeds as Bubble Tea, or pass your own `frames`. Give it an `id` and it runs its own tick chain at the preset's speed, so several spinners can run at different speeds in one program. Without an `id` it follows the global tick from `withTickInterval`.",
+    gif: "spinners.gif",
     snippets: [
       {
-        label: "Usage",
+        label: "Own speed (id)",
         lang: "dart",
         code: `import 'package:dart_tui/dart_tui.dart';
 
-const dots = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-
 final class LoadingModel extends Model {
   LoadingModel({SpinnerModel? spinner})
-      : spinner = spinner ?? SpinnerModel(frames: dots, prefix: 'Loading ');
+      : spinner = spinner ??
+            SpinnerModel(spinner: Spinner.moon, id: 'load', prefix: 'Loading ');
 
   final SpinnerModel spinner;
 
-  // Kick off the animation.
+  // Start the spinner's own tick chain. No withTickInterval needed.
   @override
-  Cmd? init() => tick(const Duration(milliseconds: 100), (_) => TickMsg());
+  Cmd? init() => spinner.tick();
 
   @override
   (Model, Cmd?) update(Msg msg) {
     if (msg is TickMsg) {
-      final (next, _) = spinner.update(msg);
-      return (
-        LoadingModel(spinner: next as SpinnerModel),
-        tick(const Duration(milliseconds: 100), (_) => TickMsg()),
-      );
+      // Forward the tick and return the Cmd: it is the next tick.
+      final (next, cmd) = spinner.update(msg);
+      return (LoadingModel(spinner: next as SpinnerModel), cmd);
     }
     return (this, null);
   }
@@ -45,11 +42,26 @@ final class LoadingModel extends Model {
   View view() => newView(spinner.view().content);
 }`,
       },
+      {
+        label: "Global tick",
+        lang: "dart",
+        code: `// Without an id, a spinner advances on every TickMsg that has no id,
+// such as the ticks from withTickInterval. Ticks with an id
+// (a timer's tickWithId, another spinner's chain) leave it alone.
+await Program(options: [withTickInterval(Spinner.dot.interval)])
+    .run(LoadingModel()); // SpinnerModel(spinner: Spinner.dot) inside
+
+// One-shot helper around a Future:
+final data = await spin(fetch(), label: 'Fetching…', spinner: Spinner.points);`,
+      },
     ],
     api: {
       title: "SpinnerModel",
       rows: [
-        { name: "frames", type: "List<String>", description: "Animation frames cycled on each TickMsg. Defaults to the Braille dot set." },
+        { name: "spinner", type: "Spinner", description: "Frames and interval. One of the 12 `Spinner` presets or `Spinner(frames, interval)`. Defaults to `Spinner.miniDot`." },
+        { name: "frames", type: "List<String>", description: "Custom frames. They replace the preset's frames and keep its interval." },
+        { name: "id", type: "Object?", description: "With an id, the spinner advances only on ticks with that id and returns its next tick at its own interval. A tick from an older chain is dropped, so calling `tick()` twice does not double the speed." },
+        { name: "tick()", type: "Cmd", description: "Starts the spinner's own tick chain. Return it from `init`." },
         { name: "index", type: "int", description: "Current frame index." },
         { name: "prefix", type: "String", description: "Text rendered before the spinner glyph." },
         { name: "suffix", type: "String", description: "Text rendered after the spinner glyph." },
