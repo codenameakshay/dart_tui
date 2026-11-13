@@ -16,7 +16,7 @@
   the program has handled it. `screen` (plain text), `styledScreen` and `model`
   follow every update. `waitFor` throws with the last screen on timeout;
   `quit` and `done` return the final model, screen and outcome.
-  `TuiTester.run(body)` drives code that makes its own `Program`, such as
+  `TuiTester.run(body)` drives programs constructed inside the body, such as
   `promptSelect` or `Form.run`. `expectScreen(screen, path)` compares with a
   golden file and names the first differing line; `DART_TUI_UPDATE_GOLDENS=1`
   writes the files. `CaptureSink` is a public in-memory `IOSink`. The library

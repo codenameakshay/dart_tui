@@ -51,10 +51,23 @@ final class CaptureSink implements IOSink {
   String get text => buffer.toString();
 
   /// Empties [buffer].
-  void clear() => buffer.clear();
+  void clear() {
+    buffer.clear();
+    _decoder = null;
+  }
+
+  Sink<List<int>>? _decoder;
 
   @override
-  Encoding encoding = utf8;
+  Encoding get encoding => _encoding;
+  Encoding _encoding = utf8;
+  @override
+  set encoding(Encoding value) {
+    _decoder?.close();
+    _decoder = null;
+    _encoding = value;
+  }
+
   @override
   void write(Object? object) => buffer.write(object);
   @override
@@ -65,7 +78,9 @@ final class CaptureSink implements IOSink {
   @override
   void writeCharCode(int charCode) => buffer.writeCharCode(charCode);
   @override
-  void add(List<int> data) => buffer.write(encoding.decode(data));
+  void add(List<int> data) => (_decoder ??= encoding.decoder
+          .startChunkedConversion(StringConversionSink.fromStringSink(buffer)))
+      .add(data);
   @override
   void addError(Object error, [StackTrace? stackTrace]) {}
   @override
@@ -78,7 +93,11 @@ final class CaptureSink implements IOSink {
   @override
   Future<void> flush() async {}
   @override
-  Future<void> close() async {}
+  Future<void> close() async {
+    _decoder?.close();
+    _decoder = null;
+  }
+
   @override
   Future<void> get done async {}
 }
@@ -112,8 +131,9 @@ final class TuiResult {
 /// Each program gets a fixed [width] x [height] (also its first
 /// [WindowSizeMsg]), an empty environment, plain mode off, no renderer, no
 /// stdin and no signal handlers. [Style.defaultProfile] is pinned to
-/// [profile] and [Style.hasDarkBackground] to [darkBackground]; both are
-/// restored when the run ends. Requests that need a terminal reply (such as
+/// [profile] and [Style.hasDarkBackground] starts as [darkBackground]
+/// (a `COLORFGBG` in [environment] or a sent [BackgroundColorMsg] changes it,
+/// as in a terminal); both are restored when the run ends. Requests that need a terminal reply (such as
 /// [RequestBackgroundColorMsg]) get fixed answers. [options] are applied
 /// last, for example `withTickInterval`.
 ///
@@ -146,7 +166,8 @@ final class TuiTester {
           options: options,
         );
 
-  /// Runs [body], and drives each [Program] it starts, one after another.
+  /// Runs [body], and drives each [Program] it creates and starts, one after
+  /// another. Programs created outside [body] do not use this tester.
   ///
   /// Use it for code that makes its own program, such as [promptSelect],
   /// `Form.run` or your app's `main` flow. [TuiResult.value] is what [body]
@@ -162,6 +183,7 @@ final class TuiTester {
   }) {
     _savedProfile = Style.defaultProfile;
     _savedDark = Style.hasDarkBackground;
+    Style.defaultProfile = profile;
     Style.hasDarkBackground = darkBackground;
     final hook = _Hook(this, [
       withInput(null),
@@ -170,7 +192,7 @@ final class TuiTester {
       withPlainMode(false),
       withEnvironment(environment),
       withColorProfile(profile),
-      withWindowSize(width, height),
+      (program) => withWindowSize(width, height)(program),
       withFps(120),
       ...options,
     ]);
@@ -270,6 +292,9 @@ final class TuiTester {
   Future<void> resize(int width, int height) {
     this.width = width;
     this.height = height;
+    if (_program case final program?) {
+      withWindowSize(width, height)(program);
+    }
     return send(WindowSizeMsg(width, height));
   }
 
@@ -372,6 +397,14 @@ final class _Hook implements ProgramTestHook {
       .._programRunning = true
       .._notify();
     return _Recorder(model, tester);
+  }
+
+  @override
+  bool handleMessage(Msg msg) {
+    if (msg is! _FlushMsg) return false;
+    tester._flushes.remove(msg.done);
+    msg.done.complete();
+    return true;
   }
 
   @override
@@ -552,7 +585,7 @@ final class _FlushMsg extends Msg {
   final Completer<void> done;
 }
 
-/// Wraps the model under test: records every view and answers [_FlushMsg].
+/// Wraps the model under test and records every view.
 final class _Recorder extends Model implements OutcomeModel<Object?> {
   _Recorder(this.inner, this.tester);
 
@@ -571,11 +604,6 @@ final class _Recorder extends Model implements OutcomeModel<Object?> {
 
   @override
   (Model, Cmd?) update(Msg msg) {
-    if (msg is _FlushMsg) {
-      tester._flushes.remove(msg.done);
-      msg.done.complete();
-      return (this, null);
-    }
     final (next, cmd) = inner.update(msg);
     final wrapped = _Recorder(next, tester);
     tester._record(next, wrapped._view);

@@ -675,7 +675,7 @@ void main() {
       { type: "heading", text: "Test a form or a prompt" },
       {
         type: "prose",
-        md: "A `Form` is a model, so `TuiTester(form)` works and `done().outcome` is its `FormValues`. For code that makes its own `Program`, such as `promptSelect`, `filter` or `Form.run`, use `TuiTester.run`: it drives every program the body starts, and `done().value` is what the body returns.",
+        md: "A `Form` is a model, so `TuiTester(form)` works and `(await t.done()).outcome` is its `FormValues`. For code that makes its own `Program`, such as `promptSelect`, `filter` or `Form.run`, use `TuiTester.run`: it drives programs constructed inside the body, and `(await t.done()).value` is what the body returns. Construct the `Program` inside the body rather than reusing one created earlier.",
       },
       {
         type: "code",
@@ -709,7 +709,7 @@ test('promptSelect', () async {
       { type: "heading", text: "Golden files" },
       {
         type: "prose",
-        md: "`expectScreen(t.screen, 'test/goldens/name.txt')` compares the screen with a file. A missing or different file throws a `TuiTestFailure` that names the first differing line, with the expected and actual text. Pass `t.styledScreen` to keep the colours in the golden.",
+        md: "`expectScreen(t.screen, 'test/goldens/name.txt')` compares the screen with a file. A missing file throws a `TuiTestFailure` that names the path. A different file throws one that names the first differing line, with the expected and actual text. Pass `t.styledScreen` to keep the colours in the golden.",
       },
       {
         type: "code",
@@ -748,7 +748,7 @@ await t.waitFor((screen) => screen != first);`,
       { type: "heading", text: "Run it in CI" },
       {
         type: "prose",
-        md: "The tester needs no terminal, so a plain `dart test` step is enough. Goldens are compared with `\\n` line endings, so a Windows checkout with CRLF still matches. A missing golden fails, so CI cannot pass by writing a new one.",
+        md: "The tester needs no terminal, so a plain `dart test` step is enough. Goldens are compared with `\\n` line endings, so a Windows checkout with CRLF still matches. A missing golden fails unless updates are enabled. Keep `DART_TUI_UPDATE_GOLDENS` unset in CI, or pass `update: false` to prevent writes.",
       },
       {
         type: "code",

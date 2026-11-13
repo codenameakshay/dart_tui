@@ -656,7 +656,7 @@ test('counter goes up', () async {
 });
 ```
 
-`TuiTester.run(() => promptSelect([...]))` drives helpers and `Form.run` the same way, and `done()` returns their value. A golden mismatch throws with the first differing line; run `DART_TUI_UPDATE_GOLDENS=1 dart test` to accept new screens. There is no fake clock: test timers with a short `withTickInterval` and `waitFor`. `CaptureSink` is an in-memory `IOSink` for `withOutput`.
+`TuiTester.run(() => promptSelect([...]))` drives helpers and `Form.run` the same way. Construct programs inside the body, rather than passing a program created earlier. `(await t.done()).value` holds their return value. A golden mismatch throws with the first differing line; run `DART_TUI_UPDATE_GOLDENS=1 dart test` to accept new screens. There is no fake clock: test timers with a short `withTickInterval` and `waitFor`. `CaptureSink` is an in-memory `IOSink` for `withOutput`.
 
 ### Readline editing keys
 

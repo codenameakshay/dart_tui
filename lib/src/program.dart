@@ -332,6 +332,9 @@ abstract interface class ProgramTestHook {
   /// Called when [program] starts; returns the model to run instead.
   Model attach(Program program, Model model);
 
+  /// Consumes internal harness messages before the application filter.
+  bool handleMessage(Msg msg);
+
   /// Turns the model [attach] returned, after the run, back into the app's.
   Model unwrap(Model model);
 
@@ -776,6 +779,7 @@ final class Program {
     // Returns true when the view may have changed and a re-render is needed.
     // Does NOT call render() — the event loop renders once per drained batch.
     Future<bool> applyMsg(Msg rawMsg) async {
+      if (_testHook?.handleMessage(rawMsg) ?? false) return false;
       final syntheticBackground = syntheticBackgroundReplies.remove(rawMsg);
       var msg = rawMsg;
       final model = runModel;
