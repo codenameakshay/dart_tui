@@ -14,7 +14,7 @@ Down
 Sleep 300ms
 Enter
 Sleep 800ms
-Enter
+Type "y"
 Sleep 800ms
 Type "Akshay"
 Sleep 800ms

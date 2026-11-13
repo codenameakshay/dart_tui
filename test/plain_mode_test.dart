@@ -88,10 +88,10 @@ void main() {
   });
 
   group('promptConfirm', () {
-    test('empty input takes the default, yes', () async {
+    test('empty input takes the default, no', () async {
       final out = _Out();
-      expect(await promptConfirm('Ship?', options: _plain('\n', out)), isTrue);
-      expect(await _noEscapes(out), 'Ship? (Y/n) \n');
+      expect(await promptConfirm('Ship?', options: _plain('\n', out)), isFalse);
+      expect(await _noEscapes(out), 'Ship? (y/N) \n');
     }, timeout: _timeout);
 
     test('n and no are false, in any case', () async {
@@ -107,7 +107,7 @@ void main() {
       expect(await promptConfirm('Ship?', options: _plain('maybe\ny\n', out)),
           isTrue);
       expect(await _noEscapes(out),
-          'Ship? (Y/n) maybe\nEnter y or n.\nShip? (Y/n) y\n');
+          'Ship? (y/N) maybe\nEnter y or n.\nShip? (y/N) y\n');
     }, timeout: _timeout);
 
     test('end of input cancels', () async {
@@ -337,7 +337,7 @@ void main() {
         withOutput(out.sink),
         ...extra,
       ]);
-      return (await out.text()).contains('(Y/n)');
+      return (await out.text()).contains('(y/N)');
     }
 
     test('custom input or output keeps the terminal UI', () async {

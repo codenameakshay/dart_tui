@@ -53,6 +53,10 @@ void main() {
       expect(r, isFalse);
     }, timeout: _timeout);
 
+    test('enter takes the default, no', () async {
+      expect(await promptConfirm('ok?', options: _opts([_enter])), isFalse);
+    }, timeout: _timeout);
+
     test('ctrl+c cancels', () async {
       final r = await promptConfirm('ok?', options: _opts([_ctrlC]));
       expect(r, isNull);

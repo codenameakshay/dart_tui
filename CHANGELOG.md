@@ -47,6 +47,9 @@
 
 ### Fixes
 
+- **`promptConfirm` defaults to no.** Its label said `[y/N]`, but Enter
+  returned `true`. Enter now returns `false`, as the label says, and plain
+  mode asks `(y/N)`. Type `y` to confirm.
 - `AdaptiveColor` foregrounds now use a `CompleteColor` background
   (`backgroundComplete`) to pick light or dark. Before, they ignored it.
 - **Inline programs no longer paint over shell history (#18).** Outside the

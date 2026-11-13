@@ -34,17 +34,17 @@ Future<String?> promptSelect(
   return program.runForResult(model);
 }
 
-/// Yes / no; returns `null` on cancel.
+/// Yes / no; returns `null` on cancel. The default is no: Enter returns
+/// `false`.
 ///
-/// In plain mode it asks `question (Y/n)`; empty input means yes, as Enter
-/// does in the terminal.
+/// In plain mode it asks `question (y/N)`; empty input means no.
 Future<bool?> promptConfirm(
   String question, {
   List<ProgramOption> options = const [],
 }) async {
   final program = Program(options: options);
   final plain = PlainSession.open(program);
-  if (plain != null) return plain.run((io) => io.askConfirm(question, true));
+  if (plain != null) return plain.run((io) => io.askConfirm(question, false));
   final model = _ConfirmPromptModel(question: question);
   return program.runForResult(model);
 }
@@ -187,7 +187,7 @@ final class _ConfirmPromptModel extends Model implements OutcomeModel<bool> {
       case 'enter':
       case 'ctrl+j':
         return (
-          _ConfirmPromptModel(question: question, result: true),
+          _ConfirmPromptModel(question: question, result: false),
           null,
         );
       case 'esc':
@@ -203,7 +203,7 @@ final class _ConfirmPromptModel extends Model implements OutcomeModel<bool> {
 
   @override
   View view() =>
-      newView('$question [y/N]\nY or Enter = yes, N = no, Esc = cancel');
+      newView('$question [y/N]\nY = yes, N or Enter = no, Esc = cancel');
 }
 
 final class _InputPromptModel extends Model implements OutcomeModel<String> {

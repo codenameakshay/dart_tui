@@ -528,7 +528,7 @@ await Program(options: [
         headers: ["Helper", "Output and input"],
         rows: [
           ["`promptSelect`, `filter`", "The title, then `1. a`, `2. b` ... lines, then `Enter a number: `. A wrong answer prints `Enter a number from 1 to N.` and asks again. `filter` also takes text that matches exactly one option."],
-          ["`promptConfirm`", "`Ship? (Y/n) `. The capital letter is the default. Empty input takes it. `y`, `yes`, `n` and `no` work."],
+          ["`promptConfirm`", "`Ship? (y/N) `. The capital letter is the default, no. Empty input takes it. `y`, `yes`, `n` and `no` work."],
           ["`promptInput`", "The label, then one line. Empty input gives an empty string."],
           ["`spin`", "`Working…` at the start, then `✓ Working` or `✗ Working: <error>`. It returns the value or throws again."],
           ["`pager`", "The content, as it is."],
