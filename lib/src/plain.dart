@@ -26,7 +26,7 @@ final class PlainSession {
     }
     // Tests that pass their own input or output keep the TUI.
     if (!p._usesSharedStdin || !identical(p._output, stdout)) return false;
-    return !stdin.hasTerminal || isPlainOutput(env, stdout.hasTerminal);
+    return !stdin.hasTerminal || isPlainOutput(env, stdoutIsTerminal());
   }
 
   static bool _flag(String? value) =>

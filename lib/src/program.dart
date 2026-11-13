@@ -735,7 +735,7 @@ final class Program {
         (_input == null &&
             !_disableInput &&
             identical(_output, stdout) &&
-            !stdout.hasTerminal));
+            !stdoutIsTerminal()));
     void control(String sequence) {
       if (!plainOutput) _output.write(sequence);
     }
@@ -992,7 +992,7 @@ final class Program {
           (identical(_output, stdout)
               ? detectColorProfile(
                   environment: _environment,
-                  isTerminal: stdout.hasTerminal,
+                  isTerminal: stdoutIsTerminal(),
                 )
               : ColorProfile.trueColor);
       Style.defaultProfile = profile;

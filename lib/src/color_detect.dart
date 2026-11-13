@@ -5,7 +5,7 @@ import 'msg.dart';
 /// Detects the [ColorProfile] of the terminal from environment variables.
 ///
 /// [environment] defaults to [Platform.environment] and [isTerminal] to
-/// `stdout.hasTerminal`. Pass both to get a pure, repeatable result.
+/// [stdoutIsTerminal]. Pass both to get a pure, repeatable result.
 ///
 /// The rules, first match wins:
 ///
@@ -40,11 +40,17 @@ ColorProfile detectColorProfile({
   if (_isSet(env['NO_COLOR'])) return ColorProfile.noColor;
   final cliForced = _forcedProfile(env['CLICOLOR_FORCE']);
   if (cliForced != null) return _max(cliForced, _terminalProfile(env));
-  if (isPlainOutput(env, isTerminal ?? stdout.hasTerminal)) {
+  if (isPlainOutput(env, isTerminal ?? stdoutIsTerminal())) {
     return ColorProfile.noColor;
   }
   return _terminalProfile(env);
 }
+
+/// Whether stdout is a terminal.
+///
+/// `stdout.hasTerminal` is false for a terminal whose window size is 0×0,
+/// such as a new pseudo-terminal, so this checks the file type instead.
+bool stdoutIsTerminal() => stdioType(stdout) == StdioType.terminal;
 
 /// Whether output cannot take escape codes: it is not a terminal, or
 /// `TERM=dumb`. Colour detection and plain mode share this rule.
