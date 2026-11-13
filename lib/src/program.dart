@@ -4,7 +4,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 
+import 'bubbles/style.dart';
 import 'cmd.dart';
+import 'color_detect.dart';
 import 'input_decoder.dart';
 import 'model.dart';
 import 'msg.dart';
@@ -323,6 +325,13 @@ ProgramOption withCellRenderer() => (p) => p._useCellRenderer = true;
 ProgramOption withFilter(Msg? Function(Model model, Msg msg) filter) =>
     (p) => p._filter = filter;
 ProgramOption withFps(int fps) => (p) => p._fps = fps.clamp(1, 120);
+
+/// Pins the [ColorProfile] for the run instead of detecting it.
+///
+/// Every [Style] without its own profile uses it while the program runs (see
+/// [Style.defaultProfile]). Without this option, a program that writes to the
+/// real stdout uses [detectColorProfile]; one with a custom [withOutput] sink
+/// uses [ColorProfile.trueColor].
 ProgramOption withColorProfile(ColorProfile profile) =>
     (p) => p._profile = profile;
 ProgramOption withWindowSize(int width, int height) {
@@ -377,7 +386,7 @@ final class Program {
   Map<String, String> _environment = Platform.environment;
   Msg? Function(Model model, Msg msg)? _filter;
   Future<void> Function()? _externalCancellation;
-  ColorProfile _profile = ColorProfile.trueColor;
+  ColorProfile? _profile;
   int _fps = 60;
   int? _width;
   int? _height;
@@ -398,6 +407,7 @@ final class Program {
   Model? _runningModel;
   final _msgs = StreamController<Msg>.broadcast(sync: true);
   bool _running = false;
+  void Function()? _restoreStyleDefaults;
   bool _killed = false;
   Completer<void>? _finished;
   Completer<void>? _activityWake;
@@ -534,6 +544,7 @@ final class Program {
     bench('start');
 
     final queue = Queue<Msg>();
+    final syntheticBackgroundReplies = Set<BackgroundColorMsg>.identity();
 
     void enqueue(Msg msg) {
       queue.add(msg);
@@ -661,6 +672,7 @@ final class Program {
     // Returns true when the view may have changed and a re-render is needed.
     // Does NOT call render() — the event loop renders once per drained batch.
     Future<bool> applyMsg(Msg rawMsg) async {
+      final syntheticBackground = syntheticBackgroundReplies.remove(rawMsg);
       var msg = rawMsg;
       final model = runModel;
       if (_filter != null) {
@@ -699,7 +711,11 @@ final class Program {
           return false;
         case RequestBackgroundColorMsg():
           _output.write('\x1b]11;?\x07');
-          if (_disableInput) enqueue(BackgroundColorMsg(0x000000));
+          if (_disableInput) {
+            final reply = BackgroundColorMsg(0x000000);
+            syntheticBackgroundReplies.add(reply);
+            enqueue(reply);
+          }
           return false;
         case RequestCursorColorMsg():
           _output.write('\x1b]12;?\x07');
@@ -868,6 +884,11 @@ final class Program {
           }
         }
       }
+      // The view that answers this message already follows the terminal.
+      if (msg is BackgroundColorMsg &&
+          (!syntheticBackground || !identical(msg, rawMsg))) {
+        Style.hasDarkBackground = isDarkRgb(msg.rgb);
+      }
       final (nextModel, cmd) = model.update(msg);
       if (!current()) return false;
       runModel = nextModel;
@@ -878,7 +899,35 @@ final class Program {
       return true;
     }
 
+    // Styles read the process-wide colour defaults; this run owns them until
+    // it ends. ponytail: one owner at a time, so overlapping Programs in one
+    // isolate share them; scope them per run (zone value) if that case appears,
+    // at the cost of a zone lookup in Style's colour path.
+    final previousProfile = Style.defaultProfile;
+    final previousDarkBackground = Style.hasDarkBackground;
+    var defaultsRestored = false;
+    void restoreStyleDefaults() {
+      if (defaultsRestored) return;
+      defaultsRestored = true;
+      Style.defaultProfile = previousProfile;
+      Style.hasDarkBackground = previousDarkBackground;
+      _restoreStyleDefaults = null;
+    }
+
+    _restoreStyleDefaults = restoreStyleDefaults;
     try {
+      final profile = _profile ??
+          (identical(_output, stdout)
+              ? detectColorProfile(
+                  environment: _environment,
+                  isTerminal: stdout.hasTerminal,
+                )
+              : ColorProfile.trueColor);
+      Style.defaultProfile = profile;
+      if (darkBackgroundFromColorFgBg(_environment['COLORFGBG'])
+          case final dark?) {
+        Style.hasDarkBackground = dark;
+      }
       _logSink = _logFile?.openWrite(mode: FileMode.append);
       runLogSink = _logSink;
       _renderer = _disableRenderer
@@ -920,7 +969,7 @@ final class Program {
       }
 
       scheduleResizeMsg();
-      enqueue(ColorProfileMsg(_profile));
+      enqueue(ColorProfileMsg(profile));
       enqueue(EnvMsg(_environment));
       bench('terminal_queries');
 
@@ -1030,6 +1079,7 @@ final class Program {
         }
       }
     } finally {
+      restoreStyleDefaults();
       if (runId == _runs) _shutdown();
       for (final timer in commandTimers) {
         timer.cancel();
@@ -1052,6 +1102,7 @@ final class Program {
 
   void _shutdown() {
     if (!_running && (_finished?.isCompleted ?? true)) return;
+    _restoreStyleDefaults?.call();
     _running = false;
     final activityWake = _activityWake;
     _activityWake = null;

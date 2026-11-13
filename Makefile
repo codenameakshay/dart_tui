@@ -58,8 +58,10 @@ help:
 	@echo ""
 
 # ── Testing & analysis ─────────────────────────────────────────────────────────
+# Unset NO_COLOR: outside a Program it switches every Style to no colour,
+# and the suite pins true-colour output.
 test:
-	$(DART) test
+	env -u NO_COLOR $(DART) test
 
 analyze:
 	$(DART) analyze
