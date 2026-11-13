@@ -140,6 +140,124 @@ void main() {
     expect((await t.done(timeout: Duration.zero)).value, [null, null]);
   });
 
+  test('a rejected run does not detach the active program', () async {
+    late Program program;
+    final rejected = Completer<void>();
+    final t = TuiTester.run(() async {
+      program = Program();
+      final running = program.run(_Text(''));
+      await expectLater(program.run(_Text('unused')), throwsStateError);
+      rejected.complete();
+      return running;
+    });
+    addTearDown(() async {
+      program.kill();
+      await t.dispose();
+    });
+    await rejected.future;
+    await t.press('x').timeout(const Duration(milliseconds: 100));
+    expect(t.screen, 'x');
+    await t.quit();
+  });
+
+  test('an earlier run detaching does not detach a rerun', () async {
+    late Program program;
+    late Future<Model> rerun;
+    final ready = Completer<void>();
+    final t = TuiTester.run(() async {
+      program = Program();
+      await program.run(_Command(() async {
+        program.kill();
+        rerun = program.run(_Text('rerun'));
+        return null;
+      }));
+      ready.complete();
+      return rerun;
+    });
+    addTearDown(() async {
+      program.kill();
+      await t.dispose();
+    });
+    await ready.future;
+    await t.press('x').timeout(const Duration(milliseconds: 100));
+    expect(t.screen, 'rerunx');
+    await t.quit();
+  });
+
+  test('dispose from a command keeps its two-second bound', () async {
+    final start = Completer<void>();
+    final releaseBody = Completer<void>();
+    final disposed = Completer<void>();
+    late TuiTester t;
+    t = TuiTester.run(() async {
+      await Program().run(_Command(() async {
+        await start.future;
+        await t.dispose();
+        disposed.complete();
+        return null;
+      }));
+      await releaseBody.future;
+      return null;
+    });
+    addTearDown(() async {
+      if (!releaseBody.isCompleted) releaseBody.complete();
+      await t.dispose();
+    });
+    start.complete();
+    await disposed.future.timeout(const Duration(seconds: 3));
+    expect(t.isRunning, isTrue);
+    releaseBody.complete();
+    await t.done();
+  });
+
+  test('dispose timeout does not claim the body has finished', () async {
+    final release = Completer<void>();
+    final t = TuiTester.run(() async {
+      await release.future;
+      return promptSelect(['late']);
+    }, profile: ColorProfile.trueColor);
+    addTearDown(() async {
+      if (!release.isCompleted) release.complete();
+      await t.dispose();
+    });
+    await t.dispose();
+    expect(t.isRunning, isTrue);
+    expect(Style.defaultProfile, ColorProfile.ansi);
+    expect(Style.hasDarkBackground, isFalse);
+    await expectLater(t.press('x'), throwsStateError);
+    final next = TuiTester(_Text('next'), profile: ColorProfile.ansi256);
+    addTearDown(next.dispose);
+    release.complete();
+    expect((await t.done()).value, isNull);
+    expect(t.isRunning, isFalse);
+    expect(Style.defaultProfile, ColorProfile.ansi256);
+    expect(Style.hasDarkBackground, isTrue);
+    await next.quit();
+    expect(Style.defaultProfile, ColorProfile.ansi);
+    expect(Style.hasDarkBackground, isFalse);
+  });
+
+  test('dispose stops a program started by a command', () async {
+    final child = Completer<Object?>();
+    final release = Completer<void>();
+    final started = Completer<void>();
+    final t = TuiTester.run(() async {
+      await Program().run(_Command(() async {
+        started.complete();
+        await release.future;
+        child.complete(await promptSelect(['child']));
+        return null;
+      }));
+      release.complete();
+      return child.future;
+    });
+    addTearDown(t.dispose);
+    await started.future;
+    await t.dispose();
+    expect((await t.done()).value, isNull);
+    expect(t.isRunning, isFalse);
+  });
+
   for (final phase in ['init', 'view', 'update']) {
     test('model $phase errors reach done and waitFor and allow dispose',
         () async {
@@ -237,4 +355,15 @@ final class _Outcome extends Model implements OutcomeModel<String> {
       (msg is KeyPressMsg ? _Outcome('done') : this, null);
   @override
   View view() => newView(outcome ?? '');
+}
+
+final class _Command extends Model {
+  _Command(this.command);
+  final Cmd command;
+  @override
+  Cmd? init() => command;
+  @override
+  (Model, Cmd?) update(Msg msg) => (this, null);
+  @override
+  View view() => newView('parent');
 }

@@ -214,6 +214,7 @@ final class TuiTester {
   bool _running = true;
   Program? _program;
   bool _programRunning = false;
+  _Recorder? _activeRun;
   Model? _model;
   View _view = newView('');
   Completer<void> _changed = Completer<void>();
@@ -233,6 +234,8 @@ final class TuiTester {
 
   void _programEnded() {
     _programRunning = false;
+    _program = null;
+    _activeRun = null;
     for (final flush in _flushes) {
       flush.complete();
     }
@@ -242,12 +245,16 @@ final class TuiTester {
 
   void _ended() {
     _running = false;
+    _restoreDefaults();
+    _programEnded();
+  }
+
+  void _restoreDefaults() {
     if (!_restored) {
       _restored = true;
       Style.defaultProfile = _savedProfile;
       Style.hasDarkBackground = _savedDark;
     }
-    _programEnded();
   }
 
   /// The current model (after the last update); null before any program.
@@ -266,6 +273,7 @@ final class TuiTester {
   bool get isRunning => _running;
 
   /// Sends [msg] and completes once the program has handled it.
+  /// Throws [StateError] after [dispose].
   Future<void> send(Msg msg) => _sendAll([msg]);
 
   /// Presses one key, given as its keystroke name, for example `enter`,
@@ -302,6 +310,7 @@ final class TuiTester {
   /// Sends [msgs] to the running program, waiting up to 2 s for the next
   /// program when one has just ended, and completes once they are handled.
   Future<void> _sendAll(List<Msg> msgs) async {
+    if (_disposed) throw StateError('the tester has been disposed');
     final clock = Stopwatch()..start();
     while (_running && !_programRunning) {
       final left = const Duration(seconds: 2) - clock.elapsed;
@@ -370,20 +379,28 @@ final class TuiTester {
     return TuiResult._(model, screen, styledScreen, value);
   }
 
-  /// Stops the running program, waits for the run to end, and restores the
+  /// Stops the running program, waits up to 2 s, and restores the
   /// [Style] defaults. Safe to call more than once; never throws.
   ///
   /// A program the body starts after this is stopped as soon as it starts,
-  /// so a prompt helper returns null and the body can finish.
+  /// so a prompt helper returns null and the body can finish. Arbitrary
+  /// work in the body cannot be cancelled. [isRunning] stays
+  /// true until the body actually ends; [done] can still await its result.
   Future<void> dispose() async {
     _disposed = true;
     if (_programRunning) _program?.kill();
+    final deadline = Completer<void>();
+    // A command's timers are cancelled when kill ends its program.
+    final timer =
+        Zone.root.createTimer(const Duration(seconds: 2), deadline.complete);
     try {
-      await _run.timeout(const Duration(seconds: 2));
+      await Future.any<Object?>([_run, deadline.future]);
     } catch (_) {
       // Reported by press, waitFor, quit or done.
+    } finally {
+      timer.cancel();
     }
-    _ended();
+    _restoreDefaults();
   }
 }
 
@@ -394,16 +411,8 @@ final class _Hook implements ProgramTestHook {
   final List<ProgramOption> options;
 
   @override
-  Model attach(Program program, Model model) {
-    tester
-      .._program = program
-      .._programRunning = true
-      .._notify();
-    // After dispose, stop it once run() has started it (kill is a no-op
-    // before that).
-    if (tester._disposed) scheduleMicrotask(program.kill);
-    return _Recorder(model, tester);
-  }
+  Model attach(Program program, Model model) =>
+      _Recorder(model, tester, program);
 
   @override
   bool handleMessage(Msg msg) {
@@ -418,7 +427,10 @@ final class _Hook implements ProgramTestHook {
 
   @override
   void detach(Program program) {
-    if (identical(program, tester._program)) tester._programEnded();
+    final active = tester._activeRun;
+    if (identical(program, tester._program) && (active?._finished ?? false)) {
+      tester._programEnded();
+    }
   }
 }
 
@@ -593,10 +605,12 @@ final class _FlushMsg extends Msg {
 
 /// Wraps the model under test and records every view.
 final class _Recorder extends Model implements OutcomeModel<Object?> {
-  _Recorder(this.inner, this.tester);
+  _Recorder(this.inner, this.tester, this.program);
 
   final Model inner;
   final TuiTester tester;
+  final Program program;
+  bool _finished = false;
   late final View _view = inner.view();
 
   @override
@@ -606,12 +620,27 @@ final class _Recorder extends Model implements OutcomeModel<Object?> {
       };
 
   @override
-  Cmd? init() => inner.init();
+  Cmd? init() {
+    tester
+      .._program = program
+      .._programRunning = true
+      .._activeRun = this
+      .._notify();
+    unawaited(program.wait().then((_) {
+      _finished = true;
+    }));
+    // init runs only after _runCore has accepted and started this run.
+    if (tester._disposed) {
+      program.kill();
+      return null;
+    }
+    return inner.init();
+  }
 
   @override
   (Model, Cmd?) update(Msg msg) {
     final (next, cmd) = inner.update(msg);
-    final wrapped = _Recorder(next, tester);
+    final wrapped = _Recorder(next, tester, program);
     tester._record(next, wrapped._view);
     return (wrapped, cmd);
   }
