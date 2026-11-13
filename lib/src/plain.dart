@@ -47,8 +47,9 @@ final class PlainSession {
   /// A terminal echoes what the user types; anything else does not.
   bool get _echoedByTerminal => _shared && stdin.hasTerminal;
 
-  void write(String text) => _out.write(text);
-  void writeln([String text = '']) => _out.writeln(text);
+  void write(String text) =>
+      _out.write(stripAnsiSequences(text).replaceAll('\x1b', ''));
+  void writeln([String text = '']) => write('$text\n');
 
   /// Runs [body], then gives unread input back to the stdin owner.
   Future<T> run<T>(Future<T> Function(PlainSession session) body) async {
@@ -72,7 +73,9 @@ final class PlainSession {
   /// control characters are dropped. Input that is not echoed by a terminal
   /// is echoed here, so the output reads like a transcript.
   Future<String?> readLine({bool secret = false}) async {
-    final hideEcho = secret && _echoedByTerminal;
+    final echoedByTerminal = _echoedByTerminal;
+    final hideEcho = secret && echoedByTerminal;
+    final previousEcho = hideEcho ? stdin.echoMode : null;
     if (hideEcho) _setEcho(false);
     try {
       while (true) {
@@ -87,7 +90,7 @@ final class PlainSession {
             utf8.decode(_bytes.sublist(0, end), allowMalformed: true),
           ).replaceAll(_controlChars, '');
           _bytes.removeRange(0, newline < 0 ? end : end + 1);
-          if (!_echoedByTerminal) {
+          if (!echoedByTerminal) {
             _out.writeln(secret ? '' : line);
           } else if (hideEcho) {
             _out.writeln();
@@ -99,7 +102,7 @@ final class PlainSession {
         await (_wake = Completer<void>()).future;
       }
     } finally {
-      if (hideEcho) _setEcho(true);
+      if (previousEcho != null) _setEcho(previousEcho);
     }
   }
 

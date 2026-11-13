@@ -234,6 +234,25 @@ class ProgramRuntimePtyTest(unittest.TestCase):
         self.assert_terminal_restored(probe.finish())
         self.assert_cooked_mode(probe)
 
+    def test_plain_password_restores_disabled_echo(self) -> None:
+        probe = self._probe("plain-password-echo")
+        probe.read_until(b"SECRET")
+        probe.send(b"private\r")
+        output = probe.finish()
+        self.assertIn(b"ECHO_RESTORED=false", output)
+        self.assertNotIn(b"private", output)
+        self.assertNotIn(b"\x1b", output)
+
+    def test_plain_prompt_pushback_reaches_tui_program(self) -> None:
+        probe = self._probe("plain-then-tui")
+        probe.read_until(b"PLAIN_NAME:")
+        probe.send(b"Ada\rq\r")
+        output = probe.finish()
+        self.assertIn(b"PLAIN_ANSWER=Ada", output)
+        self.assertIn(b"PLAIN_TUI_DONE", output)
+        self.assert_terminal_restored(output)
+        self.assert_cooked_mode(probe)
+
     def test_plain_prompt_then_tui_program_share_stdin(self) -> None:
         probe = self._probe("plain-then-tui")
         probe.read_until(b"PLAIN_NAME:")

@@ -131,6 +131,7 @@ final class Form extends Model implements OutcomeModel<FormValues> {
       final title = form.groups[gi].title;
       if (title != null && title.isNotEmpty) io.writeln(title);
       for (var fi = 0; fi < form.groups[gi].fields.length; fi++) {
+        if (form.groups[gi].hidden?.call(form._rawValues) ?? false) break;
         final values = form._rawValues;
         final field = form.groups[gi].fields[fi];
         if (field.isHidden(values)) continue;

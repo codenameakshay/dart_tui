@@ -731,12 +731,11 @@ final class Program {
     // Plain output (real stdout that is not a terminal, or plain mode
     // forced) gets no control sequences: only the final frame, as text, on
     // exit. A custom input or output keeps the terminal behaviour.
-    final plainOutput = !_disableRenderer &&
-        (_plain ??
-            (_input == null &&
-                !_disableInput &&
-                identical(_output, stdout) &&
-                !stdout.hasTerminal));
+    final plainOutput = (_plain ??
+        (_input == null &&
+            !_disableInput &&
+            identical(_output, stdout) &&
+            !stdout.hasTerminal));
     void control(String sequence) {
       if (!plainOutput) _output.write(sequence);
     }

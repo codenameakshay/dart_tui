@@ -30,13 +30,40 @@ Future<void> main(List<String> arguments) async {
     }
     return;
   }
+  if (scenario == 'plain-chain') {
+    final first = await promptInput('FIRST:',
+        options: [withPlainMode(), withEnvironment(const {})]);
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    final second = await promptInput('SECOND:',
+        options: [withPlainMode(), withEnvironment(const {})]);
+    final third = await promptInput('THIRD:',
+        options: [withPlainMode(), withEnvironment(const {})]);
+    stdout.writeln('ANSWERS=$first|$second|$third');
+    return;
+  }
+  if (scenario == 'plain-password-echo') {
+    stdin.echoMode = false;
+    try {
+      await Form([
+        Group([Field.password(key: 'secret', title: 'SECRET')]),
+      ]).run(options: [withPlainMode(), withEnvironment(const {})]);
+      stdout.writeln('ECHO_RESTORED=${stdin.echoMode}');
+    } finally {
+      stdin.echoMode = true;
+    }
+    return;
+  }
   if (scenario == 'plain-then-tui') {
     // A plain prompt reads a line through the shared stdin owner, then a full
     // program still gets keys from the same stdin.
-    final name = await promptInput('PLAIN_NAME:', options: [withPlainMode()]);
+    final name = await promptInput('PLAIN_NAME:',
+        options: [withPlainMode(), withEnvironment(const {})]);
     stdout.writeln('PLAIN_ANSWER=$name');
-    await Program(options: [withAltScreen(), withHideCursor()])
-        .run(const _ProbeModel('plain-then-tui'));
+    await Program(options: [
+      withAltScreen(),
+      withHideCursor(),
+      withEnvironment(const {}),
+    ]).run(const _ProbeModel('plain-then-tui'));
     stdout.writeln('PLAIN_TUI_DONE');
     return;
   }
@@ -127,6 +154,8 @@ Future<void> main(List<String> arguments) async {
 
 const _scenarios = {
   'plain-then-tui',
+  'plain-chain',
+  'plain-password-echo',
   'kill',
   'cancel',
   'resize',

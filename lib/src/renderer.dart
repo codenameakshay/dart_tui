@@ -74,13 +74,16 @@ final class PlainRenderer implements TeaRenderer {
   @override
   void render(View view) => _last = view.content;
   @override
-  void insertAbove(String line) => _output.writeln(stripAnsiSequences(line));
+  void insertAbove(String line) => _output.writeln(_plainText(line));
   @override
   void close() {
     final last = _last;
     _last = null;
-    if (last != null) _output.write(stripAnsiSequences(last));
+    if (last != null) _output.write(_plainText(last));
   }
+
+  static String _plainText(String text) =>
+      stripAnsiSequences(text).replaceAll('\x1b', '');
 
   @override
   void clearScreen() {}
