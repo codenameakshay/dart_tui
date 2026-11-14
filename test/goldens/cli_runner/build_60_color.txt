@@ -1,0 +1,40 @@
+Compile the project.
+
+Runs every step:
+  1. fetch dependencies
+  2. compile
+
+[1mUsage:[0m
+  tool build [arguments]
+
+[1mFlags:[0m
+  [38;5;6m-h, --help[0m             Print this usage information.
+  [38;5;6m-m, --mode=<value>[0m     How to compile. [38;5;8m(default: debug)[0m
+                         [38;5;6m[debug]  [0m Fast builds with asserts.
+                         [38;5;6m[release][0m Optimised builds.
+  [38;5;6m    --target=<os>[0m      The platform to build for. A long
+                         help text, so that it wraps onto a
+                         second line at the narrow width.
+                         [38;5;8m[linux, macos, windows][0m
+                         [38;5;8m(default: linux)[0m
+  [38;5;6m-D, --define=<value>[0m   Defines a constant.
+                         [38;5;8m(default: a=1, b=2)[0m
+  [38;5;6m    --[no-]cache[0m       Reuse earlier outputs.
+                         [38;5;8m(default: on)[0m
+  [38;5;6m    --out=<value>[0m      The output folder. [38;5;8m(required)[0m
+
+[1mGlobal flags:[0m
+  [38;5;6m-c, --config=<value>[0m   Read settings from this file.
+                         [38;5;8m(default: tool.yaml)[0m
+  [38;5;6m-v, --verbose[0m          Show all log output, and stack
+                         traces on errors.
+  [38;5;6m-q, --quiet[0m            Hide log output. Errors still show.
+  [38;5;6m    --[no-]color[0m       Force colour on, even in pipes, or
+                         off with --no-color.
+  [38;5;6m    --plain[0m            Ask prompts as plain lines, without
+                         the terminal UI.
+  [38;5;6m    --version[0m          Print the version and exit.
+
+[1mExamples:[0m
+  tool build --mode release
+  tool build -D name=value --no-cache

@@ -1,0 +1,29 @@
+Builds and ships projects.
+
+Usage:
+  tool <command> [arguments]
+
+Commands:
+  status   Show what changed since the last deploy.
+
+Project:
+  build    Compile the project.
+  deploy   Upload the latest build to the server.
+
+Flags:
+  -h, --help             Print this usage information.
+  -c, --config=<value>   Read settings from this file.
+                         (default: tool.yaml)
+  -v, --verbose          Show all log output, and stack
+                         traces on errors.
+  -q, --quiet            Hide log output. Errors still show.
+      --[no-]color       Force colour on, even in pipes, or
+                         off with --no-color.
+      --plain            Ask prompts as plain lines, without
+                         the terminal UI.
+      --version          Print the version and exit.
+
+Run "tool help <command>" for more information about a
+command.
+
+Docs: https://example.com/tool
