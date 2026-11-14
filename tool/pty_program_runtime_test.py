@@ -110,6 +110,17 @@ class _Probe:
             )
         return bytes(self.data)
 
+    def exit_code(self) -> int:
+        """Waits for the probe and returns its exit code (-N for signal N)."""
+        deadline = time.monotonic() + TIMEOUT
+        while not self._poll() and time.monotonic() < deadline:
+            self._read_once(0.1)
+        if self.status is None:
+            self._kill()
+            self.fail("probe did not exit before timeout")
+        self._drain()
+        return os.waitstatus_to_exitcode(self.status)
+
     def close(self) -> None:
         if not self._poll():
             self._kill()
@@ -446,6 +457,50 @@ class ProgramRuntimePtyTest(unittest.TestCase):
         self.assert_terminal_restored(probe.finish())
         self.assert_cooked_mode(probe)
 
+    def test_ctrl_c_during_logger_progress_kills_with_terminal_cooked(self) -> None:
+        probe = self._probe("logger-progress")
+        probe.read_until(b"LOGGER_CONFIRM")
+        probe.send(b"y")
+        probe.read_until(b"LOGGER_ANSWER=true")
+        before = len(probe.read_until(b"LOGGER_WORKING"))
+        # Let the progress redraw, so its timer is running.
+        probe.read_until_count(b"LOGGER_WORKING", 3)
+        probe.send(b"\x03")
+        self.assertEqual(probe.exit_code(), -signal.SIGINT)
+        progress = bytes(probe.data[before:])
+        self.assertNotIn(b"\x1b[?25l", progress)
+        # The prompt hid the cursor and showed it again before the progress.
+        self.assertTrue(probe.data.rfind(b"\x1b[?25h") > probe.data.rfind(b"\x1b[?25l"))
+        self.assert_cooked_mode(probe)
+
+    def test_logger_prompt_cancel_exits_130_with_terminal_restored(self) -> None:
+        probe = self._probe("logger-cancel")
+        probe.read_until(b"LOGGER_CONFIRM")
+        probe.send(b"\x1b")
+        self.assertEqual(probe.exit_code(), 130)
+        self.assertNotIn(b"LOGGER_NOT_CANCELLED", bytes(probe.data))
+        self.assertTrue(probe.data.rfind(b"\x1b[?25h") > probe.data.rfind(b"\x1b[?25l"))
+        self.assert_cooked_mode(probe)
+
+    def test_logger_flow_in_the_terminal_ui(self) -> None:
+        probe = self._probe("logger-flow")
+        probe.read_until(b"Project name?")
+        probe.send(b"demo\r")
+        probe.read_until(b"Template?")
+        probe.send(b"\x1b[B")
+        time.sleep(0.1)
+        probe.send(b"\r")
+        probe.read_until(b"Features?")
+        probe.send(b"\x1b[B\x1b[B ")
+        time.sleep(0.1)
+        probe.send(b"\r")
+        probe.read_until(b"Create demo?")
+        probe.send(b"\r")
+        output = probe.finish().decode(errors="replace")
+        self.assertIn("Wrote 6 files", output)
+        self.assertIn("Created demo with tests, lints, ci.", output)
+        self.assert_cooked_mode(probe)
+
 
 class PlainPipeTest(unittest.TestCase):
     """Helpers work without a terminal: piped stdin and stdout."""
@@ -471,6 +526,16 @@ class PlainPipeTest(unittest.TestCase):
         self.assertIn("flavor = null", out)
         self.assertIn("confirmed = null", out)
         self.assertIn("notes = null", out)
+
+    def test_logger_flow_answers_from_a_pipe(self) -> None:
+        out = self._run("example/cli_logger.dart", b"demo\n2\n\ny\n")
+        self.assertIn("Enter a number [1]: 2\n", out)
+        self.assertIn("Writing server files...\n", out)
+        self.assertIn("Created demo with tests, lints.", out)
+
+    def test_logger_takes_defaults_when_input_ends(self) -> None:
+        out = self._run("example/cli_logger.dart", b"")
+        self.assertIn("Created my_app with tests, lints.", out)
 
     def test_form_answers_from_a_pipe(self) -> None:
         out = self._run("example/form.dart", b"billing-api\n2\n\n1,3\n")

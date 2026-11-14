@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:dart_tui/cli.dart';
 import 'package:dart_tui/dart_tui.dart';
+
+import '../example/cli_logger.dart' show createProject;
 
 Future<void> main(List<String> arguments) async {
   if (!Platform.isLinux && !Platform.isMacOS) {
@@ -28,6 +31,23 @@ Future<void> main(List<String> arguments) async {
               ? _InlineLifecycleModel()
               : _InlineModel(step));
     }
+    return;
+  }
+  if (scenario == 'logger-progress') {
+    // A TUI prompt, then a progress that runs until Ctrl+C kills the process.
+    final logger = Logger();
+    final ok = await logger.confirm('LOGGER_CONFIRM');
+    logger.info('LOGGER_ANSWER=$ok');
+    logger.progress('LOGGER_WORKING');
+    await Completer<void>().future;
+  }
+  if (scenario == 'logger-cancel') {
+    await Logger().confirm('LOGGER_CONFIRM');
+    stdout.writeln('LOGGER_NOT_CANCELLED');
+    return;
+  }
+  if (scenario == 'logger-flow') {
+    await createProject(Logger(), step: const Duration(milliseconds: 50));
     return;
   }
   if (scenario == 'plain-chain') {
@@ -153,6 +173,9 @@ Future<void> main(List<String> arguments) async {
 }
 
 const _scenarios = {
+  'logger-progress',
+  'logger-cancel',
+  'logger-flow',
   'plain-then-tui',
   'plain-chain',
   'plain-password-echo',
