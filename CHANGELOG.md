@@ -4,6 +4,28 @@
 
 ### Features
 
+- **CLI command runner.** The new `CliRunner<T>` and `CliCommand<T>` in
+  `package:dart_tui/cli.dart` extend args' `CommandRunner` and `Command`, so
+  you rename the two classes and the app runs as before. `UsageException` is
+  re-exported. Every command has the runner's `logger`. Help follows the
+  layout of Cobra and gh: commands grouped by `category`, flags with defaults
+  and allowed values, the new `CliCommand.examples`, and the footer, wrapped to
+  the terminal width (`usageLineLength` overrides it). It has no colour in
+  pipes, with `NO_COLOR`, `--no-color` or in plain mode, and the same layout.
+  The runner adds `-v, --verbose`, `-q, --quiet`, `--[no-]color` and `--plain`,
+  and `--version` when you pass `version:`. It skips a flag when the runner's
+  parser or any command's parser already has an option with that name. It drops
+  a taken abbreviation. `runAndExit` exits with the `int` the command returns,
+  or 0. A `UsageException` exits with 64: one error line, "did you mean"
+  names, and the usage of the command, on stderr. Any other error exits with
+  70 and one line; the stack trace shows with `--verbose`. Only `CliCommand`
+  gets the styled help; a plain `Command` prints args' help. `--plain` and
+  `--color` apply to the runner's `Logger`, not to `promptSelect` and the other
+  helpers called directly. Text from `ArgParser.addSeparator` is not shown.
+  The package now depends on `args: ^2.5.0`, the lowest version with
+  `ArgResults.flag` and `ArgResults.option` that supports the 3.5 SDK. See the
+  new guide "Build a CLI with commands". `example/cli_app/notes.dart` shows a
+  full app. Shell completions are not built yet.
 - **CLI logger.** The new `package:dart_tui/cli.dart` has `Logger`, `Level`,
   `Progress` and `ProgressOptions`, shaped like mason_logger 0.3.6, so a Dart
   CLI can switch with an import change. Prompts return a `Future`: write

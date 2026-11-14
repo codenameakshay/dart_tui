@@ -653,6 +653,44 @@ Esc or Ctrl+C exits with code 130. When input ends in plain mode, every prompt r
 
 ![cli_logger](https://dart-tui.vercel.app/gifs/cli_logger.gif)
 
+### CLI commands (args-shaped)
+
+`CliRunner` and `CliCommand` in `package:dart_tui/cli.dart` replace args' `CommandRunner` and `Command`: rename the two classes and the app runs as before. You also get a `logger` on every command, help in the layout of Cobra and gh (grouped by `category`, with `examples`, wrapped to the terminal width), the flags `-v`, `-q`, `--[no-]color`, `--plain` and `--version`, and `runAndExit`. A usage error exits with 64 and shows "did you mean" names. Any other error exits with 70. Import `package:args` only when you name its types, such as `ArgResults`.
+
+```dart
+import 'package:dart_tui/cli.dart';
+
+Future<void> main(List<String> args) {
+  final runner = CliRunner<int>('tool', 'Builds and ships projects.',
+      version: '1.0.0')
+    ..addCommand(BuildCommand());
+  return runner.runAndExit(args);
+}
+
+class BuildCommand extends CliCommand<int> {
+  @override
+  String get name => 'build';
+  @override
+  String get description => 'Compile the project.';
+  @override
+  String get category => 'Project';
+  @override
+  List<String> get examples => ['tool build'];
+
+  @override
+  Future<int> run() async {
+    final progress = logger.progress('Compiling');
+    // ... do the work ...
+    progress.complete('Built');
+    return 0; // the exit code
+  }
+}
+```
+
+See the [guide](https://dart-tui.vercel.app/guides/cli-commands) for the global flags, exit codes and testing, and `example/cli_app/notes.dart` for a full app. Shell completions are not built yet.
+
+![cli_app](https://dart-tui.vercel.app/gifs/cli_app.gif)
+
 ### Plain mode (CI, pipes, screen readers, agents)
 
 In plain mode, every one-shot helper and `Form.run` ask plain line questions (`1. a`, `Enter a number: `) and write no escape codes. It is on when you pass `withPlainMode()`, when `DART_TUI_ACCESSIBLE` or `ACCESSIBLE` is set to a true value, or when the helper uses the real stdin and stdout and either is not a terminal (or `TERM=dumb`). `withPlainMode(false)` turns it off. A helper with `withInput` or `withOutput` keeps the terminal UI unless you force plain mode.
