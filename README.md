@@ -618,6 +618,7 @@ Quick, self-contained flows built on `Program` — no model to write. Each retur
 final choice  = await promptSelect(['apple', 'banana'], title: 'Pick one');
 final ok      = await promptConfirm('Continue?');
 final name    = await promptInput('Name');
+final many    = await promptMultiSelect(['a', 'b', 'c'], initial: {0}); // checkboxes
 
 // gum-style
 final picked  = await filter(['red', 'green', 'blue']);   // interactive fuzzy filter
@@ -626,6 +627,31 @@ await pager(longText);                                       // scrollable viewe
 ```
 
 All prompts and `filter` return `null` when cancelled with `Esc` / `Ctrl+C`.
+
+### CLI logger (mason_logger-shaped)
+
+`package:dart_tui/cli.dart` has a `Logger`, `Level`, `Progress` and `ProgressOptions` shaped like mason_logger's, so a Dart CLI can switch with an import change. Prompts return a `Future`, so add `await`. On a terminal they are a small TUI. In pipes, CI and with `ACCESSIBLE=1` they ask plain numbered line questions. It is not exported from `dart_tui.dart`.
+
+```dart
+import 'package:dart_tui/cli.dart';
+
+final logger = Logger();
+final name = await logger.prompt('Project name?', defaultValue: 'my_app');
+final template = await logger.chooseOne('Template?',
+    choices: ['cli', 'server', 'package'], defaultValue: 'cli');
+final features = await logger.chooseAny('Features?',
+    choices: ['tests', 'lints', 'ci'], defaultValues: ['tests']);
+if (await logger.confirm('Create $name?', defaultValue: true)) {
+  final progress = logger.progress('Writing $template files');
+  // ... do the work ...
+  progress.complete();
+  logger.success('Created $name with ${features.join(', ')}.');
+}
+```
+
+Esc or Ctrl+C exits with code 130. When input ends in plain mode, every prompt returns its default. See the [migration guide](https://dart-tui.vercel.app/guides/migrating-from-mason-logger) for every difference from mason_logger, and for how interact and prompts calls map to dart_tui.
+
+![cli_logger](https://dart-tui.vercel.app/gifs/cli_logger.gif)
 
 ### Plain mode (CI, pipes, screen readers, agents)
 
