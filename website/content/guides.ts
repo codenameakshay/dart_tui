@@ -1165,11 +1165,12 @@ Usage:
   tool <command> [arguments]
 
 Commands:
-  status   Show what changed since the last deploy.
+  completion   Set up shell completion.
+  status       Show what changed since the last deploy.
 
 Project:
-  build    Compile the project.
-  deploy   Upload the latest build to the server.
+  build        Compile the project.
+  deploy       Upload the latest build to the server.
 
 Flags:
   -h, --help             Print this usage information.
@@ -1399,10 +1400,76 @@ void main() {
   });
 }`,
       },
+      { type: "heading", text: "Shell completions" },
+      {
+        type: "prose",
+        md: "A runner with at least one command of its own adds a `completion` command. It supports bash, zsh and fish. Tab completes commands, flags, and the `allowed` values of options. Your commands can add values only the app knows, such as note numbers.",
+      },
+      {
+        type: "prose",
+        md: "`notes completion [bash|zsh|fish]` prints the script. `notes completion install [shell]` and `notes completion uninstall [shell]` add and remove it. With no shell named, the command uses `$SHELL`. `-y`, `--yes` skips the question in the zsh install.",
+      },
+      {
+        type: "table",
+        headers: ["Shell", "Load it yourself", "Or run `notes completion install`"],
+        rows: [
+          ["bash", "Add `eval \"$(notes completion bash)\"` to `~/.bashrc`. It also works on the bash 3.2 of macOS, where `source <(...)` does not.", "Writes `${XDG_DATA_HOME:-~/.local/share}/bash-completion/completions/notes`. The bash-completion package (version 2) loads it on demand. On macOS: `brew install bash-completion@2`. No rc file changes."],
+          ["zsh", "Add `source <(notes completion zsh)` to `~/.zshrc`, after `compinit`.", "Writes `_notes` to `${XDG_DATA_HOME:-~/.local/share}/notes/zsh/`, then adds one block to `${ZDOTDIR:-~}/.zshrc`. Then run `exec zsh`."],
+          ["fish", "Run `notes completion fish | source`.", "Writes `${XDG_CONFIG_HOME:-~/.config}/fish/completions/notes.fish`. Open a new shell."],
+        ],
+      },
+      {
+        type: "prose",
+        md: "Only the zsh install edits an rc file. The block sits between `# >>> notes completion >>>` and `# <<< notes completion <<<`. It puts the directory on `fpath` and calls `compdef`, or runs `compinit` when it has not run. Before the edit, the command prints the lines and asks. `--yes` skips the question. In plain mode (a pipe, CI, `ACCESSIBLE=1` or `--plain`), it never edits the file. It prints the lines for you to add.\n\nInstall twice changes nothing. Uninstall removes what install added: the script, the zsh directory when it is empty, and the rc block. Your `.zshrc` is then byte for byte what it was.",
+      },
+      { type: "heading", text: "What Tab completes" },
+      {
+        type: "prose",
+        md: "- Commands and aliases, with their descriptions. Hidden commands are left out.\n- Flags for the command the typed words reach, and the global flags: `--name`, `-a`, and `--no-name` for negatable flags.\n- Values from `allowed`, after `--opt=` and after `--opt `. `allowedHelp` gives the descriptions.\n- `help <command>`.\n- The shell's file completion, for an option with no `allowed` values and no values from the hook.\n\nzsh and fish show descriptions. bash shows only the values.",
+      },
+      { type: "heading", text: "Complete your own values" },
+      {
+        type: "prose",
+        md: "Override `completeValue` in a `CliCommand`. `option` is the option name, or empty for a positional argument. `partial` is the text typed so far. An entry can add a description after a tab. The runner keeps only entries that start with `partial`. Return nothing to get file completion. This is the hook of `notes done`:",
+      },
+      {
+        type: "code",
+        lang: "dart",
+        code: `/// Tab after "notes done" lists the open notes: "2\\tCall Sam".
+@override
+Iterable<String> completeValue(String option, String partial) => [
+      if (option.isEmpty)
+        for (final (i, note) in load().indexed)
+          if (note['done'] != true) '\${i + 1}\\t\${note['text']}',
+    ];`,
+      },
+      {
+        type: "callout",
+        variant: "note",
+        md: "The hook runs on every Tab. Keep it fast. Never prompt, read stdin or print. Completion skips the normal parse, so `argResults` and `globalResults` are null in the hook. The notes app reads the default `~/.notes.json`. It does not see a `-f` on the line.",
+      },
+      { type: "heading", text: "How it works" },
+      {
+        type: "prose",
+        md: "The script runs `notes __complete <words...>` on each Tab. The command prints one `value<TAB>description` line per candidate, then `:<directive>`. `:4` means no file completion. `:0` means the shell's default files. This is the protocol of Cobra. The script does not change when your commands change, so it never goes stale. On any error, the command prints nothing and exits with 0.",
+      },
+      {
+        type: "prose",
+        md: "The script calls the executable name (`executableName` of the runner) from `PATH`. So `dart run bin/notes.dart` gets no completions. Compile the app with `dart compile exe bin/notes.dart -o ~/.local/bin/notes`. Or run `dart pub global activate` with an `executables:` entry in `pubspec.yaml`. That puts `notes` in `~/.pub-cache/bin`.",
+      },
+      {
+        type: "prose",
+        md: "To turn it off, pass `CliRunner(..., completions: false)`. A command of yours named `completion` or `__complete` wins, as with the global flags. A runner with no commands of its own adds neither.",
+      },
+      { type: "heading", text: "When Tab does nothing" },
+      {
+        type: "prose",
+        md: "- Run `command -v notes`. The shell must find the executable.\n- Run `notes __complete ''`. It must print lines that end with `:4`.\n- zsh: `compinit` must run before `source <(...)`. Add `autoload -Uz compinit && compinit`. After an install, run `exec zsh`. Delete `~/.zcompdump` if an old one is cached.\n- bash: `complete -p notes` shows whether the script is loaded. Without the bash-completion package, use the `eval` line.",
+      },
       { type: "heading", text: "Limits" },
       {
         type: "prose",
-        md: "- Styled help is only for `CliCommand`. A plain args `Command` added to a `CliRunner` still prints args' own help.\n- `--plain` and `--color` apply to the runner's `Logger` and its prompts. They do not change `promptSelect` and the other one-shot helpers when you call them directly.\n- Text added with `ArgParser.addSeparator` is not shown, because args does not expose it.\n- Shell completions are not built yet. They come next.",
+        md: "- Styled help is only for `CliCommand`. A plain args `Command` added to a `CliRunner` still prints args' own help.\n- `--plain` and `--color` apply to the runner's `Logger` and its prompts. They do not change `promptSelect` and the other one-shot helpers when you call them directly.\n- Text added with `ArgParser.addSeparator` is not shown, because args does not expose it.\n- Completions do not support PowerShell yet. It comes with Windows support.\n- bash shows no descriptions.\n- A value glued to a short option (`-phigh`) is not completed.\n- The hook does not see the earlier words.",
       },
     ],
     related: ["migrating-from-mason-logger", "plain-mode", "testing"],

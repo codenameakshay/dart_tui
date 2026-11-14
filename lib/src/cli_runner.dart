@@ -31,6 +31,13 @@ const _errorStyle = Style(foreground256: 9, isBold: true);
 ///   [CliCommand.examples], and the footer. Colour follows the logger:
 ///   none in pipes, with `NO_COLOR`, `--no-color` or in plain mode.
 /// * [runAndExit], which prints errors and exits with a standard code.
+/// * Shell completions for bash, zsh and fish, when [completions] is true
+///   and the runner has a command: a `completion` command that prints,
+///   installs and uninstalls the script, and a hidden `__complete` command
+///   the script calls on each Tab. It completes commands, flags and the
+///   `allowed` values of options; [CliCommand.completeValue] adds values
+///   only the app knows. As with the global flags, a command of yours with
+///   the same name wins.
 class CliRunner<T> extends CommandRunner<T> {
   /// [usageLineLength] defaults to the terminal width, or 80 without a
   /// terminal. [logger] defaults to a new [Logger].
@@ -41,11 +48,17 @@ class CliRunner<T> extends CommandRunner<T> {
     Logger? logger,
     int? usageLineLength,
     super.suggestionDistanceLimit,
+    this.completions = true,
   })  : logger = logger ?? Logger(),
         super(
           usageLineLength: usageLineLength ??
               (io.stdout.hasTerminal ? io.stdout.terminalColumns : 80),
-        );
+        ) {
+    _helpCommand = commands['help'];
+  }
+
+  late final Command<T>? _helpCommand;
+  bool _completingValues = false;
 
   /// Printed by `--version` as `<executableName> version <version>`. The
   /// flag exists only when this is set.
@@ -53,6 +66,9 @@ class CliRunner<T> extends CommandRunner<T> {
 
   /// The logger every [CliCommand] uses.
   final Logger logger;
+
+  /// Whether the runner adds the `completion` and `__complete` commands.
+  final bool completions;
 
   /// The global flags this runner added. Added on first use, so options and
   /// commands added after the constructor are seen by the clash check;
@@ -103,6 +119,15 @@ class CliRunner<T> extends CommandRunner<T> {
         negatable: true);
     add('plain', 'Ask prompts as plain lines, without the terminal UI.');
     if (version != null) add('version', 'Print the version and exit.');
+
+    // After the scan: the completion command's own flags are not user flags.
+    // args adds `help` itself, so it does not count.
+    if (completions && commands.keys.any((name) => name != 'help')) {
+      if (!commands.containsKey('__complete')) addCommand(_CompleteCommand());
+      if (!commands.containsKey('completion')) {
+        addCommand(_CompletionCommand());
+      }
+    }
     return added;
   }
 
@@ -168,12 +193,47 @@ class CliRunner<T> extends CommandRunner<T> {
   /// [CommandRunner.run] does. Errors are thrown, not printed; see
   /// [runAndExit].
   @override
-  Future<T?> run(Iterable<String> args) => _scoped(args, runCommand);
+  Future<T?> run(Iterable<String> args) async {
+    if (_completing(args)) {
+      await _printCompletions(args.skip(1).toList());
+      return null;
+    }
+    return _scoped(args, runCommand);
+  }
+
+  /// `__complete` skips the normal parse, so a mandatory option or a
+  /// half-typed flag never turns into an error.
+  bool _completing(Iterable<String> args) {
+    if (args.isEmpty || args.first != '__complete') return false;
+    _globals; // adds the completion commands
+    return commands['__complete'] is _CompleteCommand;
+  }
+
+  /// Prints the candidates for [words], or nothing on any error.
+  Future<void> _printCompletions(List<String> words) async {
+    final previous = _completingValues;
+    _completingValues = true;
+    try {
+      logger._out.write(await _completions(this, words));
+    } catch (_) {
+    } finally {
+      _completingValues = previous;
+    }
+  }
 
   @override
   Future<T?> runCommand(ArgResults topLevelResults) async {
     if (_globals.contains('version') && topLevelResults.flag('version')) {
       logger._emit(logger._out, '$executableName version $version\n');
+      return null;
+    }
+    // Its run() cannot return null for a non-nullable T, so it runs here.
+    final results = topLevelResults.command;
+    final command = results == null ? null : commands[results.name];
+    if (command is _CompletionCommand<T> &&
+        !topLevelResults.flag('help') &&
+        !results!.flag('help')) {
+      await command._run(results);
       return null;
     }
     return super.runCommand(topLevelResults);
@@ -187,6 +247,13 @@ class CliRunner<T> extends CommandRunner<T> {
   /// the command's usage on stderr; 70 for any other exception, with a
   /// one-line error (and the stack trace with `--verbose`) on stderr.
   Future<Never> runAndExit(Iterable<String> args) async {
+    if (_completing(args)) {
+      await _printCompletions(args.skip(1).toList());
+      try {
+        await logger._out.flush();
+      } catch (_) {}
+      logger._exit(0);
+    }
     int finish(int code) {
       io.exitCode = code;
       logger.flush();
@@ -295,8 +362,30 @@ abstract class CliCommand<T> extends Command<T> {
   /// The runner's [CliRunner.logger].
   Logger get logger => _cliRunner.logger;
 
+  bool get _completingValues =>
+      runner is CliRunner<T> && (runner as CliRunner<T>)._completingValues;
+
+  @override
+  ArgResults? get argResults => _completingValues ? null : super.argResults;
+
+  @override
+  ArgResults? get globalResults =>
+      _completingValues ? null : super.globalResults;
+
   /// Example invocations, shown under "Examples:" in [usage].
   List<String> get examples => const [];
+
+  /// Values for shell completion that only the app knows, such as note ids.
+  ///
+  /// [option] is the name of the option whose value is being completed, or
+  /// empty for a positional argument. [partial] is what is typed so far;
+  /// the runner keeps only the values that start with it. An entry can add
+  /// a description after a tab: `'42\tBuy milk'`. Options with `allowed`
+  /// values never reach this. Return nothing to get the shell's file
+  /// completion. It runs on every Tab: keep it fast, and never prompt,
+  /// read stdin or write output.
+  FutureOr<Iterable<String>> completeValue(String option, String partial) =>
+      const [];
 
   CliRunner<T> get _cliRunner {
     final runner = this.runner;
@@ -316,6 +405,22 @@ abstract class CliCommand<T> extends Command<T> {
         message,
         (paint) => _cliRunner._commandHelp(this, paint, withDescription: false),
       );
+}
+
+/// The hidden command the completion scripts call. [CliRunner.run] and
+/// [CliRunner.runAndExit] answer it before parsing.
+final class _CompleteCommand<T> extends Command<T> {
+  @override
+  String get name => '__complete';
+  @override
+  String get description => 'Print completion candidates for the words.';
+  @override
+  bool get hidden => true;
+  @override
+  final argParser = ArgParser.allowAnything();
+
+  @override
+  Null run() => null; // coverage:ignore-line
 }
 
 /// A [UsageException] that can draw its usage again for another output.

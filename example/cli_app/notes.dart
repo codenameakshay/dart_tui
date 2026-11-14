@@ -36,7 +36,8 @@ class NotesRunner extends CliRunner<int> {
 /// Shared by the commands: the notes file as a list of maps.
 abstract class NotesCommand extends CliCommand<int> {
   File get _file {
-    final path = globalResults!.option('file')!;
+    // Shell completion skips the parse, so it reads the default file.
+    final path = globalResults?.option('file') ?? '~/.notes.json';
     final home =
         Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
     return File(path.startsWith('~/') && home != null
@@ -62,6 +63,11 @@ class AddCommand extends NotesCommand {
       abbr: 'p',
       help: 'How urgent the note is.',
       allowed: ['low', 'normal', 'high'],
+      allowedHelp: {
+        'low': 'Some day.',
+        'normal': 'This week.',
+        'high': 'Today.',
+      },
       defaultsTo: 'normal',
     );
   }
@@ -116,6 +122,14 @@ class DoneCommand extends NotesCommand {
   String get invocation => 'notes done <number>';
   @override
   List<String> get examples => ['notes done 2'];
+
+  /// Tab after "notes done" lists the open notes: "2\tCall Sam".
+  @override
+  Iterable<String> completeValue(String option, String partial) => [
+        if (option.isEmpty)
+          for (final (i, note) in load().indexed)
+            if (note['done'] != true) '${i + 1}\t${note['text']}',
+      ];
 
   @override
   int run() {

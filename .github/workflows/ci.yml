@@ -18,6 +18,10 @@ jobs:
         with:
           sdk: stable
       - run: dart pub get
+      # The completion tests run the scripts in real shells; bash is always
+      # there, zsh and fish are skipped where they are missing.
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq zsh fish
       - run: dart analyze
       # Formatting is platform-independent; skip on Windows so CRLF checkouts
       # don't trip --set-exit-if-changed with spurious line-ending diffs.

@@ -687,7 +687,7 @@ class BuildCommand extends CliCommand<int> {
 }
 ```
 
-See the [guide](https://dart-tui.vercel.app/guides/cli-commands) for the global flags, exit codes and testing, and `example/cli_app/notes.dart` for a full app. Shell completions are not built yet.
+See the [guide](https://dart-tui.vercel.app/guides/cli-commands) for the global flags, exit codes and testing, and `example/cli_app/notes.dart` for a full app. Tab completion works in bash, zsh and fish: run `notes completion install`, or see the guide.
 
 ![cli_app](https://dart-tui.vercel.app/gifs/cli_app.gif)
 
