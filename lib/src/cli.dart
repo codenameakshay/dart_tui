@@ -15,6 +15,7 @@ import 'msg.dart' show ColorProfile;
 import 'program.dart';
 import 'prompts.dart';
 
+part 'cli_completion.dart';
 part 'cli_runner.dart';
 part 'cli_tasks.dart';
 

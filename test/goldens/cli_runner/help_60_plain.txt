@@ -4,11 +4,12 @@ Usage:
   tool <command> [arguments]
 
 Commands:
-  status   Show what changed since the last deploy.
+  completion   Set up shell completion.
+  status       Show what changed since the last deploy.
 
 Project:
-  build    Compile the project.
-  deploy   Upload the latest build to the server.
+  build        Compile the project.
+  deploy       Upload the latest build to the server.
 
 Flags:
   -h, --help             Print this usage information.

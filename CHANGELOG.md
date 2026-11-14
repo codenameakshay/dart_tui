@@ -23,6 +23,26 @@
   stdin and does not install signal handlers. Calling `logger.tasks` while
   another list runs throws a `StateError`. See `example/cli_tasks.dart` and
   the "Task lists" section of the guide "Build a CLI with commands".
+- **Shell completions.** `CliRunner` adds a `completion` command and a hidden
+  `__complete` command when the runner has a command of its own.
+  `notes completion [bash|zsh|fish]` prints the script. `completion install` and
+  `completion uninstall` add and remove it, and use `$SHELL` when you name no
+  shell. The script runs `notes __complete <words>` on each Tab, with the
+  protocol of Cobra: one `value<TAB>description` line per candidate, then
+  `:<directive>`. It completes commands and aliases, flags (with `--no-` forms),
+  `allowed` values with `allowedHelp` after `--opt=` and `--opt `, and
+  `help <command>`; other options get file completion. The new
+  `CliCommand.completeValue(option, partial)` adds values only the app knows,
+  with an optional description after a tab. Install writes the bash script to
+  `bash-completion/completions/` under `XDG_DATA_HOME`, the fish script to
+  `fish/completions/` under `XDG_CONFIG_HOME`, and the zsh script to
+  `notes/zsh/` under `XDG_DATA_HOME`. Only the zsh install edits a file of
+  yours: it adds one marked block to `.zshrc` after it asks (`--yes` skips the
+  question), and never edits it in plain mode. Install twice changes nothing,
+  and uninstall removes what install added. `CliRunner(completions: false)` turns
+  it off. A command of yours named `completion` or `__complete` wins. PowerShell
+  is not supported yet. See the new section in the guide "Build a CLI with
+  commands".
 - **CLI command runner.** The new `CliRunner<T>` and `CliCommand<T>` in
   `package:dart_tui/cli.dart` extend args' `CommandRunner` and `Command`, so
   you rename the two classes and the app runs as before. `UsageException` is
@@ -44,7 +64,7 @@
   The package now depends on `args: ^2.5.0`, the lowest version with
   `ArgResults.flag` and `ArgResults.option` that supports the 3.5 SDK. See the
   new guide "Build a CLI with commands". `example/cli_app/notes.dart` shows a
-  full app. Shell completions are not built yet.
+  full app. Help lists the new `completion` command.
 - **CLI logger.** The new `package:dart_tui/cli.dart` has `Logger`, `Level`,
   `Progress` and `ProgressOptions`, shaped like mason_logger 0.3.6, so a Dart
   CLI can switch with an import change. Prompts return a `Future`: write
