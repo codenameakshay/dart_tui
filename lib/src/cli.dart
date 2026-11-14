@@ -59,6 +59,8 @@ const _darkGray = Style(foreground256: 8);
 const _lightGreen = Style(foreground256: 10);
 const _red = Style(foreground256: 1);
 
+String _singleLine(String text) => text.replaceAll(RegExp(r'[\r\n]+'), ' ');
+
 /// A logger for command-line tools, shaped like `mason_logger`'s `Logger`.
 ///
 /// [info], [detail] and [success] write to stdout; [warn], [err] and
@@ -106,6 +108,7 @@ final class Logger {
   final Never Function(int code) _exit;
   final _queue = <String?>[];
   Progress? _active;
+  bool _hasOpenLine = false;
 
   List<ProgramOption> get _options => [
         if (_in case final input?) withInput(input),
@@ -132,10 +135,15 @@ final class Logger {
   void _emit(io.IOSink sink, String text) {
     if (_plain) text = stripAnsiSequences(text).replaceAll('\x1b', '');
     final progress = _active;
-    if (progress == null) return sink.write(text);
-    _out.write('\r\x1b[K');
+    if (progress == null) {
+      sink.write(text);
+      if (text.isNotEmpty) _hasOpenLine = !text.endsWith('\n');
+      return;
+    }
+    if (!_hasOpenLine) _out.write('\r\x1b[K');
     sink.write(text);
-    if (text.endsWith('\n')) progress._draw();
+    if (text.isNotEmpty) _hasOpenLine = !text.endsWith('\n');
+    if (!_hasOpenLine) progress._draw();
   }
 
   void _log(
@@ -215,9 +223,13 @@ final class Logger {
   Progress progress(String message, {ProgressOptions? options}) =>
       Progress._(this, message, options ?? progressOptions);
 
-  Future<T?> _ask<T>(Future<T?> Function() prompt) async {
+  Future<T?> _ask<T>(
+    Future<T?> Function() prompt, {
+    void Function(List<int>)? onSelection,
+  }) async {
     final plain = _plain;
-    final value = await runZoned(prompt, zoneValues: {promptSummaryKey: true});
+    final value = await runZoned(prompt,
+        zoneValues: {promptSummaryKey: onSelection ?? true});
     // In plain mode null means the input ended; the caller takes the default.
     if (value == null && !plain) {
       try {
@@ -278,10 +290,13 @@ final class Logger {
     final labels = [for (final c in choices) display?.call(c) ?? '$c'];
     final start =
         defaultValue == null ? 0 : max(0, choices.indexOf(defaultValue));
-    final picked = await _ask(() => promptSelect(labels,
-        title: '$message', initial: start, options: _options));
-    // ponytail: choices with the same label map to the first of them.
-    return picked == null ? choices[start] : choices[labels.indexOf(picked)];
+    int? selectedIndex;
+    await _ask(
+      () => promptSelect(labels,
+          title: '$message', initial: start, options: _options),
+      onSelection: (indices) => selectedIndex = indices.single,
+    );
+    return choices[selectedIndex ?? start];
   }
 
   /// Asks for any number of [choices], shown with [display]. The ones in
@@ -297,12 +312,14 @@ final class Logger {
       for (final v in defaultValues ?? <T>[])
         if (choices.contains(v)) choices.indexOf(v),
     };
-    final picked = await _ask(() => promptMultiSelect(labels,
-        title: '$message', initial: initial, options: _options));
-    if (picked == null) {
-      return [for (final i in initial.toList()..sort()) choices[i]];
-    }
-    return [for (final label in picked) choices[labels.indexOf(label)]];
+    List<int>? selectedIndices;
+    await _ask(
+      () => promptMultiSelect(labels,
+          title: '$message', initial: initial, options: _options),
+      onSelection: (indices) => selectedIndices = indices,
+    );
+    final indices = selectedIndices ?? (initial.toList()..sort());
+    return [for (final i in indices) choices[i]];
   }
 }
 
@@ -312,8 +329,9 @@ final class Logger {
 /// and the elapsed time. In plain mode it writes one line when it starts and
 /// one when it ends. Below [Level.info] it writes nothing.
 final class Progress {
-  Progress._(this._logger, this._message, this._options)
-      : _plain = _logger._plain,
+  Progress._(this._logger, String message, this._options)
+      : _message = _singleLine(message),
+        _plain = _logger._plain,
         _silent = _logger.level.index > Level.info.index {
     _clock.start();
     if (_silent) return;
@@ -350,6 +368,7 @@ final class Progress {
   }
 
   void _draw() {
+    if (_logger._hasOpenLine) return;
     final frames = _options.animation.frames;
     final frame = frames.isEmpty
         ? ''
@@ -358,13 +377,15 @@ final class Progress {
     final columns =
         out is io.Stdout && out.hasTerminal ? out.terminalColumns : 80;
     // Keep the line on one row, so \r can redraw it.
+    final trailing = _singleLine(_options.trailing);
     final message = truncate(_message, max(columns - 15, 15));
-    out.write('\r$frame$message${_options.trailing} $_time\x1b[K');
+    final line = _singleLine('$frame$message$trailing $_time');
+    out.write('\r${truncate(line, max(columns - 1, 0))}\x1b[K');
   }
 
   /// Changes the message.
   void update(String message) {
-    _message = message;
+    _message = _singleLine(message);
     if (_timer != null) _draw();
   }
 
@@ -378,7 +399,9 @@ final class Progress {
   /// Ends and removes the line.
   void cancel() {
     final animated = _timer != null;
-    if (_stop() && animated) _out.write('\r\x1b[K');
+    if (_stop() && animated && !_logger._hasOpenLine) {
+      _out.write('\r\x1b[K');
+    }
   }
 
   /// Stops the timer; false when already ended.
@@ -395,9 +418,10 @@ final class Progress {
   void _end(String mark, String? update) {
     final animated = _timer != null;
     if (!_stop() || _silent) return;
-    final line = '$mark ${update ?? _message} $_time';
+    final line = '$mark ${_singleLine(update ?? _message)} $_time';
     if (animated) {
-      _out.write('\r$line\x1b[K\n');
+      _out.write('${_logger._hasOpenLine ? '\n' : ''}\r$line\x1b[K\n');
+      _logger._hasOpenLine = false;
     } else {
       _logger._emit(_out, '$line\n');
     }

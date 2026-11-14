@@ -246,6 +246,32 @@ void main() {
           throwsArgumentError);
     });
 
+    test('duplicate display labels preserve the selected choice index',
+        () async {
+      final logger = _logger(CaptureSink(), CaptureSink());
+      final t = _drive(() => logger.chooseOne<int>(
+            'Pick',
+            choices: [1, 2],
+            display: (_) => 'same',
+          ));
+      await t.press('down');
+      await t.press('enter');
+      expect((await t.done()).value, 2);
+    });
+
+    test('duplicate display labels preserve multi-select indices', () async {
+      final logger = _logger(CaptureSink(), CaptureSink());
+      final t = _drive(() => logger.chooseAny<int>(
+            'Pick',
+            choices: [1, 2],
+            display: (_) => 'same',
+          ));
+      await t.press('down');
+      await t.press('space');
+      await t.press('enter');
+      expect((await t.done()).value, [2]);
+    });
+
     test('chooseAny starts with the defaults checked', () async {
       final logger = _logger(CaptureSink(), CaptureSink());
       final t = _drive(() => logger.chooseAny(
@@ -318,6 +344,27 @@ void main() {
       expect(tags, ['x', 'y']);
     });
 
+    test('plain selection maps duplicate labels by chosen index', () async {
+      final logger = _logger(CaptureSink(), CaptureSink(),
+          plain: true, stdin: _lines('2\n'));
+      expect(
+        await logger.chooseOne<int>('Pick',
+            choices: [1, 2], display: (_) => 'same'),
+        2,
+      );
+    });
+
+    test('plain multi-select preserves duplicate display-label indices',
+        () async {
+      final logger = _logger(CaptureSink(), CaptureSink(),
+          plain: true, stdin: _lines('2\n'));
+      expect(
+        await logger.chooseAny<int>('Pick',
+            choices: [1, 2], display: (_) => 'same'),
+        [2],
+      );
+    });
+
     test('the end of input returns the defaults instead of exiting', () async {
       expect(
           (await ask('', (l) => l.prompt('Name?', defaultValue: 7))).$1, '7');
@@ -375,6 +422,45 @@ void main() {
       expect(err.text, '[WARN] careful\n');
     });
 
+    test('partial writes are not overwritten by progress timer frames',
+        () async {
+      final out = CaptureSink();
+      final logger = _logger(out, CaptureSink(), progressOptions: fast);
+      final p = logger.progress('Working');
+      addTearDown(p.cancel);
+      logger.write('partial');
+      final before = out.text.length;
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(out.text.substring(before), isEmpty);
+      p.cancel();
+      expect(_screen(out.text).single, 'partial');
+    });
+
+    test('partial write followed by complete ends before the result line', () {
+      final out = CaptureSink();
+      final logger = _logger(out, CaptureSink(), progressOptions: fast);
+      final p = logger.progress('Working');
+      addTearDown(p.cancel);
+      logger.write('partial');
+      p.complete();
+      expect(_screen(out.text), [
+        'partial',
+        matches(RegExp(r'^✓ Working \(\d+ms\)$')),
+      ]);
+    });
+
+    test('empty writes do not suppress progress frames', () async {
+      final out = CaptureSink();
+      final logger = _logger(out, CaptureSink(), progressOptions: fast);
+      final p = logger.progress('Working');
+      addTearDown(p.cancel);
+      logger.write('');
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      p.cancel();
+      expect(out.text, contains('Working...'));
+    });
+
     test('cancel removes the line; ending twice writes once', () async {
       final out = CaptureSink();
       final p =
@@ -382,6 +468,29 @@ void main() {
       p.cancel();
       p.complete();
       expect(_screen(out.text).join(), isEmpty);
+    });
+
+    test('custom trailing text is truncated to fit one terminal row', () {
+      final out = CaptureSink();
+      final logger = _logger(
+        out,
+        CaptureSink(),
+        progressOptions: ProgressOptions(trailing: '!' * 200),
+      );
+      final p = logger.progress('Working');
+      addTearDown(p.cancel);
+      expect(_screen(out.text).single.length, lessThanOrEqualTo(79));
+    });
+
+    test('multiline messages stay on one progress row', () async {
+      final out = CaptureSink();
+      final logger = _logger(out, CaptureSink(), progressOptions: fast);
+      final p = logger.progress('First\nSecond');
+      addTearDown(p.cancel);
+      p.complete('Done\nnow');
+      expect(_screen(out.text), [
+        matches(RegExp(r'^✓ Done now \(\d+ms\)$')),
+      ]);
     });
 
     test('the elapsed time switches from ms to seconds', () async {
@@ -493,6 +602,14 @@ void main() {
           ]);
       expect(plain, 'b');
       expect(out.text, endsWith('Enter a number [2]: \n'));
+    });
+
+    test('promptSelect keeps its label outcome for TuiTester', () async {
+      final t = _drive(() => promptSelect(['a', 'a', 'b'], initial: 1));
+      await t.press('enter');
+      final result = await t.done();
+      expect(result.value, 'a');
+      expect(result.outcome, 'a');
     });
 
     test('promptInput hidden and defaultValue', () async {

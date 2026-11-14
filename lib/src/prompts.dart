@@ -16,11 +16,19 @@ import 'view.dart';
 /// it asks a plain line question and writes no escape codes. The end of input
 /// cancels, like Esc.
 
-/// Internal: while this zone key is `true`, an answered prompt leaves one
-/// line (`title answer`) instead of its full last frame, as `Logger` does.
+/// Internal Logger zone key. `true` enables compact answered frames; a
+/// `void Function(List<int>)` also receives the selected indexes.
 final Object promptSummaryKey = Object();
 
-bool get _summary => Zone.current[promptSummaryKey] == true;
+Object? get _summaryValue => Zone.current[promptSummaryKey];
+
+bool get _summary =>
+    _summaryValue == true || _summaryValue is void Function(List<int>);
+
+void _reportSelection(List<int> indexes) {
+  final value = _summaryValue;
+  if (value is void Function(List<int>)) value(indexes);
+}
 
 String _answered(String title, String answer) {
   final shown = const Style(foreground256: 14, isDim: true).render(answer);
@@ -47,7 +55,9 @@ Future<String?> promptSelect(
   if (plain != null) {
     return plain.run((io) async {
       final i = await io.askChoice([title], choices, defaultIndex: start);
-      return i == null ? null : choices[i];
+      if (i == null) return null;
+      _reportSelection([i]);
+      return choices[i];
     });
   }
   final model = _SelectPromptModel(
@@ -56,7 +66,11 @@ Future<String?> promptSelect(
     cursor: start ?? 0,
     summary: _summary,
   );
-  return program.runForResult(model);
+  final done = await program.run(model);
+  final index = done is _SelectPromptModel ? done.result : null;
+  if (index == null) return null;
+  _reportSelection([index]);
+  return choices[index];
 }
 
 /// Several choices; returns the checked ones in list order, or `null` if
@@ -85,6 +99,7 @@ Future<List<String>?> promptMultiSelect(
             for (final i in initial)
               if (i >= 0 && i < choices.length) i
           });
+      if (picks != null) _reportSelection(picks.toList()..sort());
       return picks == null ? null : pick(picks);
     });
   }
@@ -99,6 +114,7 @@ Future<List<String>?> promptMultiSelect(
     summary: _summary,
   );
   final picks = await program.runForResult(model);
+  if (picks != null) _reportSelection(picks);
   return picks == null ? null : pick(picks);
 }
 
@@ -167,15 +183,16 @@ final class _SelectPromptModel extends Model implements OutcomeModel<String> {
   final List<String> choices;
   final String title;
   final int cursor;
-  final String? result;
+  final int? result;
   final bool summary;
 
+  /// The picked index; [outcome] is its label.
   @override
-  String? get outcome => result;
+  String? get outcome => result == null ? null : choices[result!];
 
   int get _c => cursor.clamp(0, choices.length - 1);
 
-  _SelectPromptModel _copy({required int cursor, String? result}) =>
+  _SelectPromptModel _copy({required int cursor, int? result}) =>
       _SelectPromptModel(
         choices: choices,
         title: title,
@@ -204,7 +221,7 @@ final class _SelectPromptModel extends Model implements OutcomeModel<String> {
       case 'enter':
       // LF (0x0a) maps to ctrl+j; CR (0x0d) maps to enter — terminals differ.
       case 'ctrl+j':
-        return (_copy(cursor: cursor, result: choices[_c]), null);
+        return (_copy(cursor: cursor, result: _c), null);
       case 'esc':
       case 'ctrl+c':
         return (_copy(cursor: cursor), () => QuitMsg());
@@ -215,7 +232,9 @@ final class _SelectPromptModel extends Model implements OutcomeModel<String> {
 
   @override
   View view() {
-    if (summary && result != null) return newView(_answered(title, result!));
+    if (summary && result != null) {
+      return newView(_answered(title, choices[result!]));
+    }
     final b = StringBuffer(title)
       ..writeln()
       ..writeln();
