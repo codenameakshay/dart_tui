@@ -37,7 +37,7 @@ final class TaskContext {
 
   /// The text on the task's line.
   String get title => _node.title;
-  set title(String value) => _node.title = _singleLine(value);
+  set title(String value) => _node.title = _taskText(value);
 
   /// Adds [line] to the task's output. While it runs, the last line shows
   /// dim under the task; a failed task shows its output. In plain mode each
@@ -76,10 +76,10 @@ final class TasksFailed implements Exception {
   String toString() {
     if (failures.length == 1) {
       final f = failures.single;
-      return '${f.title} failed: ${_singleLine('${f.error}')}';
+      return '${f.title} failed: ${_taskText(f.error)}';
     }
     final each = [
-      for (final f in failures) '${f.title} (${_singleLine('${f.error}')})',
+      for (final f in failures) '${f.title} (${_taskText(f.error)})',
     ];
     return '${failures.length} tasks failed: ${each.join('; ')}';
   }
@@ -112,6 +112,7 @@ final class TaskNode {
   /// Logged lines, each one terminal row without control characters.
   final List<String> output;
   Object? error;
+  bool _ownFailure = false;
   String? skipReason;
   final List<TaskNode> children;
 
@@ -150,7 +151,7 @@ List<String> renderTasks(
       TaskStatus.running => (
           paint(
             _lightGreen,
-            frames.isEmpty ? '•' : frames[frame % frames.length],
+            frames.isEmpty ? '•' : _taskText(frames[frame % frames.length]),
           ),
           '',
         ),
@@ -158,7 +159,7 @@ List<String> renderTasks(
       TaskStatus.failed => (paint(_red, '✗'), ''),
       TaskStatus.skipped => (
           paint(_yellow, '↓'),
-          ' ${dim(node.skipReason == null ? 'skipped' : 'skipped: ${_singleLine(node.skipReason!)}')}',
+          ' ${dim(node.skipReason == null ? 'skipped' : 'skipped: ${_taskText(node.skipReason!)}')}',
         ),
     };
     final time = node.elapsed == null ||
@@ -166,8 +167,9 @@ List<String> renderTasks(
             node.status == TaskStatus.pending
         ? ''
         : ' ${dim('(${_formatElapsed(node.elapsed!)})')}';
-    final title =
-        node.status == TaskStatus.pending ? dim(node.title) : node.title;
+    final title = node.status == TaskStatus.pending
+        ? dim(_taskText(node.title))
+        : _taskText(node.title);
     final hasFailure = node._hasFailure;
     final done =
         node.status == TaskStatus.success || node.status == TaskStatus.skipped;
@@ -175,7 +177,7 @@ List<String> renderTasks(
 
     final inner = '$indent  ';
     if (node.status == TaskStatus.running && node.output.isNotEmpty) {
-      rows.add(('$inner${dim('› ${node.output.last}')}', false));
+      rows.add(('$inner${dim('› ${_taskText(node.output.last)}')}', false));
     }
     if (node.status == TaskStatus.failed) {
       final output = node.output;
@@ -187,13 +189,15 @@ List<String> renderTasks(
         ));
       }
       for (final line in output.skip(output.length - shown)) {
-        rows.add(('$inner${dim(line)}', false));
+        rows.add(('$inner${dim(_taskText(line))}', false));
       }
       final error = node.error;
       // A failure from nested steps is shown on the step itself.
       if (error != null &&
-          !(error is TasksFailed && node.children.isNotEmpty)) {
-        rows.add(('$inner${paint(_red, _singleLine('$error'))}', false));
+          !(error is TasksFailed &&
+              node.children.isNotEmpty &&
+              !node._ownFailure)) {
+        rows.add(('$inner${paint(_red, _taskText(error))}', false));
       }
     }
     if (node.status == TaskStatus.running || hasFailure) {
@@ -206,7 +210,8 @@ List<String> renderTasks(
   for (final root in roots) {
     add(root, '');
   }
-  final fitted = whole ? rows : _fold(rows, max(height - 1, 1), dim);
+  if (!whole && height <= 1) return [];
+  final fitted = whole ? rows : _fold(rows, height - 1, dim);
   return [for (final (text, _) in fitted) truncate(text, max(width - 1, 0))];
 }
 
@@ -239,7 +244,9 @@ final class _TaskRun implements _Live {
   final Logger _logger;
   final bool _exitOnError;
   final _roots = <TaskNode>[];
-  final _failures = <({String title, Object error, StackTrace stackTrace})>[];
+  final _failures =
+      <TaskNode, ({String title, Object error, StackTrace stackTrace})>{};
+  final _nestedFailures = <TaskNode, Set<TasksFailed>>{};
   final _clock = Stopwatch();
   late final bool _plain = _logger._plain;
 
@@ -284,7 +291,7 @@ final class _TaskRun implements _Live {
     }
     _summary();
     if (_exitOnError && _failures.isNotEmpty) {
-      throw TasksFailed(List.unmodifiable(_failures));
+      throw TasksFailed(List.unmodifiable(_failures.values));
     }
   }
 
@@ -337,7 +344,7 @@ final class _TaskRun implements _Live {
     String prefix,
   ) async {
     _checkConcurrency(concurrency);
-    final nodes = [for (final task in tasks) TaskNode(task.title)];
+    final nodes = [for (final task in tasks) TaskNode(_taskText(task.title))];
     (parent?.children ?? _roots).addAll(nodes);
     _count += nodes.length;
     if (_live) _logger._drawRegion();
@@ -353,11 +360,24 @@ final class _TaskRun implements _Live {
       for (var i = 0; i < min(concurrency, nodes.length); i++) worker(),
     ]);
     if (parent == null || !_exitOnError) return;
+    final descendants = <TaskNode>{};
+    void collect(List<TaskNode> nodes) {
+      for (final node in nodes) {
+        descendants.add(node);
+        collect(node.children);
+      }
+    }
+
+    collect(nodes);
     final mine = [
-      for (final f in _failures)
-        if (f.title.startsWith('$prefix > ')) f,
+      for (final entry in _failures.entries)
+        if (descendants.contains(entry.key)) entry.value,
     ];
-    if (mine.isNotEmpty) throw TasksFailed(mine);
+    if (mine.isNotEmpty) {
+      final error = TasksFailed(mine);
+      (_nestedFailures[parent] ??= {}).add(error);
+      throw error;
+    }
   }
 
   Future<void> _runOne(Task task, TaskNode node, String prefix) async {
@@ -379,8 +399,11 @@ final class _TaskRun implements _Live {
       node
         ..status = TaskStatus.failed
         ..error = error;
-      if (error is! TasksFailed || node.children.isEmpty) {
-        _failures.add((title: context._path, error: error, stackTrace: stack));
+      if (!(error is TasksFailed &&
+          (_nestedFailures[node]?.contains(error) ?? false))) {
+        node._ownFailure = true;
+        _failures[node] =
+            (title: context._path, error: error, stackTrace: stack);
       }
       if (_exitOnError) _stopped = true;
     }
@@ -404,13 +427,15 @@ final class _TaskRun implements _Live {
     final error = node.error;
     final line = switch (node.status) {
       TaskStatus.success => '${paint(_lightGreen, '✓')} $path $time',
-      TaskStatus.failed when error is TasksFailed && node.children.isNotEmpty =>
+      TaskStatus.failed
+          when error is TasksFailed &&
+              node.children.isNotEmpty &&
+              !node._ownFailure =>
         '${paint(_red, '✗')} $path',
-      TaskStatus.failed =>
-        '${paint(_red, '✗')} $path: ${_singleLine('$error')}',
+      TaskStatus.failed => '${paint(_red, '✗')} $path: ${_taskText(error!)}',
       _ => node.skipReason == null
           ? '- $path skipped'
-          : '- $path skipped: ${_singleLine(node.skipReason!)}',
+          : '- $path skipped: ${_taskText(node.skipReason!)}',
     };
     _logger._emit(sink, '$line\n');
   }
@@ -461,6 +486,16 @@ List<String> _cleanLines(String text) {
     for (final line in lines)
       stripAnsiSequences(line.split('\r').last)
           .replaceAll('\t', '    ')
-          .replaceAll(RegExp(r'[\x00-\x1f\x7f]'), ''),
+          .replaceAll(RegExp(r'[\x00-\x1f\x7f-\x9f]'), ''),
   ];
+}
+
+String _taskText(Object value) {
+  String text;
+  try {
+    text = '$value';
+  } catch (_) {
+    return '<unprintable error>';
+  }
+  return _cleanLines(text).join(' ');
 }

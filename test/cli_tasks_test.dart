@@ -6,6 +6,7 @@ import 'package:dart_tui/cli.dart';
 import 'package:dart_tui/dart_tui.dart';
 import 'package:dart_tui/src/cli.dart' show TaskNode, TaskStatus, renderTasks;
 import 'package:dart_tui/testing.dart';
+import 'package:dart_tui/src/ansi_state.dart' show stripAnsiSequences;
 import 'package:test/test.dart';
 
 final class _Exit implements Exception {
@@ -524,6 +525,191 @@ void main() {
     });
   });
 
+  group('task regressions', () {
+    test('duplicate parent titles do not share nested failures', () async {
+      final out = CaptureSink(), err = CaptureSink();
+      final failed = Completer<void>();
+      final otherStarted = Completer<void>();
+      var unrelatedFailed = false;
+      final error = StateError('bad');
+      final result = await _logger(out, err).tasks([
+        Task('Parent', (t) async {
+          try {
+            await t.tasks([
+              Task('Bad', (t) async {
+                await otherStarted.future;
+                throw error;
+              })
+            ]);
+          } finally {
+            failed.complete();
+          }
+        }),
+        Task('Parent', (t) async {
+          otherStarted.complete();
+          await failed.future;
+          try {
+            await t.tasks([]);
+          } on TasksFailed {
+            unrelatedFailed = true;
+          }
+        }),
+      ], concurrency: 2).then<Object?>((_) => null, onError: (Object e) => e);
+      expect(unrelatedFailed, isFalse);
+      final failures = (result! as TasksFailed).failures;
+      expect(failures.map((f) => f.title), ['Parent > Bad']);
+      expect(failures.single.error, same(error));
+      final screen = _noTimeLines(_screen(out.text));
+      expect(screen.where((line) => line == '✗ Parent (T)'), hasLength(1));
+      expect(screen.where((line) => line == '✓ Parent (T)'), hasLength(1));
+    });
+
+    test('an unrelated TasksFailed thrown by a parent is retained', () async {
+      final out = CaptureSink(), err = CaptureSink();
+      const ownError = TasksFailed([]);
+      final result = await _logger(out, err).tasks([
+        Task('Parent', (t) async {
+          await t.tasks([Task('Good', (t) {})]);
+          throw ownError;
+        }),
+      ]).then<Object?>((_) => null, onError: (Object e) => e);
+      expect(result, isA<TasksFailed>());
+      final failures = (result! as TasksFailed).failures;
+      expect(failures.map((f) => f.title), ['Parent']);
+      expect(failures.single.error, same(ownError));
+      expect(_screen(out.text), contains('  0 tasks failed: '));
+    });
+
+    for (final plain in [false, true]) {
+      test('unprintable errors keep their identity and release (plain=$plain)',
+          () async {
+        final out = CaptureSink(), err = CaptureSink();
+        final logger = _logger(out, err, plain: plain);
+        final error = _Unprintable();
+        final result = await logger.tasks([
+          Task('Bad', (t) => throw error),
+        ]).then<Object?>((_) => null, onError: (Object e) => e);
+        expect(result, isA<TasksFailed>());
+        expect((result! as TasksFailed).failures.single.error, same(error));
+        expect(result.toString(), contains('unprintable error'));
+        final end = out.text;
+        await _wait(20);
+        expect(out.text, end);
+        await logger.tasks([Task('Next', (t) {})]);
+        expect(out.text, contains('✓ Next'));
+      });
+    }
+
+    test('render sanitizes controls without mutating the nodes', () {
+      final node = _run('a\tb', output: ['old\rnew\x1b[2J\t界']);
+      final rows = renderTasks([node], width: 12, height: 5);
+      expect(rows.any((r) => RegExp(r'[\x00-\x1f\x7f]').hasMatch(r)), isFalse);
+      for (final row in rows) {
+        expect(getWidth(row), lessThanOrEqualTo(11));
+      }
+      expect(node.title, 'a\tb');
+      expect(node.output.single, 'old\rnew\x1b[2J\t界');
+    });
+
+    test('render cleans error, skip and spinner text before painting', () {
+      final nodes = [
+        TaskNode('Failed',
+            status: TaskStatus.failed, error: 'old\rerror\x1b[2J\t界'),
+        TaskNode('Skip',
+            status: TaskStatus.skipped, skipReason: 'old\rwhy\x1b[2J'),
+        _run('Run'),
+      ];
+      final rows = renderTasks(nodes,
+          width: 30,
+          spinner: const Spinner(['\x1b[2J\tA\rB'], Duration(seconds: 1)),
+          paint: (_, text) => '\x1b[31m$text\x1b[0m');
+      expect(rows.join(), contains('\x1b[31m'));
+      expect(rows.join(), isNot(contains('\x1b[2J')));
+      for (final row in rows) {
+        final plain = stripAnsiSequences(row);
+        expect(RegExp(r'[\x00-\x1f\x7f-\x9f]').hasMatch(plain), isFalse);
+        expect(getWidth(row), lessThanOrEqualTo(29));
+      }
+      expect(stripAnsiSequences(rows[1]), '  error    界');
+      expect(stripAnsiSequences(rows[2]), '↓ Skip skipped: why');
+      expect(stripAnsiSequences(rows[3]), 'B Run');
+    });
+
+    test('enabled errors fail and stop pending tasks at every depth', () async {
+      final out = CaptureSink(), err = CaptureSink();
+      final otherStarted = Completer<void>(), failed = Completer<void>();
+      final events = <String>[];
+      final error = StateError('enabled');
+      final result = await _logger(out, err, plain: true).tasks([
+        Task('First', (t) async {
+          await otherStarted.future;
+          try {
+            await t.tasks([
+              Task('Disabled', (t) => events.add('body'),
+                  enabled: () => throw error),
+              Task('Nested later', (t) => events.add('nested later')),
+            ]);
+          } finally {
+            failed.complete();
+          }
+        }),
+        Task('Running', (t) async {
+          otherStarted.complete();
+          await failed.future;
+          await t
+              .tasks([Task('Other child', (t) => events.add('other child'))]);
+          events.add('running finished');
+        }),
+        Task('Later', (t) => events.add('later')),
+      ], concurrency: 2).then<Object?>((_) => null, onError: (Object e) => e);
+      expect(events, ['running finished']);
+      final failures = (result! as TasksFailed).failures;
+      expect(failures.map((f) => f.title), ['First > Disabled']);
+      expect(failures.single.error, same(error));
+      expect(out.text, contains('- First > Nested later skipped'));
+      expect(out.text, contains('- Running > Other child skipped'));
+      expect(out.text, contains('- Later skipped'));
+    });
+
+    test('empty and repeated lists leave no timer or stale state', () async {
+      final out = CaptureSink(), err = CaptureSink();
+      final logger = _logger(out, err);
+      await logger.tasks([]);
+      expect(out.text, isEmpty);
+      await logger.tasks([Task('First', (t) {})]);
+      final first = out.text;
+      await logger.tasks([]);
+      await _wait(20);
+      expect(out.text, first);
+      out.clear();
+      await logger.tasks([Task('Second', (t) => t.skip())]);
+      expect(_noTimeLines(_screen(out.text)),
+          ['↓ Second skipped', '✓ 1 task, 1 skipped (T)']);
+    });
+
+    test('plain task titles, skip reasons and errors cannot emit escapes',
+        () async {
+      final out = CaptureSink(), err = CaptureSink();
+      await _logger(out, err, plain: true).tasks([
+        Task('old\rNew\x1b[2J\tTitle', (t) {
+          t.log('\x1b[31mred\x1b[0m\ttext');
+          t.skip('old\rreason\x1b[2J');
+        }),
+        Task('Bad', (t) => throw 'old\rproblem\x1b[2J\ttext'),
+      ], exitOnError: false);
+      expect(out.text, isNot(contains('\x1b')));
+      expect(out.text, isNot(contains('\r')));
+      expect(out.text, isNot(contains('\t')));
+      expect(out.text, contains('New    Title | red    text'));
+      expect(out.text, contains('skipped: reason'));
+      expect(out.text, contains('Bad: problem    text'));
+    });
+
+    test('a one-row terminal reserves its sole row for the cursor', () {
+      expect(renderTasks([TaskNode('a')], width: 10, height: 1), isEmpty);
+    });
+  });
+
   group('CliRunner', () {
     test('a failing task list exits 70 with one Error line', () async {
       final out = CaptureSink(), err = CaptureSink();
@@ -558,4 +744,14 @@ class _Ship extends CliCommand<int> {
     ]);
     return 0;
   }
+}
+
+final class _Unprintable {
+  @override
+  bool operator ==(Object other) => identical(this, other);
+
+  @override
+  int get hashCode => throw StateError('cannot hash');
+  @override
+  String toString() => throw StateError('cannot format');
 }
