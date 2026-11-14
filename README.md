@@ -691,6 +691,10 @@ See the [guide](https://dart-tui.vercel.app/guides/cli-commands) for the global 
 
 ![cli_app](https://dart-tui.vercel.app/gifs/cli_app.gif)
 
+`logger.tasks` shows a live task list, like `pnpm install`. Tasks can run at the same time and have nested steps. A task that ends well collapses to one line, and a failed task stays open with its output. In pipes and CI it writes one plain line for each task. See `example/cli_tasks.dart` and the [guide](https://dart-tui.vercel.app/guides/cli-commands).
+
+![cli_tasks](https://dart-tui.vercel.app/gifs/cli_tasks.gif)
+
 ### Plain mode (CI, pipes, screen readers, agents)
 
 In plain mode, every one-shot helper and `Form.run` ask plain line questions (`1. a`, `Enter a number: `) and write no escape codes. It is on when you pass `withPlainMode()`, when `DART_TUI_ACCESSIBLE` or `ACCESSIBLE` is set to a true value, or when the helper uses the real stdin and stdout and either is not a terminal (or `TERM=dumb`). `withPlainMode(false)` turns it off. A helper with `withInput` or `withOutput` keeps the terminal UI unless you force plain mode.

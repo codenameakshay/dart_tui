@@ -4,6 +4,25 @@
 
 ### Features
 
+- **CLI task lists.** The new `Logger.tasks(List<Task>, {concurrency,
+  exitOnError})` in `package:dart_tui/cli.dart` shows a live task list, like
+  `pnpm install` or `docker pull`. A `Task` has a title and a `run` function
+  that gets a `TaskContext`: set `title`, call `log(line)` for output under the
+  task, `skip([reason])` to end the task as skipped, or `tasks(list,
+  {concurrency})` for nested steps at any depth. A task whose `enabled`
+  returns false is skipped. Tasks show in declaration order. A task that succeeds collapses
+  to one line, and a failed task stays open with its output. With
+  `exitOnError: true`, the default, a failure starts no new tasks, waits for
+  the running ones, draws the last frame and throws `TasksFailed` with every
+  failure (`Parent > Child` for nested ones). `CliRunner.runAndExit` turns it
+  into exit code 70 with one line. In plain mode (pipes, CI, `ACCESSIBLE=1`,
+  `--plain`) it writes no escape codes and one line for each finished task.
+  `--quiet` shows only failures and the summary, on stderr. `--verbose` prints
+  every logged line above the list. The live list is at most the terminal
+  height minus 1 and each line is cut to the width minus 1. It does not read
+  stdin and does not install signal handlers. Calling `logger.tasks` while
+  another list runs throws a `StateError`. See `example/cli_tasks.dart` and
+  the "Task lists" section of the guide "Build a CLI with commands".
 - **CLI command runner.** The new `CliRunner<T>` and `CliCommand<T>` in
   `package:dart_tui/cli.dart` extend args' `CommandRunner` and `Command`, so
   you rename the two classes and the app runs as before. `UsageException` is

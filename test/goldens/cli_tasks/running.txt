@@ -1,0 +1,4 @@
+✓ Install (1.2s)
+⠋ Build
+  › compiling b
+· Deploy

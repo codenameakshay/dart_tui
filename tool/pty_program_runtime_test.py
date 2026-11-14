@@ -498,6 +498,23 @@ class ProgramRuntimePtyTest(unittest.TestCase):
         self.assertTrue(probe.data.rfind(b"\x1b[?25h") > probe.data.rfind(b"\x1b[?25l"))
         self.assert_cooked_mode(probe)
 
+    def test_ctrl_c_during_logger_tasks_leaves_last_frame_and_cooked_terminal(self) -> None:
+        probe = self._probe("logger-tasks")
+        probe.read_until(b"LOGGER_TASK_B started")
+        # Let the list redraw, so its timer is running.
+        probe.read_until_count(b"LOGGER_TASK_B", 4)
+        self.assert_cooked_mode(probe)
+        probe.send(b"\x03")
+        self.assertEqual(probe.exit_code(), -signal.SIGINT)
+        output = bytes(probe.data)
+        self.assertNotIn(b"\x1b[?25l", output)
+        self.assertNotIn(b"\x1b[?1049h", output)
+        # The last frame stays: the finished task and both running ones.
+        last = output[output.rfind(b"LOGGER_TASK_DONE"):]
+        self.assertIn(b"LOGGER_TASK_A", last)
+        self.assertIn(b"LOGGER_TASK_B", last)
+        self.assert_cooked_mode(probe)
+
     def test_logger_prompt_escape_and_ctrl_c_cancel_with_terminal_restored(self) -> None:
         for cancel_key in (b"\x1b", b"\x03"):
             with self.subTest(cancel_key=cancel_key):

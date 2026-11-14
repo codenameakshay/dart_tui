@@ -1,0 +1,6 @@
+⠋ Check
+  ✓ Analyze (42ms)
+  ⠋ Test
+    › +3: ok
+  · Format
+· Build

@@ -1,0 +1,4 @@
+✗ Check (1.2s)
+  ✓ Analyze (42ms)
+  ✗ Test (42ms)
+    Exception: boom

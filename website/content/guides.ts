@@ -1192,6 +1192,136 @@ Docs: https://example.com/tool`,
         type: "prose",
         md: "Colour follows the logger. There is none in a pipe, with `NO_COLOR` set, with `--no-color`, or in plain mode. The text and line breaks are the same with or without colour, so you can diff the plain output.",
       },
+      { type: "heading", text: "Task lists" },
+      {
+        type: "prose",
+        md: "`logger.tasks` runs a list of tasks and shows them as a live list, like `pnpm install` or `docker pull`. Each `Task` has a title and a `run` function. `run` gets a `TaskContext`. Use `task.title = ...` to change the title, `task.log(line)` to show a line of output under the task, `task.skip('reason')` to end the task as skipped, and `task.tasks([...])` to run nested steps. You can nest to any depth. Tasks show in the order you declare them, even when they run at the same time. `concurrency` is how many run at once. The default is 1. A `Task` with `enabled: () => false` is skipped, not run.",
+      },
+      {
+        type: "code",
+        lang: "dart",
+        code: `await logger.tasks([
+  Task(
+    'Check',
+    (task) => task.tasks(concurrency: 3, [
+      Task('Resolve dependencies', (task) async {
+        task.log('Resolving args 2.7.0');
+        // ... do the work ...
+      }),
+      Task('Run tests', (task) async {
+        task.log('+97: test/renderer_test.dart');
+        if (failed) throw Exception('1 test failed');
+      }),
+      Task('Analyze', (task) async { /* ... */ }),
+    ]),
+  ),
+  Task('Build', (task) => task.tasks([
+    Task('Compile', (task) async {
+      for (final target in ['linux-x64', 'macos-arm64']) {
+        task.title = 'Compile $target';
+        // ... do the work ...
+      }
+      task.title = 'Compile 2 targets';
+    }),
+  ])),
+  Task('Publish', (task) => task.skip('dry run')),
+]);`,
+      },
+      {
+        type: "prose",
+        md: "The full flow is `example/cli_tasks.dart`. Run it with `dart run example/cli_tasks.dart`, or add `--fail` to make a test fail. A task that finishes well collapses to one line. A task that fails stays open and shows its output. This is the last frame of a run, first when all tasks pass, then with `--fail`, and then the same run with the output piped, which is plain mode.",
+      },
+      {
+        type: "compare",
+        items: [
+          {
+            label: "Terminal, all tasks pass",
+            lang: "text",
+            code: `✓ Check (0.6s)
+✓ Build (1.4s)
+↓ Publish skipped: dry run
+✓ 8 tasks, 1 skipped (2.0s)`,
+          },
+          {
+            label: "Plain (pipe, CI, ACCESSIBLE=1, --plain), shortened",
+            lang: "text",
+            code: `Check > Run tests | +97: test/renderer_test.dart
+✓ Check > Analyze (0.3s)
+✓ Check > Run tests (0.5s)
+✓ Check (0.6s)
+Build > Archive | Wrote release.tar.gz (8.2 MB)
+✓ Build > Archive (0.6s)
+✓ Build (1.4s)
+- Publish skipped: dry run
+✓ 8 tasks, 1 skipped (2.0s)`,
+          },
+        ],
+      },
+      {
+        type: "compare",
+        items: [
+          {
+            label: "Terminal, a test fails",
+            lang: "text",
+            code: `✗ Check (0.6s)
+  ✓ Resolve dependencies (0.6s)
+  ✗ Run tests (0.6s)
+    +12: test/cli_logger_test.dart
+    +48: test/cli_runner_test.dart
+    -1: test/cli_tasks_test.dart: summary line
+    +97: test/renderer_test.dart
+    Exception: 1 test failed
+  ✓ Analyze (0.2s)
+↓ Build skipped
+↓ Publish skipped
+✗ 1 of 6 failed (0.6s)`,
+          },
+          {
+            label: "Plain (pipe, CI, ACCESSIBLE=1, --plain), shortened",
+            lang: "text",
+            code: `Check > Run tests | -1: test/cli_tasks_test.dart: summary line
+✓ Check > Resolve dependencies (0.6s)
+✗ Check > Run tests: Exception: 1 test failed
+✗ Check
+- Build skipped
+- Publish skipped
+✗ 1 of 6 failed (0.6s)`,
+          },
+        ],
+      },
+      {
+        type: "prose",
+        md: "While the tasks run, the live list looks like this. `⠧` is a spinner, and `·` is a task that has not started.",
+      },
+      {
+        type: "code",
+        lang: "text",
+        code: `⠧ Check
+  ⠧ Resolve dependencies
+    › Got dependencies
+  ⠧ Run tests
+    › +97: test/renderer_test.dart
+  ✓ Analyze (0.2s)
+· Build
+· Publish`,
+      },
+      { type: "gif", src: "cli_tasks.gif", caption: "example/cli_tasks.dart" },
+      {
+        type: "prose",
+        md: "**Failures.** With `exitOnError: true`, the default, a failure starts no new tasks. The tasks that did not start show as skipped. The tasks that run now finish, the list draws its last frame, and `logger.tasks` throws `TasksFailed`. It lists every failure. A nested one reads `Parent > Child`. `CliRunner.runAndExit` turns `TasksFailed` into exit code 70 with one line. With `exitOnError: false`, every task runs, and `logger.tasks` returns when all are done. It does not throw. The failures show in the last frame.",
+      },
+      {
+        type: "prose",
+        md: "**Plain mode.** In a pipe, in CI, with `ACCESSIBLE=1` and with `--plain`, there are no escape codes. The logger writes one line for each task that ends: `✓ Build (1.2s)`, `✗ Test: <error>` or `- Lint skipped: <reason>`. A line from `task.log` starts with the task title and ` | `.",
+      },
+      {
+        type: "prose",
+        md: "**Log levels.** With `--quiet`, or any level above info, only failures and the summary show, on stderr. With `--verbose`, every line from `task.log` is also printed above the list.",
+      },
+      {
+        type: "prose",
+        md: "**Limits.** The live list is never taller than the terminal height minus 1. Tasks that are done fold into one line, `… n done`. Each line is cut to the terminal width minus 1. The list does not read stdin, does not set raw mode, does not install signal handlers and does not hide the cursor. When you press Ctrl+C, the last frame stays on screen. A `logger.progress` started inside a task writes a plain start line and an end line above the list. Calling `logger.tasks` while another list runs on the same logger throws a `StateError`.",
+      },
       { type: "heading", text: "Run and exit codes" },
       {
         type: "prose",

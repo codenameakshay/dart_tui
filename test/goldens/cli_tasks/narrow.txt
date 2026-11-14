@@ -1,0 +1,4 @@
+✓ A very long fini
+⠋ Another long runn
+  › an output line 
+· Pending task with

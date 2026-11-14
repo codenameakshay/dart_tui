@@ -65,6 +65,20 @@ async function renderBlock(block: ContentBlock, key: number) {
         </figure>
       );
 
+    case "compare":
+      return (
+        <div key={key} className="grid gap-4 md:grid-cols-2">
+          {block.items.map((item) => (
+            <figure key={item.label} className="min-w-0">
+              <figcaption className="mb-2 font-mono text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {item.label}
+              </figcaption>
+              <CodeBlock code={item.code} lang={item.lang} />
+            </figure>
+          ))}
+        </div>
+      );
+
     case "table":
       return (
         <div
