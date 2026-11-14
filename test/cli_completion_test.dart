@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io' as io;
 
+import 'package:args/command_runner.dart' show Command;
 import 'package:dart_tui/cli.dart';
 import 'package:dart_tui/testing.dart';
 import 'package:test/test.dart';
@@ -250,6 +251,13 @@ void main() {
           ['add\tThe add command.', ':4']);
     });
 
+    test('a user args Command named help keeps its own subcommands', () async {
+      final runner = CliRunner<int>('tool', 'x', logger: _logger(out))
+        ..addCommand(_RemoteWithHelp());
+      expect(await complete(['custom', 'help', ''], runner: runner),
+          ['topic\tThe topic command.', ':4']);
+    });
+
     test('the completion command completes its actions and shells', () async {
       expect(await complete(['completion', '']), [
         'bash',
@@ -291,6 +299,16 @@ void main() {
           contains('a b\tThe a b command.'));
     });
 
+    test('styled descriptions never leak terminal escapes into the protocol',
+        () async {
+      final runner = CliRunner<int>('tool', 'x', logger: _logger(out))
+        ..addCommand(_StyledCompletion());
+      expect(await complete(['styled', '--value', ''], runner: runner),
+          ['safe\tRed description', ':4']);
+      expect(await complete(['styled', ''], runner: runner),
+          ['safe\tHook description', ':4']);
+    });
+
     test('an error prints nothing, and runAndExit exits 0', () async {
       final runner = CliRunner<int>('tool', 'x', logger: _logger(out))
         ..addCommand(_Throws());
@@ -310,6 +328,42 @@ void main() {
           throwsA(isA<_Exit>().having((e) => e.code, 'code', 0)));
       expect(out.text, 'go\tThe go command.\n:4\n');
       expect(logger.level, Level.info);
+    });
+
+    test('completion hooks do not see results from a previous run', () async {
+      final command = _ResultsProbe();
+      final runner = CliRunner<int>('tool', 'x', logger: _logger(out))
+        ..addCommand(command);
+      await runner.run(['probe', '--value', 'old']);
+      expect(command.argResults, isNotNull);
+      expect(await complete(['probe', ''], runner: runner), ['clean', ':4']);
+      expect(command.argResults, isNotNull,
+          reason: 'completion does not discard normal command state');
+      await runner.run(['probe', '--value', 'new']);
+      expect(command.argResults!.option('value'), 'new');
+    });
+
+    test('malformed completion words stay silent and never execute commands',
+        () async {
+      final err = CaptureSink();
+      final logger = _logger(out, err: err, env: {'FORCE_COLOR': '3'});
+      final command = _NeverRun();
+      final runner = CliRunner<int>('tool', 'x', logger: logger)
+        ..argParser.addOption('required', mandatory: true)
+        ..addCommand(command);
+      for (final words in [
+        ['probe', '--unknown=', '--value', '\u001b[31m'],
+        ['probe', '-xyz', '--', '\n'],
+        ['--quiet', '--verbose', 'probe', '--value=bad'],
+      ]) {
+        out.clear();
+        await expectLater(runner.runAndExit(['__complete', ...words]),
+            throwsA(isA<_Exit>().having((e) => e.code, 'code', 0)));
+        expect(out.text, isNot(contains('\u001b')));
+        expect(err.text, '');
+        expect(logger.level, Level.info);
+        expect(command.runs, 0);
+      }
     });
 
     test('an empty word list completes commands', () async {
@@ -362,13 +416,14 @@ void main() {
 
     test('prints a script bound to the executable name', () async {
       final bash = await run(['completion', 'bash']);
-      expect(bash, contains('notes __complete "\${words[@]}"'));
-      expect(bash, endsWith('complete -o default -F _notes_complete notes\n'));
+      expect(bash, contains("'notes' __complete \"\${words[@]}\""));
+      expect(bash,
+          endsWith("complete -o default -F _notes_complete -- 'notes'\n"));
       out.clear();
       expect(await run(['completion', 'zsh']), startsWith('#compdef notes\n'));
       out.clear();
       expect(await run(['completion', 'fish']),
-          contains("complete -c notes -f -a '(__notes_complete)'"));
+          contains("complete -c 'notes' -f -a '(__notes_complete)'"));
     });
 
     test('a name that is not a shell word is made safe for function names',
@@ -395,6 +450,12 @@ void main() {
             throwsA(isA<UsageException>()
                 .having((e) => e.message, 'message', startsWith(message))));
       }
+    });
+
+    test('global --help prints completion help without running it', () async {
+      final help = await run(['--help', 'completion', 'bash']);
+      expect(help, contains('notes completion install|uninstall'));
+      expect(help, isNot(contains('_notes_complete()')));
     });
 
     test('--help prints its help', () async {
@@ -514,7 +575,7 @@ void main() {
       expect(installed, startsWith(rc));
       expect(installed, endsWith('# <<< notes completion <<<\n'));
       expect(installed,
-          contains('fpath=("${home.path}/.local/share/notes/zsh" \$fpath)'));
+          contains("fpath=('${home.path}/.local/share/notes/zsh' \$fpath)"));
       expect(out.text, contains('exec zsh'));
 
       await runner(plain: false).run(['completion', 'install', 'zsh', '-y']);
@@ -539,6 +600,61 @@ void main() {
         expect(readRc(), original);
       });
     }
+
+    test('zsh preserves CRLF content byte for byte', () async {
+      const original = '# config\r\nexport EDITOR=vim\r\n';
+      writeRc(original);
+      await runner(plain: false).run(['completion', 'install', 'zsh', '--yes']);
+      await runner(plain: false)
+          .run(['completion', 'uninstall', 'zsh', '--yes']);
+      expect(readRc(), original);
+    });
+
+    test('uninstall recognizes a completion block converted to CRLF', () async {
+      const original = '# config\r\nexport EDITOR=vim\r\n';
+      writeRc(original);
+      await runner(plain: false).run(['completion', 'install', 'zsh', '--yes']);
+      final installed = readRc();
+      writeRc(original +
+          installed.substring(original.length).replaceAll('\n', '\r\n'));
+      await runner(plain: false)
+          .run(['completion', 'uninstall', 'zsh', '--yes']);
+      expect(readRc(), original);
+    });
+
+    test('text added after the block keeps its own line', () async {
+      writeRc('no trailing newline');
+      await runner(plain: false).run(['completion', 'install', 'zsh', '--yes']);
+      io.File('${home.path}/.zshrc')
+          .writeAsStringSync('alias x=y\n', mode: io.FileMode.append);
+      await runner(plain: false)
+          .run(['completion', 'uninstall', 'zsh', '--yes']);
+      expect(readRc(), 'no trailing newline\nalias x=y\n');
+    });
+
+    test('editing an rc block does not authorize deleting outside it',
+        () async {
+      writeRc('no trailing newline');
+      await runner(plain: false).run(['completion', 'install', 'zsh', '--yes']);
+      writeRc(readRc().replaceFirst('autoload -Uz', '# edited\nautoload -Uz'));
+      await runner(plain: false)
+          .run(['completion', 'uninstall', 'zsh', '--yes']);
+      expect(readRc(), 'no trailing newline');
+    });
+
+    test('an unmatched nested start never removes surrounding rc text',
+        () async {
+      const original = '# >>> notes completion >>>\n'
+          'keep this\n'
+          '# >>> notes completion >>>\n'
+          'also keep this\n'
+          '# <<< notes completion <<<\n'
+          'after\n';
+      writeRc(original);
+      await runner(plain: false)
+          .run(['completion', 'uninstall', 'zsh', '--yes']);
+      expect(readRc(), original);
+    });
 
     test('zsh follows ZDOTDIR and creates a missing .zshrc', () async {
       await runner(plain: false, env: {'ZDOTDIR': '${home.path}/zdot'})
@@ -613,6 +729,27 @@ void main() {
       expect(readRc(), '${before}after\n');
     });
 
+    test('zsh rc markers treat regex and shell metacharacters literally',
+        () async {
+      for (final exe in [
+        "notes.[x]\$';&",
+        'notes\n# <<< notes completion <<<\r'
+      ]) {
+        final custom = CliRunner<int>(exe, 'x',
+            logger: _logger(out, env: {'HOME': home.path}))
+          ..addCommand(_Sub('go'));
+        const original = '# >>> notes.x completion >>>\n'
+            'keep\n# <<< notes.x completion <<<\n';
+        writeRc(original);
+        await custom.run(['completion', 'install', 'zsh', '--yes']);
+        final syntax =
+            await io.Process.run('zsh', ['-n', '${home.path}/.zshrc']);
+        expect(syntax.exitCode, 0, reason: '${syntax.stderr}');
+        await custom.run(['completion', 'uninstall', 'zsh', '--yes']);
+        expect(readRc(), original);
+      }
+    });
+
     test('no HOME is an error', () async {
       final runner = CliRunner<int>('notes', 'x',
           logger: _logger(out, err: err, env: const {}))
@@ -632,6 +769,74 @@ final class _Throws extends CliCommand<int> {
   @override
   Iterable<String> completeValue(String option, String partial) =>
       throw StateError('boom');
+  @override
+  int run() => 0;
+}
+
+final class _ResultsProbe extends CliCommand<int> {
+  _ResultsProbe() {
+    argParser.addOption('value');
+  }
+  @override
+  String get name => 'probe';
+  @override
+  String get description => 'Probe parsed results.';
+  @override
+  Iterable<String> completeValue(String option, String partial) =>
+      [argResults == null && globalResults == null ? 'clean' : 'stale'];
+  @override
+  int run() => 0;
+}
+
+final class _PlainHelp extends Command<int> {
+  _PlainHelp() {
+    addSubcommand(_Sub('topic'));
+  }
+  @override
+  String get name => 'help';
+  @override
+  String get description => 'User help.';
+}
+
+final class _RemoteWithHelp extends CliCommand<int> {
+  _RemoteWithHelp() {
+    addSubcommand(_PlainHelp());
+  }
+  @override
+  String get name => 'custom';
+  @override
+  String get description => 'Custom commands.';
+}
+
+final class _NeverRun extends CliCommand<int> {
+  _NeverRun() {
+    argParser.addOption('value');
+  }
+  int runs = 0;
+  @override
+  String get name => 'probe';
+  @override
+  String get description => 'Must not execute.';
+  @override
+  int run() {
+    runs++;
+    throw StateError('completion executed a command');
+  }
+}
+
+final class _StyledCompletion extends CliCommand<int> {
+  _StyledCompletion() {
+    argParser.addOption('value',
+        allowed: ['safe'],
+        allowedHelp: {'safe': '\u001b[31mRed description\u001b[0m'});
+  }
+  @override
+  String get name => 'styled';
+  @override
+  String get description => 'Styled values.';
+  @override
+  Iterable<String> completeValue(String option, String partial) =>
+      ['safe\t\u001b[32mHook description\u001b[0m'];
   @override
   int run() => 0;
 }

@@ -53,7 +53,12 @@ class CliRunner<T> extends CommandRunner<T> {
         super(
           usageLineLength: usageLineLength ??
               (io.stdout.hasTerminal ? io.stdout.terminalColumns : 80),
-        );
+        ) {
+    _helpCommand = commands['help'];
+  }
+
+  late final Command<T>? _helpCommand;
+  bool _completingValues = false;
 
   /// Printed by `--version` as `<executableName> version <version>`. The
   /// flag exists only when this is set.
@@ -206,9 +211,14 @@ class CliRunner<T> extends CommandRunner<T> {
 
   /// Prints the candidates for [words], or nothing on any error.
   Future<void> _printCompletions(List<String> words) async {
+    final previous = _completingValues;
+    _completingValues = true;
     try {
       logger._out.write(await _completions(this, words));
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      _completingValues = previous;
+    }
   }
 
   @override
@@ -220,7 +230,9 @@ class CliRunner<T> extends CommandRunner<T> {
     // Its run() cannot return null for a non-nullable T, so it runs here.
     final results = topLevelResults.command;
     final command = results == null ? null : commands[results.name];
-    if (command is _CompletionCommand<T> && !results!.flag('help')) {
+    if (command is _CompletionCommand<T> &&
+        !topLevelResults.flag('help') &&
+        !results!.flag('help')) {
       await command._run(results);
       return null;
     }
@@ -349,6 +361,16 @@ class CliRunner<T> extends CommandRunner<T> {
 abstract class CliCommand<T> extends Command<T> {
   /// The runner's [CliRunner.logger].
   Logger get logger => _cliRunner.logger;
+
+  bool get _completingValues =>
+      runner is CliRunner<T> && (runner as CliRunner<T>)._completingValues;
+
+  @override
+  ArgResults? get argResults => _completingValues ? null : super.argResults;
+
+  @override
+  ArgResults? get globalResults =>
+      _completingValues ? null : super.globalResults;
 
   /// Example invocations, shown under "Examples:" in [usage].
   List<String> get examples => const [];
