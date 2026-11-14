@@ -55,13 +55,16 @@ class CliRunner<T> extends CommandRunner<T> {
   final Logger logger;
 
   /// The global flags this runner added. Added on first use, so options and
-  /// commands added after the constructor are seen by the clash check.
+  /// commands added after the constructor are seen by the clash check;
+  /// ones added after the first [usage], [parse] or [run] are not.
   late final Set<String> _globals = _addGlobalFlags();
 
   Set<String> _addGlobalFlags() {
     final taken = <String>{};
+    final abbreviations = <String>{};
     void scan(ArgParser parser) {
       for (final option in parser.options.values) {
+        if (option.abbr != null) abbreviations.add(option.abbr!);
         taken
           ..add(option.name)
           ..addAll(option.aliases);
@@ -85,9 +88,7 @@ class CliRunner<T> extends CommandRunner<T> {
       }
       argParser.addFlag(
         name,
-        abbr: abbr != null && argParser.findByAbbreviation(abbr) == null
-            ? abbr
-            : null,
+        abbr: abbr != null && !abbreviations.contains(abbr) ? abbr : null,
         negatable: negatable,
         defaultsTo: negatable ? null : false,
         help: help,
@@ -186,22 +187,27 @@ class CliRunner<T> extends CommandRunner<T> {
   /// the command's usage on stderr; 70 for any other exception, with a
   /// one-line error (and the stack trace with `--verbose`) on stderr.
   Future<Never> runAndExit(Iterable<String> args) async {
+    int finish(int code) {
+      io.exitCode = code;
+      logger.flush();
+      return code;
+    }
+
+    int report(Object error, StackTrace stack) => finish(_report(error, stack));
     int code;
     try {
       code = await _scoped(args, (results) async {
         try {
           final result = await runCommand(results);
-          return result is int ? result : 0;
+          return finish(result is int ? result : 0);
         } catch (error, stack) {
           // Inside the scope, so --no-color and --verbose apply.
-          return _report(error, stack);
+          return report(error, stack);
         }
       });
     } catch (error, stack) {
-      code = _report(error, stack);
+      code = report(error, stack);
     }
-    io.exitCode = code;
-    logger.flush();
     for (final sink in [logger._out, logger._err]) {
       try {
         await sink.flush();
@@ -363,7 +369,7 @@ List<String> _paragraph(String text, int width, _Paint paint,
       continue;
     }
     final pad = indent + line.length - body.length;
-    for (final wrapped in _wrap(_words(body), max(width - pad, 20), paint)) {
+    for (final wrapped in _wrap(_words(body), max(width - pad, 1), paint)) {
       out.add('${' ' * pad}$wrapped');
     }
   }
@@ -381,13 +387,22 @@ List<String> _table(
 }) {
   final col =
       column ?? rows.fold<int>(0, (w, row) => max(w, textWidth(row.$1)));
-  final start = 2 + col + 3;
+  final stacked = 2 + col + 3 > width - 20;
+  final start = stacked ? 4 : 2 + col + 3;
   final out = <String>[];
   for (final (left, right) in rows) {
     final lines = [
-      for (final words in right) ..._wrap(words, max(width - start, 20), paint),
+      for (final words in right) ..._wrap(words, max(width - start, 1), paint),
     ];
     final cell = '  ${paint(_accent, left)}';
+    if (stacked) {
+      out.addAll(_paragraph(left, width, paint, indent: 2)
+          .map((line) => paint(_accent, line)));
+      out.addAll(lines
+          .where((line) => line.isNotEmpty)
+          .map((line) => '${' ' * start}$line'));
+      continue;
+    }
     out.add(lines.first.isEmpty
         ? cell
         : '$cell${' ' * (start - 2 - textWidth(left))}${lines.first}');
@@ -412,7 +427,8 @@ List<(String, List<_Words>)> _flagRows(ArgParser parser, String? skip) {
         ? '--[no-]${option.name}'
         : '--${option.name}';
     final value = option.isFlag ? '' : '=<${option.valueHelp ?? 'value'}>';
-    final help = _words(option.help ?? '');
+    final helpLines = (option.help ?? '').split('\n').map(_words).toList();
+    final help = helpLines.last;
     final allowed = option.allowed;
     final allowedHelp = option.allowedHelp;
     if (allowed != null && allowedHelp == null) {
@@ -428,15 +444,21 @@ List<(String, List<_Words>)> _flagRows(ArgParser parser, String? skip) {
     // One unit each, so a line break never splits them.
     if (shown != null) help.add(('(default: $shown)', _dim));
     if (option.mandatory) help.add(('(required)', _dim));
-    final right = [help];
+    final right = helpLines;
     if (allowedHelp != null) {
       final keys = allowed ?? allowedHelp.keys.toList();
       final pad = keys.fold<int>(0, (w, k) => max(w, textWidth(k) + 2));
       for (final key in keys) {
-        right.add([
-          ('[$key]'.padRight(pad), _accent),
-          ..._words(allowedHelp[key] ?? ''),
-        ]);
+        final lines = (allowedHelp[key] ?? '').split('\n');
+        for (var i = 0; i < lines.length; i++) {
+          right.add([
+            (
+              i == 0 ? '[$key]${' ' * (pad - textWidth(key) - 2)}' : ' ' * pad,
+              _accent
+            ),
+            ..._words(lines[i]),
+          ]);
+        }
       }
     }
     rows.add(('$abbr$name$value', right));
@@ -509,7 +531,8 @@ String _help({
     if (examples.isNotEmpty)
       [
         paint(_heading, 'Examples:'),
-        for (final example in examples) '  $example',
+        for (final example in examples)
+          ..._paragraph(example, width, paint, indent: 2),
       ],
     if (hint != null) _paragraph(hint, width, paint),
     if (footer != null && footer.isNotEmpty) _paragraph(footer, width, paint),

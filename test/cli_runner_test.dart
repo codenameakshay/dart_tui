@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:args/command_runner.dart';
 import 'package:dart_tui/cli.dart';
 import 'package:dart_tui/dart_tui.dart';
+import 'package:dart_tui/src/grapheme_width.dart';
 import 'package:dart_tui/testing.dart';
 import 'package:test/test.dart';
 
@@ -150,9 +151,12 @@ void main() {
     out = CaptureSink();
     err = CaptureSink();
     final profile = Style.defaultProfile;
+    final dark = Style.hasDarkBackground;
     Style.defaultProfile = ColorProfile.trueColor;
+    Style.hasDarkBackground = true;
     addTearDown(() {
       Style.defaultProfile = profile;
+      Style.hasDarkBackground = dark;
       io.exitCode = 0;
     });
   });
@@ -192,6 +196,63 @@ void main() {
         });
       }
     }
+
+    test('long option cells stay within the help width', () {
+      final app = _app(out, err, plain: true, width: 60)
+        ..argParser.addOption('this-is-a-fairly-long-option',
+            valueHelp: 'a-long-value',
+            help: 'This help has many short words that all fit the line.');
+      for (final line in app.usage.split('\n')) {
+        expect(textWidth(line), lessThanOrEqualTo(60), reason: line);
+      }
+    });
+
+    test('long examples wrap to the help width', () {
+      final app = _app(out, err, plain: true, width: 60)
+        ..addCommand(_HelpDetails());
+      for (final line in app.commands['details']!.usage.split('\n')) {
+        expect(textWidth(line), lessThanOrEqualTo(60), reason: line);
+      }
+    });
+
+    test('multiline option help aligns every line', () {
+      final app = _app(out, err, plain: true)
+        ..argParser.addOption('message', help: 'First line.\nSecond line.');
+      final lines = app.usage.split('\n');
+      final first = lines.singleWhere((line) => line.contains('First line.'));
+      final second = lines.singleWhere((line) => line.contains('Second line.'));
+      expect(second.indexOf('Second'), first.indexOf('First'));
+    });
+
+    test('multiline allowed help aligns continuation descriptions', () {
+      final app = _app(out, err, plain: true)
+        ..argParser.addOption('choice', allowed: [
+          'one'
+        ], allowedHelp: {
+          'one': 'First line.\nSecond line.',
+        });
+      final lines = app.usage.split('\n');
+      final first = lines.singleWhere((line) => line.contains('First line.'));
+      final second = lines.singleWhere((line) => line.contains('Second line.'));
+      expect(second.indexOf('Second'), first.indexOf('First'));
+    });
+
+    test('allowed help aligns wide labels by terminal columns', () {
+      final app = _app(out, err, plain: true)
+        ..argParser.addOption('choice', allowed: [
+          '界',
+          'abc'
+        ], allowedHelp: {
+          '界': 'First choice.',
+          'abc': 'Second choice.',
+        });
+      final lines = app.usage.split('\n');
+      final first = lines.singleWhere((line) => line.contains('First choice.'));
+      final second =
+          lines.singleWhere((line) => line.contains('Second choice.'));
+      expect(textWidth(first.substring(0, first.indexOf('First'))),
+          textWidth(second.substring(0, second.indexOf('Second'))));
+    });
 
     test('--help, help <command> and no command print help to stdout',
         () async {
@@ -272,6 +333,19 @@ void main() {
       expect(Style.defaultProfile, ColorProfile.trueColor);
     });
 
+    test('an injectable prompt exit restores the scope', () async {
+      final app = _app(out, err);
+      (app.commands['probe']! as _Probe).action = () => _throwExit(130);
+      await expectLater(
+          app.run(['--verbose', '--no-color', '--plain', 'probe']),
+          throwsA(isA<_Exit>().having((exit) => exit.code, 'code', 130)));
+      expect(app.logger.level, Level.info);
+      expect(Style.defaultProfile, ColorProfile.trueColor);
+      out.clear();
+      app.logger.progress('After').complete();
+      expect(out.text, contains('\r'));
+    });
+
     test('--version prints the version; without one there is no flag',
         () async {
       expect(await exitCodeOf(_app(out, err), ['--version']), 0);
@@ -297,6 +371,35 @@ void main() {
       expect(help, contains('-q, --[no-]quick'));
       expect(help, contains('--plain'));
       expect(help, contains('--version'));
+    });
+
+    test('recursive command abbreviations block global abbreviations', () {
+      final app = _app(out, err);
+      final parent = _OptionCommand('parent');
+      final child = _OptionCommand('child')
+        ..argParser.addFlag('verify', abbr: 'v');
+      parent.addSubcommand(child);
+      app.addCommand(parent);
+      expect(app.usage, isNot(contains('-v, --verbose')));
+      expect(app.usage, contains('    --verbose'));
+    });
+
+    test('nested runs restore the outer and initial state', () async {
+      final app = _app(out, err);
+      final probe = app.commands['probe']! as _Probe;
+      probe.action = () async {
+        probe.action = null;
+        await app.run(['--quiet', '--color', 'probe']);
+        expect(app.logger.level, Level.verbose);
+        expect(Style.defaultProfile, ColorProfile.noColor);
+        return 0;
+      };
+      await app.run(['--verbose', '--no-color', 'probe']);
+      expect(app.logger.level, Level.info);
+      expect(Style.defaultProfile, ColorProfile.trueColor);
+      await app.run(['probe']);
+      expect(probe.level, Level.info);
+      expect(probe.profile, ColorProfile.trueColor);
     });
 
     test('a command option named no-color also blocks --color', () {
@@ -388,11 +491,41 @@ void main() {
       expect(err.text, startsWith('Error: '));
     });
 
+    test('quiet applies while delayed messages flush', () async {
+      final app = _app(out, err);
+      app.logger.delayed('later');
+      expect(await exitCodeOf(app, ['--quiet', 'status']), 0);
+      expect(out.text, isEmpty);
+      expect(app.logger.level, Level.info);
+    });
+
     test('runAndExit flushes delayed messages before exiting', () async {
       final app = _app(out, err);
       app.logger.delayed('later');
       expect(await exitCodeOf(app, ['status']), 0);
       expect(out.text, 'later\n');
+    });
+
+    test('exit awaits both sinks after delayed output and setting exitCode',
+        () async {
+      final events = <String>[];
+      final logger = Logger(
+        stdout:
+            _OrderedSink('out', events, onWrite: () => expect(io.exitCode, 3)),
+        stderr: _OrderedSink('err', events),
+        environment: const {},
+        exit: (code) {
+          expect(io.exitCode, 3);
+          expect(events, ['out:later\n', 'out flushed', 'err flushed']);
+          return _throwExit(code);
+        },
+      );
+      final app = CliRunner<int>('app', '', logger: logger)
+        ..addCommand(_OptionCommand('status', result: 3));
+      io.exitCode = 17;
+      logger.delayed('later');
+      expect(await exitCodeOf(app, ['--verbose', 'status']), 3);
+      expect(logger.level, Level.info);
     });
 
     test('run keeps CommandRunner semantics: errors are thrown', () async {
@@ -436,6 +569,8 @@ class _Verbose extends CliCommand<int> {
   String get name => 'run';
   @override
   String get description => 'Runs.';
+  @override
+  int run() => 0;
 }
 
 class _NoColor extends CliCommand<int> {
@@ -582,4 +717,46 @@ String draw(
 
 String drawTriangle(int width, int height, String char) {
   return draw(width, height, char, (x, y) => x.abs() <= (1 + y) / 2);
+}
+
+class _OptionCommand extends CliCommand<int> {
+  _OptionCommand(this.name, {this.result = 0});
+  final int result;
+  @override
+  final String name;
+  @override
+  String get description => '';
+  @override
+  int run() => result;
+}
+
+class _HelpDetails extends _OptionCommand {
+  _HelpDetails() : super('details');
+  @override
+  List<String> get examples => [
+        'tool details --message one two three four five six seven eight nine '
+            'ten eleven twelve thirteen fourteen fifteen',
+      ];
+}
+
+class _OrderedSink implements io.IOSink {
+  _OrderedSink(this.name, this.events, {this.onWrite});
+  final void Function()? onWrite;
+  final String name;
+  final List<String> events;
+
+  @override
+  void write(Object? object) {
+    onWrite?.call();
+    events.add('$name:$object');
+  }
+
+  @override
+  Future<void> flush() async {
+    await Future<void>.delayed(Duration.zero);
+    events.add('$name flushed');
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

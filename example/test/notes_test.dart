@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dart_tui/cli.dart';
+import 'package:dart_tui/dart_tui.dart';
 import 'package:dart_tui/testing.dart';
 import 'package:test/test.dart';
 
@@ -18,6 +19,14 @@ void main() {
   late CaptureSink err;
 
   setUp(() {
+    final profile = Style.defaultProfile;
+    final darkBackground = Style.hasDarkBackground;
+    Style.defaultProfile = ColorProfile.trueColor;
+    Style.hasDarkBackground = true;
+    addTearDown(() {
+      Style.defaultProfile = profile;
+      Style.hasDarkBackground = darkBackground;
+    });
     final dir = Directory.systemTemp.createTempSync('notes_test');
     addTearDown(() => dir.deleteSync(recursive: true));
     file = '${dir.path}/notes.json';
