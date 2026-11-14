@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:dart_tui/cli.dart';
 import 'package:dart_tui/dart_tui.dart';
+
+import '../example/cli_logger.dart' show createProject;
 
 Future<void> main(List<String> arguments) async {
   if (!Platform.isLinux && !Platform.isMacOS) {
@@ -28,6 +31,56 @@ Future<void> main(List<String> arguments) async {
               ? _InlineLifecycleModel()
               : _InlineModel(step));
     }
+    return;
+  }
+  if (scenario.startsWith('logger-progress-end-')) {
+    final logger = Logger();
+    if (scenario == 'logger-progress-end-overlap') {
+      final first = logger.progress('FIRST_PROGRESS');
+      final second = logger.progress('SECOND_PROGRESS');
+      first.complete('FIRST_DONE');
+      second.complete('SECOND_DONE');
+    } else {
+      final progress = logger.progress('ENDING_PROGRESS');
+      switch (scenario) {
+        case 'logger-progress-end-complete':
+          progress.complete('ENDING_COMPLETE');
+          break;
+        case 'logger-progress-end-fail':
+          progress.fail('ENDING_FAILED');
+          break;
+        case 'logger-progress-end-cancel':
+          progress.cancel();
+          break;
+      }
+    }
+    return;
+  }
+  if (scenario == 'logger-interleave') {
+    final logger = Logger();
+    final progress = logger.progress('INTERLEAVE_WORK');
+    logger.info('INTERLEAVE_INFO');
+    logger.warn('INTERLEAVE_WARN');
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    progress.fail('INTERLEAVE_FAILED');
+    logger.info('INTERLEAVE_DONE');
+    return;
+  }
+  if (scenario == 'logger-progress') {
+    // A TUI prompt, then a progress that runs until Ctrl+C kills the process.
+    final logger = Logger();
+    final ok = await logger.confirm('LOGGER_CONFIRM');
+    logger.info('LOGGER_ANSWER=$ok');
+    logger.progress('LOGGER_WORKING');
+    await Completer<void>().future;
+  }
+  if (scenario == 'logger-cancel') {
+    await Logger().confirm('LOGGER_CONFIRM');
+    stdout.writeln('LOGGER_NOT_CANCELLED');
+    return;
+  }
+  if (scenario == 'logger-flow') {
+    await createProject(Logger(), step: const Duration(milliseconds: 50));
     return;
   }
   if (scenario == 'plain-chain') {
@@ -153,6 +206,14 @@ Future<void> main(List<String> arguments) async {
 }
 
 const _scenarios = {
+  'logger-interleave',
+  'logger-progress-end-complete',
+  'logger-progress-end-fail',
+  'logger-progress-end-cancel',
+  'logger-progress-end-overlap',
+  'logger-progress',
+  'logger-cancel',
+  'logger-flow',
   'plain-then-tui',
   'plain-chain',
   'plain-password-echo',

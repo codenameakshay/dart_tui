@@ -766,6 +766,268 @@ await t.waitFor((screen) => screen != first);`,
     related: ["plain-mode", "program-options", "examples"],
   },
   {
+    slug: "migrating-from-mason-logger",
+    name: "Migrating from mason_logger, interact or prompts",
+    category: "guides",
+    order: 6.8,
+    tagline: "Switch a Dart CLI to dart_tui with an import change and `await`.",
+    description:
+      "`package:dart_tui/cli.dart` has a `Logger` shaped like mason_logger's. This guide maps each call of mason_logger, interact and prompts to its dart_tui equivalent, lists every difference, and says where there is no equivalent.",
+    gif: "cli_logger.gif",
+    blocks: [
+      { type: "heading", text: "The short version" },
+      {
+        type: "prose",
+        md: "`package:dart_tui/cli.dart` exports `Logger`, `Level`, `Progress` and `ProgressOptions`. They are shaped like the ones in mason_logger 0.3.6. For most CLIs you change the import and add `await` before each prompt. The library is not exported from `dart_tui.dart`, so a plain `import 'package:dart_tui/dart_tui.dart'` does not add these names.",
+      },
+      {
+        type: "code",
+        lang: "diff",
+        code: `-import 'package:mason_logger/mason_logger.dart';
++import 'package:dart_tui/cli.dart';
+
+ final logger = Logger();
+-final name = logger.prompt('Project name?', defaultValue: 'my_app');
++final name = await logger.prompt('Project name?', defaultValue: 'my_app');`,
+      },
+      {
+        type: "prose",
+        md: "Add the package with `dart pub add dart_tui`. On a terminal, prompts are a small TUI. In pipes, CI and with `ACCESSIBLE=1`, they ask plain numbered line questions.",
+      },
+      { type: "heading", text: "From mason_logger" },
+      {
+        type: "table",
+        headers: ["mason_logger", "dart_tui", "Note"],
+        rows: [
+          ["`Logger()`, `logger.level = Level.verbose`", "Same", "`Level` has the same values."],
+          ["`info`, `detail`, `success`, `write`", "Same", "They write to stdout."],
+          ["`warn(msg, tag: 'WARN')`, `err`, `alert`", "Same", "They write to stderr. `warn` writes `[WARN] msg`."],
+          ["`delayed(msg)`, `flush()`", "Same", ""],
+          ["`info(msg, style: (m) => ...)`", "Same", "`style` is `String? Function(String?)`. Use dart_tui `Style` inside it."],
+          ["`progress(msg)`, `update`, `complete`, `fail`, `cancel`", "Same", "See difference 5."],
+          ["`ProgressOptions(animation: ProgressAnimation(frames: f, interval: i))`", "`ProgressOptions(animation: Spinner(f, i))`", "Any `Spinner` preset works, for example `Spinner.dot`."],
+          ["`logger.prompt(msg, defaultValue:, hidden:)`", "`await logger.prompt(...)`", "Returns a `Future<String>`."],
+          ["`logger.promptAny(msg, separator:)`", "`await logger.promptAny(...)`", "Returns a `Future<List<String>>`."],
+          ["`logger.confirm(msg, defaultValue:)`", "`await logger.confirm(...)`", "Returns a `Future<bool>`."],
+          ["`logger.chooseOne(msg, choices:, defaultValue:, display:)`", "`await logger.chooseOne(...)`", "Returns a `Future<T>`."],
+          ["`logger.chooseAny(msg, choices:, defaultValues:, display:)`", "`await logger.chooseAny(...)`", "Returns a `Future<List<T>>`."],
+          ["`Logger(theme: LogTheme(...))`", "No equivalent", "Pass `style:` per call, or colour the text with dart_tui `Style`."],
+          ["`lightCyan.wrap('x')`, `styleBold.wrap('x')`, `link(uri: ...)`", "No equivalent", "mason's ansi helpers are not copied. Use `Style(foreground256: 14, isBold: true).render('x')`."],
+        ],
+      },
+      { type: "heading", text: "What stays the same" },
+      {
+        type: "prose",
+        md: "The `Level` enum has the same values. `info`, `detail`, `success` and `write` go to stdout. `warn`, `err` and `alert` go to stderr. `warn` writes `[WARN] msg`, and `tag: ''` writes the message alone. `delayed` and `flush` work the same. A finished progress shows the elapsed time as `(42ms)` below 100 ms and `(1.2s)` above. An answered prompt collapses to one line: `message answer`.",
+      },
+      { type: "heading", text: "Differences from mason_logger" },
+      {
+        type: "prose",
+        md: "These are on purpose. Each one is checked against the mason_logger source.",
+      },
+      {
+        type: "table",
+        headers: ["#", "Topic", "mason_logger", "dart_tui"],
+        rows: [
+          ["1", "Prompts", "Synchronous.", "They return a `Future`. Write `await logger.prompt(...)`."],
+          ["2", "Cancel and end of input", "Ctrl+C exits with code 130. Esc does nothing. On end of input, only `prompt` and `confirm` return the default. `chooseOne`, `chooseAny` and `promptAny` throw `NoTerminalAttachedError` without a terminal.", "In the TUI, Esc or Ctrl+C exits the process with code 130. In plain mode, when input ends (for example `cli < /dev/null`), every prompt returns its default: `prompt` returns `defaultValue` or `''`, `confirm` returns `defaultValue`, `chooseOne` returns `defaultValue` or the first choice, `chooseAny` returns `defaultValues` or `[]`, `promptAny` returns `[]`. dart_tui never throws `NoTerminalAttachedError`. Without a terminal (pipes, CI, `ACCESSIBLE=1`), prompts ask plain numbered line questions."],
+          ["3", "Theme and ansi helpers", "`LogTheme`, `theme:`, `lightCyan.wrap`, `styleBold`, `link`.", "None of them. The per-call `style:` stays. Use dart_tui `Style` for colours."],
+          ["4", "Progress animation", "`ProgressAnimation(frames:, interval:)`.", "`ProgressOptions.animation` is a `Spinner(frames, interval)`. The default frames, interval and trailing text (`...`) are the same as mason's."],
+          ["5", "Progress output", "Waits one interval before the first frame. Turns line wrap off (`\\x1b[?7l`). Without a terminal it writes the frame with no newline, then `\\r✓ ...`.", "Draws at once. Never turns line wrap off: it cuts the message to the width instead. Never hides the cursor, reads stdin, enters raw mode or installs signal handlers, so Ctrl+C stops the CLI as usual and the terminal stays intact. A `Logger` write during a progress clears the line, prints, then draws the progress again. Without a terminal it writes one start line (`message...`) and one end line (`✓ message (0.9s)`)."],
+          ["6", "confirm", "Also accepts `yea`, `yeah`, `yep`, `yup` and `nope`. An unknown answer returns the default.", "TUI keys: `y`, `n`, Enter (the default). Plain mode accepts `y`, `yes`, `n` and `no`, and asks again on anything else."],
+          ["7", "promptAny", "Inserts `<separator> ` as you type.", "Only splits the answer on the separator. Items are trimmed and empty ones are dropped."],
+          ["8", "chooseOne and chooseAny", "", "Empty `choices` in `chooseOne` throws `ArgumentError`. The cursor does not wrap. Space does not confirm. `chooseAny` returns the picks in list order, not in the order you toggled them. The `a` key toggles all."],
+          ["9", "Hidden prompt", "Shows nothing while you type.", "Shows `•` for each character while you type. The answered line shows `******`, as in mason."],
+          ["10", "Colour", "mason's own checks.", "Follows dart_tui's `detectColorProfile`: `NO_COLOR`, `FORCE_COLOR`, `CLICOLOR_FORCE`, `TERM=dumb` and pipes. With no colour and no terminal, the output has no escape codes at all."],
+          ["11", "Test parameters", "None.", "The constructor also takes `stdout`, `stderr` (an `IOSink`), `stdin` (a `Stream<List<int>>`), `environment` and `exit`. The defaults are the real ones."],
+        ],
+      },
+      {
+        type: "callout",
+        variant: "warn",
+        md: "A custom `stdin` is listened to once per prompt. To answer several prompts from one stream, pass a broadcast stream.",
+      },
+      { type: "heading", text: "Show colour with Style" },
+      {
+        type: "prose",
+        md: "mason's `lightCyan.wrap(...)` becomes a dart_tui `Style`. The per-call `style:` parameter keeps its shape.",
+      },
+      {
+        type: "code",
+        lang: "dart",
+        code: `import 'package:dart_tui/cli.dart';
+import 'package:dart_tui/dart_tui.dart' show Style;
+
+const accent = Style(foreground256: 14, isBold: true);
+
+logger.info('Ready', style: (m) => accent.render(m ?? ''));`,
+      },
+      { type: "heading", text: "A full flow" },
+      {
+        type: "prose",
+        md: "This is the create-project flow from `example/cli_logger.dart`. On a terminal each prompt is a TUI. Piped through `cat`, the same code asks numbered questions and the progress writes two lines.",
+      },
+      {
+        type: "code",
+        lang: "dart",
+        code: `import 'package:dart_tui/cli.dart';
+
+Future<void> main() async {
+  final logger = Logger();
+  final name = await logger.prompt('Project name?', defaultValue: 'my_app');
+  final template = await logger.chooseOne(
+    'Template?',
+    choices: const ['cli', 'server', 'package'],
+    defaultValue: 'cli',
+  );
+  final features = await logger.chooseAny(
+    'Features?',
+    choices: const ['tests', 'lints', 'ci', 'docker'],
+    defaultValues: const ['tests', 'lints'],
+  );
+  if (!await logger.confirm('Create $name?', defaultValue: true)) {
+    logger.warn('Cancelled.');
+    return;
+  }
+  final files = logger.progress('Writing $template files');
+  // ... do the work ...
+  files.complete('Wrote \${3 + features.length} files');
+  logger.success('Created $name.');
+}`,
+      },
+      { type: "heading", text: "From interact 2.2.0" },
+      {
+        type: "prose",
+        md: "interact components are objects with a synchronous `interact()` method. dart_tui has one-shot functions that return a `Future`. They return `null` when the user cancels with Esc or Ctrl+C. They do not exit the process. (`Logger` exits with code 130 instead.)",
+      },
+      {
+        type: "table",
+        headers: ["interact", "dart_tui", "Note"],
+        rows: [
+          ["`Input(prompt:, defaultValue:).interact()`", "`await promptInput(prompt, defaultValue: ...)`", "Empty input returns `defaultValue`."],
+          ["`Input(initialText:)`", "No equivalent", "`promptInput` starts empty."],
+          ["`Input(validator:)` with `ValidationError`", "No equivalent in `promptInput`", "Ask again in a loop, or use `Field.input(validate:)` in a `Form`."],
+          ["`Confirm(prompt:, defaultValue:).interact()`", "`await promptConfirm(prompt, defaultValue: ...)`", "`defaultValue` is `false` unless set. There is no \"no default\" mode, so Enter always answers."],
+          ["`Confirm(waitForNewLine:)`", "No equivalent", "In the TUI, `y` and `n` answer at once."],
+          ["`Select(prompt:, options:, initialIndex:).interact()`", "`await promptSelect(options, title: prompt, initial: index)`", "interact returns the index. `promptSelect` returns the chosen string: use `options.indexOf(answer)` if you need the index. The cursor does not wrap. An empty list returns `null`."],
+          ["`MultiSelect(prompt:, options:, defaults:).interact()`", "`await promptMultiSelect(options, title: prompt, initial: {0, 2})`", "`defaults` is a `List<bool>`. `initial` is a `Set<int>` of indexes. The result is a list of strings in list order, not indexes."],
+          ["`Password(prompt:).interact()`", "`await promptInput(prompt, hidden: true)`", "Shows `•` for each character."],
+          ["`Password(confirmation: true)`", "No equivalent", "Call `promptInput(hidden: true)` twice and compare the answers."],
+          ["`Sort(prompt:, options:)`", "No equivalent", "dart_tui has no one-shot sort prompt."],
+          ["`Spinner(icon:).interact()` and `state.done()`", "`await spin(task, label: ...)`, or `logger.progress(...)`", "`spin` takes a `Future` and stops by itself when it ends. `Logger.progress` stops with `complete`, `fail` or `cancel`."],
+          ["`Progress(length:).interact()` with `increase`", "No one-shot equivalent", "`Logger.progress` is a spinner with a message, not a bar. For a bar, use the `ProgressModel` component inside a `Program`."],
+          ["`MultiSpinner`, `MultiProgress`", "No equivalent", "`Logger` keeps one progress at a time: a new one takes over the line."],
+          ["`Theme`, `Theme.colorfulTheme`", "No equivalent", "Colour your text with dart_tui `Style`."],
+        ],
+      },
+      { type: "heading", text: "From prompts 2.0.0" },
+      {
+        type: "prose",
+        md: "The `prompts` package reads lines from stdin with `readLineSync`. Its functions are synchronous.",
+      },
+      {
+        type: "table",
+        headers: ["prompts", "dart_tui", "Note"],
+        rows: [
+          ["`get(message, defaultsTo:)`", "`await promptInput(message, defaultValue: ...)`", "Or `await logger.prompt(...)`."],
+          ["`get(conceal: true)`", "`await promptInput(message, hidden: true)`", ""],
+          ["`get(validate:)`", "No equivalent in `promptInput`", "Ask again in a loop, or use `Field.input(validate:)` in a `Form`."],
+          ["`get(allowMultiline: true)`", "No equivalent", "`promptInput` reads one line."],
+          ["`get(chevron:, color:, inputColor:)`", "No equivalent", "dart_tui draws its own prompt. Colour follows the colour profile."],
+          ["`getBool(message, defaultsTo:)`", "`await promptConfirm(message, defaultValue: ...)`", "dart_tui adds the `[y/N]` or `(y/N)` hint itself. There is no `appendYesNo`."],
+          ["`getInt(message)`, `getDouble(message)`", "No equivalent", "Use `int.tryParse(await promptInput(...) ?? '')` and ask again if it is `null`."],
+          ["`choose(message, options, defaultsTo:)`", "`await promptSelect(strings, title: message, initial: index)`", "For other types use `await logger.chooseOne(message, choices: options, defaultValue: ..., display: ...)`."],
+          ["`choose(names:)`", "No equivalent", "The numbered list in plain mode uses numbers only."],
+          ["`choose(interactive: false)`", "Plain mode", "Pass `withPlainMode()` in `options`. A `Logger` uses plain mode in pipes and CI."],
+          ["`chooseShorthand(...)`", "No equivalent", "Use `promptSelect` or `filter`."],
+        ],
+      },
+      { type: "heading", text: "Plain mode and CI" },
+      {
+        type: "prose",
+        md: "You do not configure anything for CI. When stdin or stdout is not a terminal, when `TERM=dumb`, or when `ACCESSIBLE=1` (or `DART_TUI_ACCESSIBLE=1`) is set, prompts ask plain line questions and write no escape codes. The [plain mode](/guides/plain-mode) guide lists all the rules.",
+      },
+      {
+        type: "code",
+        lang: "bash",
+        code: `printf 'demo\\n2\\n1,3\\ny\\n' | dart run example/cli_logger.dart   # answers from a pipe
+dart run example/cli_logger.dart < /dev/null               # every prompt returns its default
+ACCESSIBLE=1 dart run example/cli_logger.dart              # plain questions on a terminal`,
+      },
+      {
+        type: "table",
+        headers: ["Situation", "What happens"],
+        rows: [
+          ["Esc or Ctrl+C in the TUI", "The process exits with code 130."],
+          ["Input ends in plain mode", "Every prompt returns its default. No exit, no error."],
+          ["No terminal", "Numbered line questions. `NoTerminalAttachedError` is never thrown."],
+          ["`NO_COLOR` set, or output is a pipe", "No colour. With no colour and no terminal, there are no escape codes at all."],
+          ["`FORCE_COLOR` or `CLICOLOR_FORCE` set", "Colour is on."],
+          ["`progress` without a terminal", "One start line (`message...`) and one end line (`✓ message (0.9s)`)."],
+        ],
+      },
+      { type: "heading", text: "Test your CLI" },
+      {
+        type: "prose",
+        md: "Pass `stdout` and `stderr` as `CaptureSink` objects from `package:dart_tui/testing.dart`, and read what the logger wrote with `.text`. To answer a prompt in the TUI, build the logger with fake output and run the call inside `TuiTester.run`. See the [testing](/guides/testing) guide for the tester.",
+      },
+      {
+        type: "code",
+        lang: "dart",
+        code: `import 'dart:convert';
+
+import 'package:dart_tui/cli.dart';
+import 'package:dart_tui/testing.dart';
+import 'package:test/test.dart';
+
+void main() {
+  test('writes to stdout and stderr', () {
+    final out = CaptureSink(), err = CaptureSink();
+    Logger(stdout: out, stderr: err, environment: const {})
+      ..info('hello')
+      ..warn('careful');
+    expect(out.text, 'hello\\n');
+    expect(err.text, '[WARN] careful\\n');
+  });
+
+  test('prompt in the TUI', () async {
+    final logger = Logger(
+      stdout: CaptureSink(),
+      stderr: CaptureSink(),
+      environment: const {},
+    );
+    final t = TuiTester.run(() => logger.prompt('Name?', defaultValue: 'app'));
+    addTearDown(t.dispose);
+    await t.type('demo');
+    await t.press('enter');
+    expect((await t.done()).value, 'demo');
+  });
+
+  test('plain mode reads answers from stdin', () async {
+    final logger = Logger(
+      stdout: CaptureSink(),
+      stderr: CaptureSink(),
+      stdin: Stream.value(utf8.encode('2\\n')),
+      environment: const {'ACCESSIBLE': '1'},
+    );
+    expect(await logger.chooseOne('Pick', choices: ['a', 'b']), 'b');
+  });
+}`,
+      },
+      {
+        type: "callout",
+        variant: "note",
+        md: "To test the cancel path, pass `exit: (code) => throw MyExit(code)` and expect the throw. The default `exit` ends the process.",
+      },
+      { type: "heading", text: "New one-shot options" },
+      {
+        type: "prose",
+        md: "The `Logger` is built on the one-shot prompts, and they gained options you can use directly. `promptMultiSelect(choices, title:, initial:)` is new: Space or `x` toggles, `a` toggles all, Enter confirms, and it returns the checked strings in list order. `promptSelect` takes `initial:`, `promptConfirm` takes `defaultValue:`, and `promptInput` takes `hidden:` and `defaultValue:`.",
+      },
+    ],
+    related: ["plain-mode", "testing", "colour-and-terminals"],
+  },
+  {
     slug: "text-and-layout",
     name: "Text & layout",
     category: "guides",

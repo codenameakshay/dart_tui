@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:characters/characters.dart';
 
+import 'bubbles/multi_select.dart';
+import 'bubbles/style.dart';
 import 'cmd.dart';
 import 'model.dart';
 import 'msg.dart';
@@ -12,57 +16,158 @@ import 'view.dart';
 /// it asks a plain line question and writes no escape codes. The end of input
 /// cancels, like Esc.
 
+/// Internal Logger zone key. `true` enables compact answered frames; a
+/// `void Function(List<int>)` also receives the selected indexes.
+final Object promptSummaryKey = Object();
+
+Object? get _summaryValue => Zone.current[promptSummaryKey];
+
+bool get _summary =>
+    _summaryValue == true || _summaryValue is void Function(List<int>);
+
+void _reportSelection(List<int> indexes) {
+  final value = _summaryValue;
+  if (value is void Function(List<int>)) value(indexes);
+}
+
+String _answered(String title, String answer) {
+  final shown = const Style(foreground256: 14, isDim: true).render(answer);
+  return title.isEmpty ? shown : '$title $shown';
+}
+
 /// Single-choice list; returns the selected string, or `null` if cancelled.
 ///
+/// The cursor starts on [initial] (default the first choice).
+///
 /// In plain mode it writes [title] and the numbered choices, then reads a
-/// number from 1 to N, asking again until the answer is valid.
+/// number from 1 to N, asking again until the answer is valid. With
+/// [initial], empty input picks it.
 Future<String?> promptSelect(
   List<String> choices, {
   List<ProgramOption> options = const [],
   String title = 'Choose one',
+  int? initial,
 }) async {
   if (choices.isEmpty) return null;
+  final start = initial?.clamp(0, choices.length - 1);
   final program = Program(options: options);
   final plain = PlainSession.open(program);
   if (plain != null) {
     return plain.run((io) async {
-      final i = await io.askChoice([title], choices);
-      return i == null ? null : choices[i];
+      final i = await io.askChoice([title], choices, defaultIndex: start);
+      if (i == null) return null;
+      _reportSelection([i]);
+      return choices[i];
     });
   }
-  final model = _SelectPromptModel(choices: choices, title: title);
-  return program.runForResult(model);
+  final model = _SelectPromptModel(
+    choices: choices,
+    title: title,
+    cursor: start ?? 0,
+    summary: _summary,
+  );
+  final done = await program.run(model);
+  final index = done is _SelectPromptModel ? done.result : null;
+  if (index == null) return null;
+  _reportSelection([index]);
+  return choices[index];
 }
 
-/// Yes / no; returns `null` on cancel. The default is no: Enter returns
-/// `false`.
+/// Several choices; returns the checked ones in list order, or `null` if
+/// cancelled. Empty [choices] returns an empty list.
 ///
-/// In plain mode it asks `question (y/N)`; empty input means no.
+/// `Space` (or `x`) toggles, `a` toggles all, `Enter` confirms. The
+/// indexes in [initial] start checked.
+///
+/// In plain mode it writes [title] and the numbered choices, then reads
+/// comma-separated numbers; empty input keeps [initial].
+Future<List<String>?> promptMultiSelect(
+  List<String> choices, {
+  List<ProgramOption> options = const [],
+  String title = 'Choose any',
+  Set<int> initial = const {},
+}) async {
+  if (choices.isEmpty) return const [];
+  List<String> pick(Iterable<int> picks) =>
+      [for (final i in picks.toList()..sort()) choices[i]];
+  final program = Program(options: options);
+  final plain = PlainSession.open(program);
+  if (plain != null) {
+    return plain.run((io) async {
+      final picks = await io.askMany([title], choices,
+          defaults: {
+            for (final i in initial)
+              if (i >= 0 && i < choices.length) i
+          });
+      if (picks != null) _reportSelection(picks.toList()..sort());
+      return picks == null ? null : pick(picks);
+    });
+  }
+  final model = _MultiPromptModel(
+    MultiSelectModel(
+      title: title,
+      items: [
+        for (final (i, c) in choices.indexed)
+          MultiSelectItem(label: c, selected: initial.contains(i)),
+      ],
+    ),
+    summary: _summary,
+  );
+  final picks = await program.runForResult(model);
+  if (picks != null) _reportSelection(picks);
+  return picks == null ? null : pick(picks);
+}
+
+/// Yes / no; returns `null` on cancel. Enter returns [defaultValue] (no,
+/// unless set).
+///
+/// In plain mode it asks `question (y/N)`, or `(Y/n)` when [defaultValue] is
+/// true; empty input takes the default.
 Future<bool?> promptConfirm(
   String question, {
   List<ProgramOption> options = const [],
+  bool defaultValue = false,
 }) async {
   final program = Program(options: options);
   final plain = PlainSession.open(program);
-  if (plain != null) return plain.run((io) => io.askConfirm(question, false));
-  final model = _ConfirmPromptModel(question: question);
+  if (plain != null) {
+    return plain.run((io) => io.askConfirm(question, defaultValue));
+  }
+  final model = _ConfirmPromptModel(
+    question: question,
+    defaultValue: defaultValue,
+    summary: _summary,
+  );
   return program.runForResult(model);
 }
 
-/// Single-line text; returns `null` on cancel.
+/// Single-line text; returns `null` on cancel. Empty input returns
+/// [defaultValue].
+///
+/// With [hidden], the answer is shown as `•` while typing (like a password
+/// text input) and is not echoed in plain mode.
 ///
 /// In plain mode it writes [label] and reads one line.
 Future<String?> promptInput(
   String label, {
   List<ProgramOption> options = const [],
+  bool hidden = false,
+  String defaultValue = '',
 }) async {
   final program = Program(options: options);
   final plain = PlainSession.open(program);
   if (plain != null) {
     final prompt = label.isEmpty || label.endsWith(' ') ? label : '$label ';
-    return plain.run((io) => io.askText(prompt));
+    return plain.run(
+      (io) => io.askText(prompt, initial: defaultValue, secret: hidden),
+    );
   }
-  final model = _InputPromptModel(label: label);
+  final model = _InputPromptModel(
+    label: label,
+    hidden: hidden,
+    defaultValue: defaultValue,
+    summary: _summary,
+  );
   return program.runForResult(model);
 }
 
@@ -72,17 +177,29 @@ final class _SelectPromptModel extends Model implements OutcomeModel<String> {
     required this.title,
     this.cursor = 0,
     this.result,
+    this.summary = false,
   });
 
   final List<String> choices;
   final String title;
   final int cursor;
-  final String? result;
+  final int? result;
+  final bool summary;
 
+  /// The picked index; [outcome] is its label.
   @override
-  String? get outcome => result;
+  String? get outcome => result == null ? null : choices[result!];
 
   int get _c => cursor.clamp(0, choices.length - 1);
+
+  _SelectPromptModel _copy({required int cursor, int? result}) =>
+      _SelectPromptModel(
+        choices: choices,
+        title: title,
+        cursor: cursor,
+        result: result,
+        summary: summary,
+      );
 
   @override
   (Model, Cmd?) update(Msg msg) {
@@ -91,21 +208,11 @@ final class _SelectPromptModel extends Model implements OutcomeModel<String> {
     switch (msg.key) {
       case 'up':
       case 'k':
-        return (
-          _SelectPromptModel(
-            choices: choices,
-            title: title,
-            cursor: _c > 0 ? _c - 1 : 0,
-            result: result,
-          ),
-          null,
-        );
+        return (_copy(cursor: _c > 0 ? _c - 1 : 0, result: result), null);
       case 'down':
       case 'j':
         return (
-          _SelectPromptModel(
-            choices: choices,
-            title: title,
+          _copy(
             cursor: _c < choices.length - 1 ? _c + 1 : choices.length - 1,
             result: result,
           ),
@@ -114,26 +221,10 @@ final class _SelectPromptModel extends Model implements OutcomeModel<String> {
       case 'enter':
       // LF (0x0a) maps to ctrl+j; CR (0x0d) maps to enter — terminals differ.
       case 'ctrl+j':
-        return (
-          _SelectPromptModel(
-            choices: choices,
-            title: title,
-            cursor: cursor,
-            result: choices[_c],
-          ),
-          null,
-        );
+        return (_copy(cursor: cursor, result: _c), null);
       case 'esc':
       case 'ctrl+c':
-        return (
-          _SelectPromptModel(
-            choices: choices,
-            title: title,
-            cursor: cursor,
-            result: null,
-          ),
-          () => QuitMsg(),
-        );
+        return (_copy(cursor: cursor), () => QuitMsg());
       default:
         return (this, null);
     }
@@ -141,6 +232,9 @@ final class _SelectPromptModel extends Model implements OutcomeModel<String> {
 
   @override
   View view() {
+    if (summary && result != null) {
+      return newView(_answered(title, choices[result!]));
+    }
     final b = StringBuffer(title)
       ..writeln()
       ..writeln();
@@ -155,17 +249,73 @@ final class _SelectPromptModel extends Model implements OutcomeModel<String> {
   }
 }
 
+final class _MultiPromptModel extends Model implements OutcomeModel<List<int>> {
+  _MultiPromptModel(this.list, {this.result, this.summary = false});
+
+  final MultiSelectModel list;
+  final List<int>? result;
+  final bool summary;
+
+  @override
+  List<int>? get outcome => result;
+
+  @override
+  (Model, Cmd?) update(Msg msg) {
+    if (msg is KeyMsg) {
+      switch (msg.key) {
+        case 'enter':
+        case 'ctrl+j':
+          final picks = [
+            for (final (i, item) in list.items.indexed)
+              if (item.selected) i,
+          ];
+          return (
+            _MultiPromptModel(list, result: picks, summary: summary),
+            null
+          );
+        case 'esc':
+        case 'ctrl+c':
+          return (this, () => QuitMsg());
+      }
+    }
+    final (next, cmd) = list.update(msg);
+    return (_MultiPromptModel(next as MultiSelectModel, summary: summary), cmd);
+  }
+
+  @override
+  View view() {
+    final picks = result;
+    if (summary && picks != null) {
+      final labels = [for (final i in picks) list.items[i].label];
+      return newView(_answered(list.title, '$labels'));
+    }
+    return newView('${list.view().content}\n\n'
+        '↑/↓ navigate, Space toggle, Enter confirm, Esc cancel');
+  }
+}
+
 final class _ConfirmPromptModel extends Model implements OutcomeModel<bool> {
   _ConfirmPromptModel({
     required this.question,
+    this.defaultValue = false,
     this.result,
+    this.summary = false,
   });
 
   final String question;
+  final bool defaultValue;
   final bool? result;
+  final bool summary;
 
   @override
   bool? get outcome => result;
+
+  _ConfirmPromptModel _with(bool? result) => _ConfirmPromptModel(
+        question: question,
+        defaultValue: defaultValue,
+        result: result,
+        summary: summary,
+      );
 
   @override
   (Model, Cmd?) update(Msg msg) {
@@ -174,36 +324,30 @@ final class _ConfirmPromptModel extends Model implements OutcomeModel<bool> {
     switch (msg.key) {
       case 'y':
       case 'Y':
-        return (
-          _ConfirmPromptModel(question: question, result: true),
-          null,
-        );
+        return (_with(true), null);
       case 'n':
       case 'N':
-        return (
-          _ConfirmPromptModel(question: question, result: false),
-          null,
-        );
+        return (_with(false), null);
       case 'enter':
       case 'ctrl+j':
-        return (
-          _ConfirmPromptModel(question: question, result: false),
-          null,
-        );
+        return (_with(defaultValue), null);
       case 'esc':
       case 'ctrl+c':
-        return (
-          _ConfirmPromptModel(question: question, result: null),
-          () => QuitMsg(),
-        );
+        return (_with(null), () => QuitMsg());
       default:
         return (this, null);
     }
   }
 
   @override
-  View view() =>
-      newView('$question [y/N]\nY = yes, N or Enter = no, Esc = cancel');
+  View view() {
+    if (summary && result != null) {
+      return newView(_answered(question, result! ? 'Yes' : 'No'));
+    }
+    return newView(defaultValue
+        ? '$question [Y/n]\nY or Enter = yes, N = no, Esc = cancel'
+        : '$question [y/N]\nY = yes, N or Enter = no, Esc = cancel');
+  }
 }
 
 final class _InputPromptModel extends Model implements OutcomeModel<String> {
@@ -211,14 +355,29 @@ final class _InputPromptModel extends Model implements OutcomeModel<String> {
     required this.label,
     this.value = '',
     this.result,
+    this.hidden = false,
+    this.defaultValue = '',
+    this.summary = false,
   });
 
   final String label;
   final String value;
   final String? result;
+  final bool hidden;
+  final String defaultValue;
+  final bool summary;
 
   @override
   String? get outcome => result;
+
+  _InputPromptModel _with(String value, {String? result}) => _InputPromptModel(
+        label: label,
+        value: value,
+        result: result,
+        hidden: hidden,
+        defaultValue: defaultValue,
+        summary: summary,
+      );
 
   @override
   (Model, Cmd?) update(Msg msg) {
@@ -227,62 +386,40 @@ final class _InputPromptModel extends Model implements OutcomeModel<String> {
       final text = msg.content
           .replaceAll(RegExp(r'\r\n|[\r\n\t]'), ' ')
           .replaceAll(RegExp(r'[\x00-\x1f\x7f-\x9f]'), '');
-      return text.isEmpty
-          ? (this, null)
-          : (
-              _InputPromptModel(label: label, value: value + text),
-              null,
-            );
+      return text.isEmpty ? (this, null) : (_with(value + text), null);
     }
     if (msg is! KeyMsg) return (this, null);
     switch (msg.key) {
       case 'enter':
       case 'ctrl+j':
         return (
-          _InputPromptModel(
-            label: label,
-            value: value,
-            result: value,
-          ),
-          null,
+          _with(value, result: value.isEmpty ? defaultValue : value),
+          null
         );
       case 'esc':
       case 'ctrl+c':
-        return (
-          _InputPromptModel(
-            label: label,
-            value: value,
-            result: null,
-          ),
-          () => QuitMsg(),
-        );
+        return (_with(value), () => QuitMsg());
       case 'backspace':
         if (value.isEmpty) return (this, null);
-        return (
-          _InputPromptModel(
-            label: label,
-            value: value.characters.skipLast(1).toString(),
-          ),
-          null,
-        );
+        return (_with(value.characters.skipLast(1).toString()), null);
       default:
         // Insert the rune text: msg.key is 'space' for the space key.
         final ke = msg.keyEvent;
         if (ke.code == KeyCode.rune &&
             ke.text.isNotEmpty &&
             ke.modifiers.isEmpty) {
-          return (
-            _InputPromptModel(
-              label: label,
-              value: value + ke.text,
-            ),
-            null,
-          );
+          return (_with(value + ke.text), null);
         }
         return (this, null);
     }
   }
 
   @override
-  View view() => newView('$label $value█');
+  View view() {
+    if (summary && result != null) {
+      return newView(_answered(label, hidden ? '******' : result!));
+    }
+    final shown = hidden ? '•' * value.characters.length : value;
+    return newView('$label $shown█');
+  }
 }

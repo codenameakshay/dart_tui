@@ -4,6 +4,28 @@
 
 ### Features
 
+- **CLI logger.** The new `package:dart_tui/cli.dart` has `Logger`, `Level`,
+  `Progress` and `ProgressOptions`, shaped like mason_logger 0.3.6, so a Dart
+  CLI can switch with an import change. Prompts return a `Future`: write
+  `await logger.prompt(...)`. `info`, `detail`, `success`, `warn`, `err`,
+  `alert`, `delayed` and `flush` write to the same streams as in mason_logger.
+  `progress` draws a spinner line at once, truncates the message to the width,
+  and never hides the cursor, reads stdin or installs signal handlers. Without
+  a terminal it writes one start line and one end line.
+  `ProgressOptions.animation` is a `Spinner`. On a terminal, Esc or Ctrl+C
+  exits with code 130. In plain mode, when input ends, every prompt returns its
+  default, and `NoTerminalAttachedError` is never thrown. There is no
+  `LogTheme`. The constructor takes `stdout`, `stderr`, `stdin`, `environment`
+  and `exit` for tests. The library is not exported from `dart_tui.dart`. See
+  the new guide "Migrating from mason_logger, interact or prompts".
+  `example/cli_logger.dart` shows a create-project flow.
+- **Multi-select prompt and prompt options.** The new `promptMultiSelect`
+  asks for any number of choices: Space toggles, `a` toggles all, Enter
+  confirms, and the result is in list order. In plain mode it reads
+  comma-separated numbers. `promptSelect` takes `initial`, `promptConfirm`
+  takes `defaultValue`, and `promptInput` takes `hidden` (shows `•` while you
+  type) and `defaultValue`. All of them are optional, so existing calls do not
+  change.
 - **Test harness.** The new `package:dart_tui/testing.dart` tests apps the way
   teatest and Textual snapshot tests do. `TuiTester(model)` runs the real
   `Program` headless at a fixed size (80x24 by default, also sent as the first

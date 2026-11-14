@@ -29,9 +29,15 @@ class _Probe:
         pid, master = pty.fork()
         if pid == 0:
             os.chdir(ROOT)
-            os.execvp(
+            env = os.environ.copy()
+            if scenario.startswith("logger-"):
+                env["TERM"] = "xterm-256color"
+                for name in ("CI", "ACCESSIBLE", "DART_TUI_ACCESSIBLE"):
+                    env.pop(name, None)
+            os.execvpe(
                 "dart",
                 ["dart", "run", str(PROBE), scenario],
+                env,
             )
         self.pid = pid
         self.master = master
@@ -109,6 +115,17 @@ class _Probe:
                 f"probe exited {return_code}; output={bytes(self.data)!r}"
             )
         return bytes(self.data)
+
+    def exit_code(self) -> int:
+        """Waits for the probe and returns its exit code (-N for signal N)."""
+        deadline = time.monotonic() + TIMEOUT
+        while not self._poll() and time.monotonic() < deadline:
+            self._read_once(0.1)
+        if self.status is None:
+            self._kill()
+            self.fail("probe did not exit before timeout")
+        self._drain()
+        return os.waitstatus_to_exitcode(self.status)
 
     def close(self) -> None:
         if not self._poll():
@@ -446,6 +463,71 @@ class ProgramRuntimePtyTest(unittest.TestCase):
         self.assert_terminal_restored(probe.finish())
         self.assert_cooked_mode(probe)
 
+    def test_logger_finished_progress_timers_do_not_keep_process_alive(self) -> None:
+        for scenario in (
+            "logger-progress-end-complete",
+            "logger-progress-end-fail",
+            "logger-progress-end-cancel",
+            "logger-progress-end-overlap",
+        ):
+            with self.subTest(scenario=scenario):
+                probe = self._probe(scenario)
+                output = probe.finish()
+                if "overlap" in scenario:
+                    self.assertIn(b"SECOND_DONE", output)
+                else:
+                    self.assertIn(b"ENDING_", output)
+                self.assert_cooked_mode(probe)
+
+    def test_ctrl_c_during_logger_progress_kills_with_terminal_cooked(self) -> None:
+        probe = self._probe("logger-progress")
+        probe.read_until(b"LOGGER_CONFIRM")
+        probe.send(b"y")
+        probe.read_until(b"LOGGER_ANSWER=true")
+        before = len(probe.read_until(b"LOGGER_WORKING"))
+        # Let the progress redraw, so its timer is running.
+        probe.read_until_count(b"LOGGER_WORKING", 3)
+        self.assert_cooked_mode(probe)
+        probe.send(b"\x03")
+        self.assertEqual(probe.exit_code(), -signal.SIGINT)
+        progress = bytes(probe.data[before:])
+        self.assertNotIn(b"\x1b[?25l", progress)
+        self.assertNotIn(b"\x1b[?25h", progress)
+        self.assertIn(b"^C", bytes(probe.data))
+        # The prompt hid the cursor and showed it again before the progress.
+        self.assertTrue(probe.data.rfind(b"\x1b[?25h") > probe.data.rfind(b"\x1b[?25l"))
+        self.assert_cooked_mode(probe)
+
+    def test_logger_prompt_escape_and_ctrl_c_cancel_with_terminal_restored(self) -> None:
+        for cancel_key in (b"\x1b", b"\x03"):
+            with self.subTest(cancel_key=cancel_key):
+                probe = self._probe("logger-cancel")
+                probe.read_until(b"LOGGER_CONFIRM")
+                probe.send(cancel_key)
+                self.assertEqual(probe.exit_code(), 130)
+                self.assertNotIn(b"LOGGER_NOT_CANCELLED", bytes(probe.data))
+                self.assertTrue(probe.data.rfind(b"\x1b[?25h") > probe.data.rfind(b"\x1b[?25l"))
+                self.assert_cooked_mode(probe)
+
+    def test_logger_flow_in_the_terminal_ui(self) -> None:
+        probe = self._probe("logger-flow")
+        probe.read_until(b"Project name?")
+        probe.send(b"demo\r")
+        probe.read_until(b"Template?")
+        probe.send(b"\x1b[B")
+        time.sleep(0.1)
+        probe.send(b"\r")
+        probe.read_until(b"Features?")
+        probe.send(b"\x1b[B\x1b[B ")
+        time.sleep(0.1)
+        probe.send(b"\r")
+        probe.read_until(b"Create demo?")
+        probe.send(b"\r")
+        output = probe.finish().decode(errors="replace")
+        self.assertIn("Wrote 6 files", output)
+        self.assertIn("Created demo with tests, lints, ci.", output)
+        self.assert_cooked_mode(probe)
+
 
 class PlainPipeTest(unittest.TestCase):
     """Helpers work without a terminal: piped stdin and stdout."""
@@ -471,6 +553,16 @@ class PlainPipeTest(unittest.TestCase):
         self.assertIn("flavor = null", out)
         self.assertIn("confirmed = null", out)
         self.assertIn("notes = null", out)
+
+    def test_logger_flow_answers_from_a_pipe(self) -> None:
+        out = self._run("example/cli_logger.dart", b"demo\n2\n\ny\n")
+        self.assertIn("Enter a number [1]: 2\n", out)
+        self.assertIn("Writing server files...\n", out)
+        self.assertIn("Created demo with tests, lints.", out)
+
+    def test_logger_takes_defaults_when_input_ends(self) -> None:
+        out = self._run("example/cli_logger.dart", b"")
+        self.assertIn("Created my_app with tests, lints.", out)
 
     def test_form_answers_from_a_pipe(self) -> None:
         out = self._run("example/form.dart", b"billing-api\n2\n\n1,3\n")
@@ -522,6 +614,26 @@ class _Tmux:
         subprocess.run(
             ["tmux", "-L", self.socket, "kill-server"], capture_output=True
         )
+
+
+@unittest.skipUnless(shutil.which("tmux"), "tmux is not installed")
+class LoggerTmuxTest(unittest.TestCase):
+    def test_logger_progress_and_stdout_stderr_logs_survive_terminal_replay(self) -> None:
+        pane = _Tmux(f"dart run {shlex.quote(str(PROBE))} logger-interleave")
+        self.addCleanup(pane.close)
+        lines = pane.wait_for("INTERLEAVE_DONE")
+        text = "\n".join(lines)
+        for marker in (
+            "INTERLEAVE_INFO",
+            "INTERLEAVE_WARN",
+            "INTERLEAVE_FAILED",
+            "INTERLEAVE_DONE",
+        ):
+            self.assertIn(marker, text)
+        positions = [text.index(marker) for marker in (
+            "INTERLEAVE_INFO", "INTERLEAVE_WARN", "INTERLEAVE_FAILED", "INTERLEAVE_DONE"
+        )]
+        self.assertEqual(positions, sorted(positions), text)
 
 
 @unittest.skipUnless(shutil.which("tmux"), "tmux is not installed")
