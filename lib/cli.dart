@@ -19,4 +19,13 @@ library;
 export 'package:args/command_runner.dart' show UsageException;
 
 export 'src/cli.dart'
-    show CliCommand, CliRunner, Level, Logger, Progress, ProgressOptions;
+    show
+        CliCommand,
+        CliRunner,
+        Level,
+        Logger,
+        Progress,
+        ProgressOptions,
+        Task,
+        TaskContext,
+        TasksFailed;

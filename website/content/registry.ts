@@ -23,6 +23,7 @@ export type ContentBlock =
   | { type: "heading"; text: string }
   | { type: "code"; lang: string; code: string; label?: string }
   | { type: "gif"; src: string; caption?: string }
+  | { type: "compare"; items: { label: string; lang: string; code: string }[] }
   | { type: "table"; headers: string[]; rows: string[][] }
   | { type: "callout"; variant?: "note" | "warn"; md: string };
 

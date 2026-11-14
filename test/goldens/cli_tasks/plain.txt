@@ -1,0 +1,9 @@
+Fetch | one
+Fetch | two
+✓ Fetch (T)
+Build > Compile | cc a.c
+✓ Build > Compile (T)
+- Build > Link skipped: nothing to do
+✓ Build (T)
+- Off skipped
+✓ 5 tasks, 2 skipped (T)

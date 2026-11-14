@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:collection' show SplayTreeMap;
 import 'dart:io' as io;
-import 'dart:math' show max;
+import 'dart:math' show max, min;
 
 import 'package:args/args.dart';
 import 'package:args/command_runner.dart';
@@ -16,6 +16,7 @@ import 'program.dart';
 import 'prompts.dart';
 
 part 'cli_runner.dart';
+part 'cli_tasks.dart';
 
 /// How much a [Logger] writes. Each level includes the ones after it.
 enum Level {
@@ -68,6 +69,22 @@ const _red = Style(foreground256: 1);
 
 String _singleLine(String text) => text.replaceAll(RegExp(r'[\r\n]+'), ' ');
 
+/// `42ms` under 100 ms, else `1.2s`.
+String _formatElapsed(Duration elapsed) {
+  final ms = elapsed.inMilliseconds;
+  return ms < 100 ? '${ms}ms' : '${(ms / 1000).toStringAsFixed(1)}s';
+}
+
+/// What draws the live region at the bottom of stdout: a [Progress] or a
+/// task list.
+abstract interface class _Live {
+  /// The rows to draw, each already cut to fit [columns] - 1.
+  List<String> _frame(int columns, int rows);
+
+  /// Stops the timer when another region takes over.
+  bool _stop();
+}
+
 /// A logger for command-line tools, shaped like `mason_logger`'s `Logger`.
 ///
 /// [info], [detail] and [success] write to stdout; [warn], [err] and
@@ -114,7 +131,13 @@ final class Logger {
   final Map<String, String> _env;
   final Never Function(int code) _exit;
   final _queue = <String?>[];
-  Progress? _active;
+
+  /// The live region, drawn below everything else on stdout.
+  _Live? _active;
+
+  /// How many rows the live region has on screen. The cursor stays at the
+  /// end of the last one.
+  int _rows = 0;
   bool _hasOpenLine = false;
 
   /// Set by [CliRunner]'s `--[no-]color` and `--plain` while a command runs.
@@ -151,20 +174,54 @@ final class Logger {
     return (style, text) => style.copyWith(profile: profile).render(text);
   }
 
-  /// Writes [text] to [sink]. A running progress line is cleared first and
-  /// drawn again after it, when [text] ends a line.
+  /// Writes [text] to [sink]. The live region is cleared first and drawn
+  /// again after it, when [text] ends a line.
   void _emit(io.IOSink sink, String text) {
     if (_plain) text = stripAnsiSequences(text).replaceAll('\x1b', '');
-    final progress = _active;
-    if (progress == null) {
+    if (_active == null) {
       sink.write(text);
       if (text.isNotEmpty) _hasOpenLine = !text.endsWith('\n');
       return;
     }
-    if (!_hasOpenLine) _out.write('\r\x1b[K');
+    if (!_hasOpenLine) _clearRegion();
     sink.write(text);
     if (text.isNotEmpty) _hasOpenLine = !text.endsWith('\n');
-    if (!_hasOpenLine) progress._draw();
+    _drawRegion();
+  }
+
+  /// The terminal's columns and rows, or 80x24 without one.
+  (int, int) get _size {
+    final out = _out;
+    return out is io.Stdout && out.hasTerminal
+        ? (out.terminalColumns, out.terminalLines)
+        : (80, 24);
+  }
+
+  /// Erases the live region and leaves the cursor where it started.
+  void _clearRegion() {
+    if (_rows > 1) {
+      _out.write('\r\x1b[${_rows - 1}A\x1b[J');
+    } else {
+      _out.write('\r\x1b[K');
+    }
+    _rows = 0;
+  }
+
+  /// Draws the live region over the old one: cursor up, then each row
+  /// followed by clear-line. Nothing is drawn after a partial line.
+  void _drawRegion() {
+    final live = _active;
+    if (live == null || _hasOpenLine) return;
+    final (columns, rows) = _size;
+    final lines = live._frame(columns, rows);
+    final out = StringBuffer('\r');
+    if (_rows > 1) out.write('\x1b[${_rows - 1}A');
+    out
+      ..write(lines.join('\x1b[K\n'))
+      ..write('\x1b[K');
+    if (lines.length < _rows) out.write('\x1b[J');
+    _out.write(out);
+    _rows = max(lines.length, 1);
   }
 
   void _log(
@@ -243,6 +300,30 @@ final class Logger {
   /// signals, so Ctrl+C stops the process as in any CLI.
   Progress progress(String message, {ProgressOptions? options}) =>
       Progress._(this, message, options ?? progressOptions);
+
+  /// Runs [tasks] as a live list: a spinner line per task, the last line of
+  /// each running task's output under it, and logs above it. Nested steps
+  /// come from [TaskContext.tasks]. At the end it prints one summary line.
+  ///
+  /// [concurrency] tasks run at once; they always show in the order given.
+  /// With [exitOnError], a failure starts no new tasks (they are marked
+  /// skipped), waits for the running ones, and then throws [TasksFailed]
+  /// with every failure. Without it, every task runs and failures are only
+  /// reported.
+  ///
+  /// In plain mode (pipes, CI) it writes one line per finished task, and
+  /// each logged line prefixed with its task's title. Above [Level.info] it
+  /// writes only failures and the summary, to stderr. At [Level.verbose]
+  /// every logged line is also printed above the list.
+  ///
+  /// Like [progress], it never reads stdin, enters raw mode, hides the
+  /// cursor or catches signals.
+  Future<void> tasks(
+    List<Task> tasks, {
+    int concurrency = 1,
+    bool exitOnError = true,
+  }) =>
+      _TaskRun(this, exitOnError).run(tasks, concurrency);
 
   Future<T?> _ask<T>(
     Future<T?> Function() prompt, {
@@ -349,10 +430,11 @@ final class Logger {
 /// On a terminal it rewrites one line on a timer: the frame, the message
 /// and the elapsed time. In plain mode it writes one line when it starts and
 /// one when it ends. Below [Level.info] it writes nothing.
-final class Progress {
+final class Progress implements _Live {
   Progress._(this._logger, String message, this._options)
       : _message = _singleLine(message),
-        _plain = _logger._plain,
+        // Inside a task list it writes start and end lines above the list.
+        _plain = _logger._plain || _logger._active is _TaskRun,
         _silent = _logger.level.index > Level.info.index {
     _clock.start();
     if (_silent) return;
@@ -365,7 +447,7 @@ final class Progress {
     _logger._active = this;
     _draw();
     _timer = Timer.periodic(_options.animation.interval, (_) {
-      _frame++;
+      _tick++;
       _draw();
     });
   }
@@ -377,31 +459,27 @@ final class Progress {
   final _clock = Stopwatch();
   String _message;
   Timer? _timer;
-  int _frame = 0;
+  int _tick = 0;
   bool _done = false;
 
   io.IOSink get _out => _logger._out;
 
-  String get _time {
-    final ms = _clock.elapsedMilliseconds;
-    final time = ms < 100 ? '${ms}ms' : '${(ms / 1000).toStringAsFixed(1)}s';
-    return _logger._paint(_out, _darkGray, '($time)');
-  }
+  String get _time =>
+      _logger._paint(_out, _darkGray, '(${_formatElapsed(_clock.elapsed)})');
 
-  void _draw() {
-    if (_logger._hasOpenLine) return;
+  void _draw() => _logger._drawRegion();
+
+  @override
+  List<String> _frame(int columns, int rows) {
     final frames = _options.animation.frames;
     final frame = frames.isEmpty
         ? ''
-        : '${_logger._paint(_out, _lightGreen, frames[_frame % frames.length])} ';
-    final out = _out;
-    final columns =
-        out is io.Stdout && out.hasTerminal ? out.terminalColumns : 80;
+        : '${_logger._paint(_out, _lightGreen, frames[_tick % frames.length])} ';
     // Keep the line on one row, so \r can redraw it.
     final trailing = _singleLine(_options.trailing);
     final message = truncate(_message, max(columns - 15, 15));
     final line = _singleLine('$frame$message$trailing $_time');
-    out.write('\r${truncate(line, max(columns - 1, 0))}\x1b[K');
+    return [truncate(line, max(columns - 1, 0))];
   }
 
   /// Changes the message.
@@ -422,10 +500,12 @@ final class Progress {
     final animated = _timer != null;
     if (_stop() && animated && !_logger._hasOpenLine) {
       _out.write('\r\x1b[K');
+      _logger._rows = 0;
     }
   }
 
   /// Stops the timer; false when already ended.
+  @override
   bool _stop() {
     if (_done) return false;
     _done = true;
@@ -442,7 +522,9 @@ final class Progress {
     final line = '$mark ${_singleLine(update ?? _message)} $_time';
     if (animated) {
       _out.write('${_logger._hasOpenLine ? '\n' : ''}\r$line\x1b[K\n');
-      _logger._hasOpenLine = false;
+      _logger
+        .._hasOpenLine = false
+        .._rows = 0;
     } else {
       _logger._emit(_out, '$line\n');
     }

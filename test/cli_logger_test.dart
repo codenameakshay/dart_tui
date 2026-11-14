@@ -71,7 +71,243 @@ TuiTester _drive(Future<Object?> Function() body) {
   return t;
 }
 
+final class _ManualPeriodicTimer implements Timer {
+  _ManualPeriodicTimer(this.callback);
+  final void Function(Timer) callback;
+  @override
+  bool isActive = true;
+  @override
+  int tick = 0;
+  @override
+  void cancel() => isActive = false;
+  void fire() {
+    if (!isActive) return;
+    tick++;
+    callback(this);
+  }
+}
+
+String _withoutElapsed(String text) => text.replaceAll(
+      RegExp(r'\(\d+ms\)|\(\d+\.\ds\)'),
+      '(T)',
+    );
+
+List<String> _liveScreen(String text) {
+  final rows = <List<String>>[[]];
+  var row = 0, column = 0;
+  final csi = RegExp(r'\x1b\[(\d*)([A-Za-z])');
+  for (var i = 0; i < text.length; i++) {
+    final match = csi.matchAsPrefix(text, i);
+    if (match != null) {
+      switch (match[2]) {
+        case 'A':
+          row = (row - (int.tryParse(match[1]!) ?? 1)).clamp(0, row);
+        case 'K':
+          rows[row].length = column.clamp(0, rows[row].length);
+        case 'J':
+          rows[row].length = column.clamp(0, rows[row].length);
+          rows.length = row + 1;
+      }
+      i = match.end - 1;
+    } else if (text[i] == '\r') {
+      column = 0;
+    } else if (text[i] == '\n') {
+      row++;
+      column = 0;
+      if (rows.length <= row) rows.add([]);
+    } else {
+      while (rows[row].length <= column) {
+        rows[row].add(' ');
+      }
+      rows[row][column++] = text[i];
+    }
+  }
+  final lines = rows.map((row) => row.join()).toList();
+  while (lines.isNotEmpty && lines.last.isEmpty) {
+    lines.removeLast();
+  }
+  return lines;
+}
+
 void main() {
+  group('Progress byte compatibility', () {
+    const options = ProgressOptions(
+      animation: Spinner(['A', 'B'], Duration(seconds: 1)),
+    );
+    test('a completed partial write resumes frames with baseline bytes', () {
+      final out = CaptureSink();
+      final timers = <_ManualPeriodicTimer>[];
+      runZoned(() {
+        final logger = _logger(out, CaptureSink(), progressOptions: options);
+        final p = logger.progress('Work');
+        logger.write('part');
+        timers.single.fire();
+        logger.write('ial\n');
+        timers.single.fire();
+        p.cancel();
+      }, zoneSpecification: ZoneSpecification(
+        createPeriodicTimer: (self, parent, zone, duration, callback) {
+          final timer = _ManualPeriodicTimer(callback);
+          timers.add(timer);
+          return timer;
+        },
+      ));
+      expect(
+          _withoutElapsed(out.text),
+          '\rA Work... (T)\x1b[K\r\x1b[Kpartial\n'
+          '\rB Work... (T)\x1b[K\rA Work... (T)\x1b[K\r\x1b[K');
+    });
+
+    for (final ending in ['complete', 'fail', 'cancel', 'takeover']) {
+      for (final partial in [false, true]) {
+        test('$ending with partial=$partial matches 530c46a', () {
+          final timers = <_ManualPeriodicTimer>[];
+          final out = CaptureSink(), err = CaptureSink();
+          runZoned(() {
+            final logger = _logger(out, err, progressOptions: options);
+            final p = logger.progress('Work');
+            timers.single.fire();
+            logger.info('note');
+            logger.warn('warn');
+            p.update('Next');
+            if (partial) {
+              logger.write('part');
+              timers.single.fire();
+              logger.write('ial');
+            }
+            switch (ending) {
+              case 'complete':
+                p.complete('Done');
+              case 'fail':
+                p.fail('Bad');
+              case 'cancel':
+                p.cancel();
+              case 'takeover':
+                final next = logger.progress('Other');
+                p.complete('Ignored');
+                if (partial) logger.write(' end\n');
+                next.cancel();
+            }
+          }, zoneSpecification: ZoneSpecification(
+            createPeriodicTimer: (self, parent, zone, duration, callback) {
+              final timer = _ManualPeriodicTimer(callback);
+              timers.add(timer);
+              return timer;
+            },
+          ));
+          const frameA = '\rA Work... (T)\x1b[K';
+          const frameB = '\rB Work... (T)\x1b[K';
+          const nextFrame = '\rB Next... (T)\x1b[K';
+          final prefix = '$frameA$frameB\r\x1b[Knote\n$frameB'
+              '\r\x1b[K$frameB$nextFrame'
+              '${partial ? '\r\x1b[Kpartial' : ''}';
+          final suffix = switch (ending) {
+            'complete' => '${partial ? '\n' : ''}\r✓ Done (T)\x1b[K\n',
+            'fail' => '${partial ? '\n' : ''}\r✗ Bad (T)\x1b[K\n',
+            'cancel' => partial ? '' : '\r\x1b[K',
+            _ => partial
+                ? ' end\n\rA Other... (T)\x1b[K\r\x1b[K'
+                : '\rA Other... (T)\x1b[K\r\x1b[K',
+          };
+          expect(_withoutElapsed(out.text), '$prefix$suffix');
+          expect(err.text, '[WARN] warn\n');
+          expect(timers.every((timer) => !timer.isActive), isTrue);
+        });
+      }
+    }
+  });
+
+  group('Logger live region', () {
+    test('partial writes, stderr and shrinking frames preserve earlier logs',
+        () async {
+      final out = CaptureSink();
+      final timers = <_ManualPeriodicTimer>[];
+      final one = Completer<void>(), two = Completer<void>();
+      await runZoned(() async {
+        final logger = _logger(out, out);
+        final run = logger.tasks([
+          Task('One', (task) async {
+            task.log('detail');
+            await one.future;
+          }),
+          Task('Two', (_) => two.future),
+        ], concurrency: 2);
+        timers.single.fire();
+        logger.write('part');
+        expect(out.text, endsWith('\r\x1b[2A\x1b[Jpart'));
+        final partial = out.text;
+        timers.single.fire();
+        expect(out.text, partial);
+        logger.write('ial\n');
+        logger.warn('warning');
+        expect(_liveScreen(out.text).take(2), ['partial', '[WARN] warning']);
+        one.complete();
+        await Future<void>.delayed(Duration.zero);
+        timers.single.fire();
+        expect(out.text, endsWith('\x1b[K\x1b[J'));
+        expect(_liveScreen(out.text), [
+          'partial',
+          '[WARN] warning',
+          matches(RegExp(r'^✓ One \(.*\)$')),
+          matches(RegExp(r'^. Two$')),
+        ]);
+        two.complete();
+        await run;
+        logger.info('after');
+        expect(_liveScreen(out.text).last, 'after');
+        expect(timers.single.isActive, isFalse);
+      }, zoneSpecification: ZoneSpecification(
+        createPeriodicTimer: (self, parent, zone, duration, callback) {
+          final timer = _ManualPeriodicTimer(callback);
+          timers.add(timer);
+          return timer;
+        },
+      ));
+    });
+
+    test('a final frame taller than the terminal is released before reuse',
+        () async {
+      final out = CaptureSink();
+      final logger = _logger(out, CaptureSink());
+      await logger.tasks([
+        for (var i = 0; i < 30; i++) Task('Task $i', (_) {}),
+      ]);
+      final lines = _liveScreen(out.text);
+      expect(lines, hasLength(31));
+      for (var i = 0; i < 30; i++) {
+        expect(lines[i], startsWith('✓ Task $i ('));
+      }
+      expect(lines.last, startsWith('✓ 30 tasks ('));
+      final previous = out.text;
+      logger.info('after');
+      expect(out.text.substring(previous.length), 'after\n');
+      final p = logger.progress('again');
+      p.cancel();
+      await logger.tasks([Task('Next', (_) {})]);
+      expect(_liveScreen(out.text).last, startsWith('✓ 1 task ('));
+    });
+
+    for (final complete in [false, true]) {
+      test('Progress complete=$complete leaves no rows for the next task list',
+          () async {
+        final out = CaptureSink();
+        final logger = _logger(out, CaptureSink());
+        final p = logger.progress('first');
+        if (complete) {
+          p.complete();
+        } else {
+          p.cancel();
+        }
+        final previous = out.text;
+        await logger.tasks([Task('Next', (_) {})]);
+        expect(out.text.substring(previous.length), isNot(contains('\x1b[1A')));
+        final lines = _liveScreen(out.text);
+        expect(lines, hasLength(complete ? 3 : 2));
+        expect(lines.last, startsWith('✓ 1 task ('));
+      });
+    }
+  });
+
   group('Logger writes', () {
     test('each method writes to stdout or stderr, as mason_logger does', () {
       final out = CaptureSink(), err = CaptureSink();

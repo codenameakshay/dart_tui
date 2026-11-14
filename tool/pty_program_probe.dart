@@ -74,6 +74,17 @@ Future<void> main(List<String> arguments) async {
     logger.progress('LOGGER_WORKING');
     await Completer<void>().future;
   }
+  if (scenario == 'logger-tasks') {
+    // A live task list that runs until Ctrl+C kills the process.
+    await Logger().tasks(concurrency: 2, [
+      Task('LOGGER_TASK_DONE', (_) {}),
+      for (final name in ['LOGGER_TASK_A', 'LOGGER_TASK_B'])
+        Task(name, (task) async {
+          task.log('$name started');
+          await Completer<void>().future;
+        }),
+    ]);
+  }
   if (scenario == 'logger-cancel') {
     await Logger().confirm('LOGGER_CONFIRM');
     stdout.writeln('LOGGER_NOT_CANCELLED');
@@ -213,6 +224,7 @@ const _scenarios = {
   'logger-progress-end-overlap',
   'logger-progress',
   'logger-cancel',
+  'logger-tasks',
   'logger-flow',
   'plain-then-tui',
   'plain-chain',
