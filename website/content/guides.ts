@@ -1028,6 +1028,256 @@ void main() {
     related: ["plain-mode", "testing", "colour-and-terminals"],
   },
   {
+    slug: "cli-commands",
+    name: "Build a CLI with commands",
+    category: "guides",
+    order: 6.85,
+    tagline: "A command runner with styled help, a logger and standard flags.",
+    description:
+      "`CliRunner` and `CliCommand` in `package:dart_tui/cli.dart` replace `CommandRunner` and `Command` from args. This guide shows how to port an app, what the runner adds, how the help looks, which exit codes it uses, and how to test it.",
+    gif: "cli_app.gif",
+    blocks: [
+      { type: "heading", text: "The short version" },
+      {
+        type: "prose",
+        md: "`CliRunner<T>` extends args' `CommandRunner<T>`, and `CliCommand<T>` extends `Command<T>`. Rename the two classes and the app runs as before. You also get a `Logger` on every command, help in the layout of Cobra and gh, five global flags, and `runAndExit`, which prints errors and exits with a standard code. `package:dart_tui/cli.dart` also exports `UsageException` from args.",
+      },
+      {
+        type: "code",
+        lang: "dart",
+        code: `import 'package:dart_tui/cli.dart';
+
+Future<void> main(List<String> args) {
+  final runner = CliRunner<int>('notes', 'Keep a short list of notes.',
+      version: '1.0.0')
+    ..addCommand(AddCommand());
+  return runner.runAndExit(args);
+}`,
+      },
+      {
+        type: "prose",
+        md: "The full app is `example/cli_app/notes.dart`. Run it with `dart run example/cli_app/notes.dart --help`.",
+      },
+      { type: "heading", text: "Port an args app" },
+      {
+        type: "prose",
+        md: "Keep `args` in your `pubspec.yaml`. You still use `ArgParser` and `ArgResults` from it. dart_tui needs `args: ^2.5.0`, the lowest version with `ArgResults.flag` and `ArgResults.option`.",
+      },
+      {
+        type: "code",
+        lang: "diff",
+        code: `-import 'package:args/command_runner.dart';
++import 'package:dart_tui/cli.dart';
+
+-class BuildCommand extends Command<int> {
++class BuildCommand extends CliCommand<int> {
+   // name, description, argParser and run() stay as they are.
+ }
+
+-final runner = CommandRunner<int>('tool', 'Builds and ships projects.');
++final runner = CliRunner<int>('tool', 'Builds and ships projects.');`,
+      },
+      { type: "heading", text: "The logger" },
+      {
+        type: "prose",
+        md: "The runner has a `logger`. Every `CliCommand` reads the same one as `logger`. Pass your own with `CliRunner(..., logger: Logger(...))`. See [Migrating from mason_logger](/guides/migrating-from-mason-logger) for its methods.",
+      },
+      {
+        type: "code",
+        lang: "dart",
+        code: `class AddCommand extends CliCommand<int> {
+  @override
+  String get name => 'add';
+  @override
+  String get description => 'Add a note.';
+
+  @override
+  Future<int> run() async {
+    final text = await logger.prompt('What should the note say?');
+    final progress = logger.progress('Saving');
+    // ... do the work ...
+    progress.complete('Saved');
+    logger.detail('Only shown with --verbose.');
+    return 0;
+  }
+}`,
+      },
+      {
+        type: "callout",
+        variant: "note",
+        md: "A `CliCommand` that is not added to a `CliRunner` throws a `StateError` when you read `logger`.",
+      },
+      { type: "heading", text: "Group commands and add examples" },
+      {
+        type: "prose",
+        md: "`category` is the `Command.category` getter from args. Commands with the same category appear under one heading. The headings and the commands in each are sorted by name. Commands with no category come first, under `Commands:`. Hidden commands and aliases are not listed. `examples` is new in `CliCommand`: a list of command lines shown at the end of that command's help. `usageFooter` on the runner or on a command adds a last line.",
+      },
+      {
+        type: "code",
+        lang: "dart",
+        code: `class DoneCommand extends CliCommand<int> {
+  @override
+  String get name => 'done';
+  @override
+  String get description => 'Mark a note as done.';
+  @override
+  String get category => 'Write';
+  @override
+  String get invocation => 'notes done <number>';
+  @override
+  List<String> get examples => ['notes done 2'];
+
+  @override
+  int run() => 0;
+}`,
+      },
+      { type: "heading", text: "Global flags" },
+      {
+        type: "prose",
+        md: "The runner adds these flags to its own parser. They apply while `run` runs, and the runner restores the logger afterwards.",
+      },
+      {
+        type: "table",
+        headers: ["Flag", "What it does"],
+        rows: [
+          ["`-v`, `--verbose`", "Sets `Level.verbose`: `detail` lines show, and a stack trace shows on an unexpected error."],
+          ["`-q`, `--quiet`", "Sets `Level.quiet`. Errors still show."],
+          ["`--[no-]color`", "`--no-color` turns colour off. `--color` turns it on, even in a pipe, as `FORCE_COLOR=1` does."],
+          ["`--plain`", "The logger's prompts ask plain line questions, as in [plain mode](/guides/plain-mode)."],
+          ["`--version`", "Prints `<name> version <version>` and exits. Only added when you pass `version:`."],
+        ],
+      },
+      {
+        type: "prose",
+        md: "**The clash rule.** The runner skips a global flag when its `argParser`, or the parser of any command (at any depth), already has an option with that name. For `--color` it also checks `no-color`. Your option wins. When the abbreviation `-v` or `-q` is taken, the flag is added without it. So a `--verbose` flag you define yourself keeps its meaning, and the runner does not set `Level.verbose` for it.",
+      },
+      { type: "heading", text: "Help" },
+      {
+        type: "prose",
+        md: "`notes --help`, `notes help <command>` and a run with no command print help to stdout. The layout has the description, `Usage:`, commands grouped by category in aligned columns, flags with their defaults and allowed values, `Examples:`, and the footer. Flags of the runner show under `Global flags:` in a command's help.",
+      },
+      {
+        type: "code",
+        lang: "text",
+        code: `Builds and ships projects.
+
+Usage:
+  tool <command> [arguments]
+
+Commands:
+  status   Show what changed since the last deploy.
+
+Project:
+  build    Compile the project.
+  deploy   Upload the latest build to the server.
+
+Flags:
+  -h, --help             Print this usage information.
+  -c, --config=<value>   Read settings from this file. (default: tool.yaml)
+  -v, --verbose          Show all log output, and stack traces on errors.
+  -q, --quiet            Hide log output. Errors still show.
+      --[no-]color       Force colour on, even in pipes, or off with --no-color.
+      --plain            Ask prompts as plain lines, without the terminal UI.
+      --version          Print the version and exit.
+
+Run "tool help <command>" for more information about a command.
+
+Docs: https://example.com/tool`,
+      },
+      {
+        type: "prose",
+        md: "Help wraps to the terminal width, or 80 columns when there is no terminal. Pass `usageLineLength:` to set it. Text wraps at word boundaries, and a flag's help continues under its own column.",
+      },
+      {
+        type: "prose",
+        md: "Colour follows the logger. There is none in a pipe, with `NO_COLOR` set, with `--no-color`, or in plain mode. The text and line breaks are the same with or without colour, so you can diff the plain output.",
+      },
+      { type: "heading", text: "Run and exit codes" },
+      {
+        type: "prose",
+        md: "`run(args)` works as in args: it returns the command's result, and errors reach you as exceptions. `runAndExit(args)` is for `main`. It runs, prints errors, flushes the logger and exits.",
+      },
+      {
+        type: "table",
+        headers: ["Outcome", "Exit code", "Output"],
+        rows: [
+          ["The command returns an `int`", "That `int`", ""],
+          ["The command returns anything else", "0", ""],
+          ["`UsageException` (unknown command, bad option, `usageException(...)` in a command)", "64", "A one-line `Error: ...` on stderr, then \"Did you mean\" names when there are any, then the usage of the command."],
+          ["Any other error", "70", "A one-line `Error: ...` on stderr. The stack trace shows only with `--verbose`."],
+        ],
+      },
+      {
+        type: "code",
+        lang: "text",
+        code: `$ notes lsit
+Error: Could not find a command named "lsit".
+
+Did you mean this?
+  list
+
+Usage:
+  notes <command> [arguments]
+  ...`,
+      },
+      { type: "heading", text: "Test your CLI" },
+      {
+        type: "prose",
+        md: "Build the runner with a `Logger` that writes to `CaptureSink` objects from `package:dart_tui/testing.dart`. Pass `exit:` to catch the exit code, and `usageLineLength:` to fix the width. Compare help with a golden file using `expectScreen`. The [testing](/guides/testing) guide covers the tester.",
+      },
+      {
+        type: "code",
+        lang: "dart",
+        code: `import 'package:dart_tui/cli.dart';
+import 'package:dart_tui/testing.dart';
+import 'package:test/test.dart';
+
+// NotesRunner is the runner from example/cli_app/notes.dart.
+final class Exit implements Exception {
+  Exit(this.code);
+  final int code;
+}
+
+void main() {
+  late CaptureSink out, err;
+  late NotesRunner app;
+
+  setUp(() {
+    out = CaptureSink();
+    err = CaptureSink();
+    app = NotesRunner(
+      logger: Logger(
+        stdout: out,
+        stderr: err,
+        environment: const {'ACCESSIBLE': '1'},
+        exit: (code) => throw Exit(code),
+      ),
+      usageLineLength: 80,
+    );
+  });
+
+  test('help matches the golden file', () {
+    expectScreen(app.usage, 'test/goldens/help.txt');
+  });
+
+  test('a typo exits with 64', () async {
+    await expectLater(
+      app.runAndExit(['lsit']),
+      throwsA(isA<Exit>().having((e) => e.code, 'code', 64)),
+    );
+    expect(err.text, contains('Did you mean this?\\n  list'));
+  });
+}`,
+      },
+      { type: "heading", text: "Limits" },
+      {
+        type: "prose",
+        md: "- Styled help is only for `CliCommand`. A plain args `Command` added to a `CliRunner` still prints args' own help.\n- `--plain` and `--color` apply to the runner's `Logger` and its prompts. They do not change `promptSelect` and the other one-shot helpers when you call them directly.\n- Text added with `ArgParser.addSeparator` is not shown, because args does not expose it.\n- Shell completions are not built yet. They come next.",
+      },
+    ],
+    related: ["migrating-from-mason-logger", "plain-mode", "testing"],
+  },
+  {
     slug: "text-and-layout",
     name: "Text & layout",
     category: "guides",

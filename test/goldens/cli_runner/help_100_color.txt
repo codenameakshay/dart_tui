@@ -1,0 +1,24 @@
+Builds and ships projects.
+
+[1mUsage:[0m
+  tool <command> [arguments]
+
+[1mCommands:[0m
+  [38;5;6mstatus[0m   Show what changed since the last deploy.
+
+[1mProject:[0m
+  [38;5;6mbuild[0m    Compile the project.
+  [38;5;6mdeploy[0m   Upload the latest build to the server.
+
+[1mFlags:[0m
+  [38;5;6m-h, --help[0m             Print this usage information.
+  [38;5;6m-c, --config=<value>[0m   Read settings from this file. [38;5;8m(default: tool.yaml)[0m
+  [38;5;6m-v, --verbose[0m          Show all log output, and stack traces on errors.
+  [38;5;6m-q, --quiet[0m            Hide log output. Errors still show.
+  [38;5;6m    --[no-]color[0m       Force colour on, even in pipes, or off with --no-color.
+  [38;5;6m    --plain[0m            Ask prompts as plain lines, without the terminal UI.
+  [38;5;6m    --version[0m          Print the version and exit.
+
+Run "tool help <command>" for more information about a command.
+
+Docs: https://example.com/tool

@@ -1,14 +1,21 @@
 import 'dart:async';
+import 'dart:collection' show SplayTreeMap;
 import 'dart:io' as io;
 import 'dart:math' show max;
+
+import 'package:args/args.dart';
+import 'package:args/command_runner.dart';
 
 import 'ansi_state.dart' show stripAnsiSequences;
 import 'bubbles/spinner.dart';
 import 'bubbles/style.dart';
 import 'color_detect.dart';
+import 'grapheme_width.dart' show textWidth;
 import 'msg.dart' show ColorProfile;
 import 'program.dart';
 import 'prompts.dart';
+
+part 'cli_runner.dart';
 
 /// How much a [Logger] writes. Each level includes the ones after it.
 enum Level {
@@ -110,24 +117,38 @@ final class Logger {
   Progress? _active;
   bool _hasOpenLine = false;
 
+  /// Set by [CliRunner]'s `--[no-]color` and `--plain` while a command runs.
+  ColorProfile? _profile;
+  bool _forcePlain = false;
+
   List<ProgramOption> get _options => [
         if (_in case final input?) withInput(input),
         if (!identical(_out, io.stdout)) withOutput(_out),
         withEnvironment(_env),
+        if (_forcePlain) withPlainMode(),
+        if (_profile case final profile?) withColorProfile(profile),
       ];
 
   /// The prompt helpers' plain-mode rule, for the same input and output.
   bool get _plain => PlainSession.open(Program(options: _options)) != null;
 
-  String _paint(io.IOSink sink, Style style, String text) {
-    if (_plain) return text;
+  String _paint(io.IOSink sink, Style style, String text) =>
+      _painter(sink)(style, text);
+
+  /// Paints text for [sink], deciding plain mode and colour once.
+  _Paint _painter(io.IOSink sink) {
+    if (_plain) return _noPaint;
     final terminal = identical(sink, io.stdout)
         ? stdoutIsTerminal()
         : identical(sink, io.stderr) && io.stderr.hasTerminal;
-    final profile = detectColorProfile(environment: _env, isTerminal: terminal);
-    // No colour off a terminal means no escapes at all, not even bold.
-    if (profile == ColorProfile.noColor && !terminal) return text;
-    return style.copyWith(profile: profile).render(text);
+    final profile =
+        _profile ?? detectColorProfile(environment: _env, isTerminal: terminal);
+    // No colour means no escapes at all, not even bold, when the profile is
+    // forced or the output is not a terminal.
+    if (profile == ColorProfile.noColor && (_profile != null || !terminal)) {
+      return _noPaint;
+    }
+    return (style, text) => style.copyWith(profile: profile).render(text);
   }
 
   /// Writes [text] to [sink]. A running progress line is cleared first and

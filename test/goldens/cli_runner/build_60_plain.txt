@@ -1,0 +1,40 @@
+Compile the project.
+
+Runs every step:
+  1. fetch dependencies
+  2. compile
+
+Usage:
+  tool build [arguments]
+
+Flags:
+  -h, --help             Print this usage information.
+  -m, --mode=<value>     How to compile. (default: debug)
+                         [debug]   Fast builds with asserts.
+                         [release] Optimised builds.
+      --target=<os>      The platform to build for. A long
+                         help text, so that it wraps onto a
+                         second line at the narrow width.
+                         [linux, macos, windows]
+                         (default: linux)
+  -D, --define=<value>   Defines a constant.
+                         (default: a=1, b=2)
+      --[no-]cache       Reuse earlier outputs.
+                         (default: on)
+      --out=<value>      The output folder. (required)
+
+Global flags:
+  -c, --config=<value>   Read settings from this file.
+                         (default: tool.yaml)
+  -v, --verbose          Show all log output, and stack
+                         traces on errors.
+  -q, --quiet            Hide log output. Errors still show.
+      --[no-]color       Force colour on, even in pipes, or
+                         off with --no-color.
+      --plain            Ask prompts as plain lines, without
+                         the terminal UI.
+      --version          Print the version and exit.
+
+Examples:
+  tool build --mode release
+  tool build -D name=value --no-cache
