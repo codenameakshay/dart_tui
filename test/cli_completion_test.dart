@@ -742,9 +742,12 @@ void main() {
             'keep\n# <<< notes.x completion <<<\n';
         writeRc(original);
         await custom.run(['completion', 'install', 'zsh', '--yes']);
-        final syntax =
-            await io.Process.run('zsh', ['-n', '${home.path}/.zshrc']);
-        expect(syntax.exitCode, 0, reason: '${syntax.stderr}');
+        // The shell test checks the scripts; here only when zsh is there.
+        if (io.Process.runSync('sh', ['-c', 'command -v zsh']).exitCode == 0) {
+          final syntax =
+              await io.Process.run('zsh', ['-n', '${home.path}/.zshrc']);
+          expect(syntax.exitCode, 0, reason: '${syntax.stderr}');
+        }
         await custom.run(['completion', 'uninstall', 'zsh', '--yes']);
         expect(readRc(), original);
       }

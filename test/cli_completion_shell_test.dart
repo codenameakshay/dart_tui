@@ -122,7 +122,8 @@ void main() {
       'TERM': 'dumb',
     };
     for (final shell in ['bash', 'zsh', 'fish']) {
-      final script = await run('notes', ['completion', shell]);
+      // A full path: macOS looks the name up in the parent's PATH.
+      final script = await run('${bin.path}/notes', ['completion', shell]);
       expect(script.exitCode, 0, reason: '${script.stderr}');
       File('${tmp.path}/notes.$shell').writeAsStringSync('${script.stdout}');
     }
