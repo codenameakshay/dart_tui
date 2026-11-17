@@ -5,6 +5,15 @@ export 'cmd.dart';
 export 'color_detect.dart' show detectColorProfile;
 export 'model.dart';
 export 'msg.dart';
-export 'program.dart' hide PlainSession, ProgramTestHook, programTestHookKey;
+export 'program.dart'
+    hide
+        PlainSession,
+        ProgramTestHook,
+        programTestHookKey,
+        SyncPlainSession,
+        SyncPromptInput,
+        syncPromptInputKey,
+        promptExitKey,
+        runModelSync;
 export 'prompts.dart' hide promptSummaryKey;
 export 'view.dart';

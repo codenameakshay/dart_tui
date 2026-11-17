@@ -157,39 +157,9 @@ final class PlainSession {
     List<String> labels, {
     int? defaultIndex,
     bool matchText = false,
-  }) async {
-    for (final line in heading) {
-      if (line.isNotEmpty) writeln(line);
-    }
-    for (var i = 0; i < labels.length; i++) {
-      writeln('${i + 1}. ${labels[i]}');
-    }
-    final hint = defaultIndex == null ? '' : ' [${defaultIndex + 1}]';
-    while (true) {
-      write('Enter a number$hint: ');
-      final line = await readLine();
-      if (line == null) return null;
-      final answer = line.trim();
-      if (answer.isEmpty && defaultIndex != null) return defaultIndex;
-      final n = int.tryParse(answer);
-      if (n != null && n >= 1 && n <= labels.length) return n - 1;
-      if (matchText && answer.isNotEmpty) {
-        final query = answer.toLowerCase();
-        final lower = [for (final l in labels) l.toLowerCase()];
-        final exact = lower.indexOf(query);
-        if (exact >= 0) return exact;
-        final hits = [
-          for (var i = 0; i < lower.length; i++)
-            if (lower[i].contains(query)) i,
-        ];
-        if (hits.length == 1) return hits.single;
-      }
-      writeln(matchText
-          ? 'Enter a number from 1 to ${labels.length}, or text that '
-              'matches one option.'
-          : 'Enter a number from 1 to ${labels.length}.');
-    }
-  }
+  }) =>
+      _ask(_choiceQuestion(heading, labels,
+          defaultIndex: defaultIndex, matchText: matchText));
 
   /// Like [askChoice], for several answers given as comma-separated numbers.
   /// Empty input keeps [defaults].
@@ -198,44 +168,8 @@ final class PlainSession {
     List<String> labels, {
     Set<int> defaults = const {},
     int? limit,
-  }) async {
-    for (final line in heading) {
-      if (line.isNotEmpty) writeln(line);
-    }
-    for (var i = 0; i < labels.length; i++) {
-      writeln('${i + 1}. ${labels[i]}');
-    }
-    final most = limit == null ? '' : ' (up to $limit)';
-    final hint = defaults.isEmpty
-        ? ''
-        : ' [${(defaults.toList()..sort()).map((i) => i + 1).join(',')}]';
-    while (true) {
-      write('Enter numbers separated by commas$most$hint: ');
-      final line = await readLine();
-      if (line == null) return null;
-      final parts = [
-        for (final part in line.split(','))
-          if (part.trim().isNotEmpty) part.trim(),
-      ];
-      if (parts.isEmpty) return defaults;
-      final picks = <int>{};
-      for (final part in parts) {
-        final n = int.tryParse(part);
-        if (n == null || n < 1 || n > labels.length) {
-          picks.clear();
-          break;
-        }
-        picks.add(n - 1);
-      }
-      if (picks.isEmpty) {
-        writeln('Enter numbers from 1 to ${labels.length}, like 1,3.');
-      } else if (limit != null && picks.length > limit) {
-        writeln('Choose at most $limit.');
-      } else {
-        return picks;
-      }
-    }
-  }
+  }) =>
+      _ask(_manyQuestion(heading, labels, defaults: defaults, limit: limit));
 
   /// Asks [question] with `(Y/n)` or `(y/N)`; empty input takes
   /// [defaultValue]. `y`, `yes`, `n`, `no` and the [yes] / [no] labels are
@@ -245,34 +179,148 @@ final class PlainSession {
     bool defaultValue, {
     String yes = 'Yes',
     String no = 'No',
-  }) async {
-    final hint = defaultValue ? '(Y/n)' : '(y/N)';
-    final prompt = question.isEmpty ? '$hint ' : '$question $hint ';
-    while (true) {
-      write(prompt);
-      final line = await readLine();
-      if (line == null) return null;
-      final answer = line.trim().toLowerCase();
-      if (answer.isEmpty) return defaultValue;
-      if (answer == 'y' || answer == 'yes' || answer == yes.toLowerCase()) {
-        return true;
-      }
-      if (answer == 'n' || answer == 'no' || answer == no.toLowerCase()) {
-        return false;
-      }
-      writeln('Enter y or n.');
-    }
-  }
+  }) =>
+      _ask(_confirmQuestion(question, defaultValue, yes: yes, no: no));
 
   /// Writes [prompt] and reads one line; empty input takes [initial].
   Future<String?> askText(
     String prompt, {
     String initial = '',
     bool secret = false,
-  }) async {
-    write(prompt);
-    final line = await readLine(secret: secret);
-    if (line == null) return null;
-    return line.isEmpty ? initial : line;
+  }) =>
+      _ask(_textQuestion(prompt, initial: initial, secret: secret));
+
+  Future<T?> _ask<T extends Object>(_Question<T> question) async {
+    question.intro.forEach(writeln);
+    while (true) {
+      write(question.prompt);
+      final line = await readLine(secret: question.secret);
+      if (line == null) return null;
+      switch (question.parse(line)) {
+        case _Retry(:final message):
+          writeln(message);
+        case final T answer:
+          return answer;
+      }
+    }
   }
 }
+
+/// A plain-mode question, shared by [PlainSession] and the sync prompts'
+/// plain session: [intro] is written once, then [prompt] before each line
+/// until [parse] accepts one.
+final class _Question<T extends Object> {
+  const _Question(this.intro, this.prompt, this.parse, {this.secret = false});
+
+  final List<String> intro;
+  final String prompt;
+  final bool secret;
+
+  /// The answer, or a [_Retry] with the message to write before asking again.
+  final Object Function(String line) parse;
+}
+
+final class _Retry {
+  const _Retry(this.message);
+  final String message;
+}
+
+List<String> _intro(List<String> heading, List<String> labels) => [
+      for (final line in heading)
+        if (line.isNotEmpty) line,
+      for (var i = 0; i < labels.length; i++) '${i + 1}. ${labels[i]}',
+    ];
+
+_Question<int> _choiceQuestion(
+  List<String> heading,
+  List<String> labels, {
+  int? defaultIndex,
+  bool matchText = false,
+}) {
+  final hint = defaultIndex == null ? '' : ' [${defaultIndex + 1}]';
+  return _Question(_intro(heading, labels), 'Enter a number$hint: ', (line) {
+    final answer = line.trim();
+    if (answer.isEmpty && defaultIndex != null) return defaultIndex;
+    final n = int.tryParse(answer);
+    if (n != null && n >= 1 && n <= labels.length) return n - 1;
+    if (matchText && answer.isNotEmpty) {
+      final query = answer.toLowerCase();
+      final lower = [for (final l in labels) l.toLowerCase()];
+      final exact = lower.indexOf(query);
+      if (exact >= 0) return exact;
+      final hits = [
+        for (var i = 0; i < lower.length; i++)
+          if (lower[i].contains(query)) i,
+      ];
+      if (hits.length == 1) return hits.single;
+    }
+    return _Retry(matchText
+        ? 'Enter a number from 1 to ${labels.length}, or text that '
+            'matches one option.'
+        : 'Enter a number from 1 to ${labels.length}.');
+  });
+}
+
+_Question<Set<int>> _manyQuestion(
+  List<String> heading,
+  List<String> labels, {
+  Set<int> defaults = const {},
+  int? limit,
+}) {
+  final most = limit == null ? '' : ' (up to $limit)';
+  final hint = defaults.isEmpty
+      ? ''
+      : ' [${(defaults.toList()..sort()).map((i) => i + 1).join(',')}]';
+  return _Question(
+    _intro(heading, labels),
+    'Enter numbers separated by commas$most$hint: ',
+    (line) {
+      final parts = [
+        for (final part in line.split(','))
+          if (part.trim().isNotEmpty) part.trim(),
+      ];
+      if (parts.isEmpty) return defaults;
+      final picks = <int>{};
+      for (final part in parts) {
+        final n = int.tryParse(part);
+        if (n == null || n < 1 || n > labels.length) {
+          return _Retry('Enter numbers from 1 to ${labels.length}, like 1,3.');
+        }
+        picks.add(n - 1);
+      }
+      if (limit != null && picks.length > limit) {
+        return _Retry('Choose at most $limit.');
+      }
+      return picks;
+    },
+  );
+}
+
+_Question<bool> _confirmQuestion(
+  String question,
+  bool defaultValue, {
+  String yes = 'Yes',
+  String no = 'No',
+}) {
+  final hint = defaultValue ? '(Y/n)' : '(y/N)';
+  final prompt = question.isEmpty ? '$hint ' : '$question $hint ';
+  return _Question(const [], prompt, (line) {
+    final answer = line.trim().toLowerCase();
+    if (answer.isEmpty) return defaultValue;
+    if (answer == 'y' || answer == 'yes' || answer == yes.toLowerCase()) {
+      return true;
+    }
+    if (answer == 'n' || answer == 'no' || answer == no.toLowerCase()) {
+      return false;
+    }
+    return const _Retry('Enter y or n.');
+  });
+}
+
+_Question<String> _textQuestion(
+  String prompt, {
+  String initial = '',
+  bool secret = false,
+}) =>
+    _Question(const [], prompt, (line) => line.isEmpty ? initial : line,
+        secret: secret);

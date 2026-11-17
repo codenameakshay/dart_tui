@@ -4,6 +4,31 @@
 
 ### Features
 
+- **Sync prompts.** `promptSelectSync`, `promptMultiSelectSync`,
+  `promptConfirmSync` and `promptInputSync` take the same parameters as the
+  async prompts, use the same models and views, and return the value itself
+  instead of a `Future`. Code that already calls prompts synchronously, such as
+  helpers that wrap the `prompts` package (melos), interact's `Confirm` and
+  `Select` (fvm) or mason_logger's `Logger`, can switch by changing only those
+  helpers, with no `async` up the call chain. On a terminal they use raw mode,
+  read `stdin.readByteSync`, decode keys as before, repaint inline and restore
+  the terminal in a `finally` block. Esc returns `null`. Ctrl+C restores the
+  terminal and exits the process with code 130, unlike the async prompts, which
+  return `null`. A lone Esc is told apart with a 50 ms wait. In plain mode they
+  ask the same numbered line questions with `stdin.readLineSync`, and the end
+  of input returns `null`. Limits: no Cmds run, no spinner, no redraw on
+  resize, only the process stdin (`withInput(stream)` throws `ArgumentError`,
+  `withInput(null)` returns `null` at once), `StateError` while a `Program` or
+  an async prompt reads stdin and under `TuiTester`, and a signal from outside
+  during a prompt ends the process without restoring the terminal. `Logger` in
+  `package:dart_tui/cli.dart` gains `promptSync`, `promptAnySync`,
+  `confirmSync`, `chooseOneSync` and `chooseAnySync`, with the parameters and
+  return types of mason_logger's methods, so moving from mason_logger is a
+  rename with no `await`. A `Logger` with a custom `stdin:` stream throws
+  `StateError` from them. Use them to migrate existing synchronous code; write
+  new code with the async prompts. On Windows the raw path is implemented but
+  checked only by unit tests on windows-latest, not in an interactive console;
+  the pseudo-terminal tests run on macOS and Linux only.
 - **CLI task lists.** The new `Logger.tasks(List<Task>, {concurrency,
   exitOnError})` in `package:dart_tui/cli.dart` shows a live task list, like
   `pnpm install` or `docker pull`. A `Task` has a title and a `run` function

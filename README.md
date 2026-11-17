@@ -628,6 +628,8 @@ await pager(longText);                                       // scrollable viewe
 
 All prompts and `filter` return `null` when cancelled with `Esc` / `Ctrl+C`.
 
+For code that is already synchronous (helpers that wrap `prompts` or `interact`), `promptSelectSync`, `promptMultiSelectSync`, `promptConfirmSync` and `promptInputSync` take the same parameters and return the value with no `Future`. Esc returns `null`, Ctrl+C exits with code 130. They read only the process stdin and run no Cmds, so use the async prompts in new code. The raw path on Windows is checked by CI unit tests only, not in an interactive console.
+
 ### CLI logger (mason_logger-shaped)
 
 `package:dart_tui/cli.dart` has a `Logger`, `Level`, `Progress` and `ProgressOptions` shaped like mason_logger's, so a Dart CLI can switch with an import change. Prompts return a `Future`, so add `await`. On a terminal they are a small TUI. In pipes, CI and with `ACCESSIBLE=1` they ask plain numbered line questions. It is not exported from `dart_tui.dart`.
@@ -649,7 +651,7 @@ if (await logger.confirm('Create $name?', defaultValue: true)) {
 }
 ```
 
-Esc or Ctrl+C exits with code 130. When input ends in plain mode, every prompt returns its default. See the [migration guide](https://dart-tui.vercel.app/guides/migrating-from-mason-logger) for every difference from mason_logger, and for how interact and prompts calls map to dart_tui.
+Esc or Ctrl+C exits with code 130. When input ends in plain mode, every prompt returns its default. To stay synchronous like mason_logger, use the twins `promptSync`, `promptAnySync`, `confirmSync`, `chooseOneSync` and `chooseAnySync`: the migration is a rename with no `await`. See the [migration guide](https://dart-tui.vercel.app/guides/migrating-from-mason-logger) for every difference from mason_logger, and for how interact and prompts calls map to dart_tui.
 
 ![cli_logger](https://dart-tui.vercel.app/gifs/cli_logger.gif)
 

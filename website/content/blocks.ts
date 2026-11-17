@@ -91,9 +91,81 @@ print('Hello, \$name!');`,
         { name: "promptSelect(items, {title})", type: "Future<String?>", description: "Single-choice picker." },
         { name: "promptConfirm(message)", type: "Future<bool?>", description: "Yes/no confirmation." },
         { name: "promptInput(label)", type: "Future<String?>", description: "Single-line text prompt." },
+        { name: "promptSelectSync(choices, {title, initial})", type: "String?", description: "Sync twin of `promptSelect`. Blocks until answered." },
+        { name: "promptMultiSelectSync(choices, {title, initial})", type: "List<String>?", description: "Sync twin of `promptMultiSelect`." },
+        { name: "promptConfirmSync(question, {defaultValue})", type: "bool?", description: "Sync twin of `promptConfirm`." },
+        { name: "promptInputSync(label, {hidden, defaultValue})", type: "String?", description: "Sync twin of `promptInput`." },
       ],
     },
-    related: ["forms", "gum-helpers"],
+    blocks: [
+      { type: "heading", text: "Sync prompts" },
+      {
+        type: "prose",
+        md: "`promptSelectSync`, `promptMultiSelectSync`, `promptConfirmSync` and `promptInputSync` take the same parameters as the async prompts and return the value itself, not a `Future`. They use the same models and views, so the frames are the same. Use them in code that is already synchronous, so you can switch to dart_tui by changing only your helper functions and no call chain has to become `async`. Examples are helpers that wrap the `prompts` package (`get`, `getBool`, `choose`) or interact's `Confirm` and `Select` (`.interact()`), and mason_logger's sync prompts.",
+      },
+      {
+        type: "prose",
+        md: "For new code, use the async prompts. They run on the event loop, so timers and other work keep going while they wait. They redraw on resize, handle signals, and can be tested with `withInput` and `TuiTester`.",
+      },
+      {
+        type: "code",
+        lang: "dart",
+        code: `import 'package:dart_tui/dart_tui.dart';
+
+// A synchronous helper. Its callers do not change.
+bool promptBool(String message, {bool defaultsTo = false}) =>
+    promptConfirmSync(message, defaultValue: defaultsTo) ?? defaultsTo;
+
+void main() {
+  final name = promptInputSync('Project name?', defaultValue: 'my_app');
+  if (name == null) return; // Esc
+  final template = promptSelectSync(['cli', 'server', 'package'], title: 'Template?');
+  if (template == null) return;
+  if (!promptBool('Create \$name?', defaultsTo: true)) return;
+}`,
+      },
+      {
+        type: "prose",
+        md: "On a terminal a sync prompt turns on raw mode, reads stdin with `readByteSync`, decodes keys the same way and repaints inline. It restores the terminal in a `finally` block: cooked mode, cursor shown. In plain mode (pipes, CI, `TERM=dumb`, `ACCESSIBLE=1` or `DART_TUI_ACCESSIBLE=1`, `withPlainMode()`) it asks the same numbered line questions and reads with `readLineSync`.",
+      },
+      {
+        type: "table",
+        headers: ["Event", "Sync prompts", "Async prompts"],
+        rows: [
+          ["Esc", "Returns `null`.", "Returns `null`."],
+          ["Ctrl+C", "Restores the terminal, then exits the process with code 130.", "Returns `null`."],
+          ["End of input in plain mode", "Returns `null`. `Logger` returns the default.", "Returns `null`. `Logger` returns the default."],
+        ],
+      },
+      {
+        type: "prose",
+        md: "A lone Esc is told from the start of a key sequence by waiting 50 ms.",
+      },
+      { type: "heading", text: "What sync prompts cannot do" },
+      {
+        type: "table",
+        headers: ["Limit", "Detail"],
+        rows: [
+          ["No event loop", "No Cmds run: only quit is understood, and the prompt models need nothing else. Timers and futures elsewhere in the program wait until the prompt returns."],
+          ["No resize", "The frame is not redrawn when the terminal is resized."],
+          ["Process stdin only", "`withInput(stream)` throws `ArgumentError`. `withInput(null)` returns `null` at once."],
+          ["One reader at a time", "They throw `StateError` while a `Program` or an async prompt reads stdin (await it first), and under `TuiTester`."],
+          ["Signals from outside", "`kill` or `SIGTERM` during a sync prompt ends the process without restoring the terminal. There is no event loop to handle it."],
+          ["No stdin isolate", "They never start one."],
+        ],
+      },
+      {
+        type: "callout",
+        variant: "note",
+        md: "`Logger` in `package:dart_tui/cli.dart` has thin wrappers: `promptSync`, `promptAnySync`, `confirmSync`, `chooseOneSync` and `chooseAnySync`. They match mason_logger's methods, so moving from mason_logger is a rename with no `await`. Esc or Ctrl+C exits with code 130. A `Logger` built with a custom `stdin:` stream throws `StateError` from them.",
+      },
+      {
+        type: "callout",
+        variant: "warn",
+        md: "On Windows the raw path is implemented, but only CI unit tests on windows-latest check it. Nobody has run it in an interactive console. The pseudo-terminal tests run on macOS and Linux only.",
+      },
+    ],
+    related: ["forms", "gum-helpers", "migrating-from-mason-logger"],
   },
   {
     slug: "gum-helpers",

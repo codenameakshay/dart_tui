@@ -95,7 +95,9 @@ abstract interface class _Live {
 /// `ACCESSIBLE=1` (see [withPlainMode]). Colours follow
 /// [detectColorProfile], so `NO_COLOR` and pipes turn them off.
 ///
-/// Unlike `mason_logger`, prompts return a [Future].
+/// Unlike `mason_logger`, prompts return a [Future]. Each one has a blocking
+/// twin ([promptSync], [promptAnySync], [confirmSync], [chooseOneSync],
+/// [chooseAnySync]) for code that is already synchronous.
 ///
 /// Cancelling a prompt (Esc or Ctrl+C in the TUI) exits the process with
 /// code 130, as `mason_logger` does on Ctrl+C. When input ends in plain
@@ -418,6 +420,110 @@ final class Logger {
     List<int>? selectedIndices;
     await _ask(
       () => promptMultiSelect(labels,
+          title: '$message', initial: initial, options: _options),
+      onSelection: (indices) => selectedIndices = indices,
+    );
+    final indices = selectedIndices ?? (initial.toList()..sort());
+    return [for (final i in indices) choices[i]];
+  }
+
+  T? _askSync<T>(
+    String name,
+    T? Function() prompt, {
+    void Function(List<int>)? onSelection,
+  }) {
+    if (_in != null) {
+      throw StateError(
+        'Logger.$name reads the process stdin, and this Logger was given a '
+        'stdin stream. Use the async ${name.replaceAll('Sync', '')}.',
+      );
+    }
+    final plain = _plain;
+    final value = runZoned(prompt, zoneValues: {
+      promptSummaryKey: onSelection ?? true,
+      promptExitKey: _exit,
+    });
+    if (value == null && !plain) _exit(130);
+    return value;
+  }
+
+  /// Like [prompt], but blocks and returns the answer, as mason_logger's
+  /// `prompt` does. For code that is already synchronous; see
+  /// [promptInputSync] for what sync prompts can't do.
+  String promptSync(
+    String? message, {
+    Object? defaultValue,
+    bool hidden = false,
+  }) {
+    final fallback = defaultValue == null ? '' : '$defaultValue';
+    final label = fallback.isEmpty
+        ? '$message'
+        : '$message ${_paint(_out, _darkGray, '($fallback)')}';
+    final answer = _askSync(
+        'promptSync',
+        () => promptInputSync(label,
+            hidden: hidden, defaultValue: fallback, options: _options));
+    final value = hidden ? answer : answer?.trim();
+    return value == null || value.isEmpty ? fallback : value;
+  }
+
+  /// Like [promptAny], but blocks and returns the answer.
+  List<String> promptAnySync(String? message, {String separator = ','}) {
+    final answer = _askSync(
+        'promptAnySync', () => promptInputSync('$message', options: _options));
+    return [
+      for (final part in (answer ?? '').split(separator))
+        if (part.trim().isNotEmpty) part.trim(),
+    ];
+  }
+
+  /// Like [confirm], but blocks and returns the answer.
+  bool confirmSync(String? message, {bool defaultValue = false}) =>
+      _askSync(
+          'confirmSync',
+          () => promptConfirmSync('$message',
+              defaultValue: defaultValue, options: _options)) ??
+      defaultValue;
+
+  /// Like [chooseOne], but blocks and returns the answer.
+  T chooseOneSync<T extends Object?>(
+    String? message, {
+    required List<T> choices,
+    T? defaultValue,
+    String Function(T choice)? display,
+  }) {
+    if (choices.isEmpty) {
+      throw ArgumentError.value(choices, 'choices', 'must not be empty');
+    }
+    final labels = [for (final c in choices) display?.call(c) ?? '$c'];
+    final start =
+        defaultValue == null ? 0 : max(0, choices.indexOf(defaultValue));
+    int? selectedIndex;
+    _askSync(
+      'chooseOneSync',
+      () => promptSelectSync(labels,
+          title: '$message', initial: start, options: _options),
+      onSelection: (indices) => selectedIndex = indices.single,
+    );
+    return choices[selectedIndex ?? start];
+  }
+
+  /// Like [chooseAny], but blocks and returns the answer.
+  List<T> chooseAnySync<T extends Object?>(
+    String? message, {
+    required List<T> choices,
+    List<T>? defaultValues,
+    String Function(T choice)? display,
+  }) {
+    final labels = [for (final c in choices) display?.call(c) ?? '$c'];
+    final initial = {
+      for (final v in defaultValues ?? <T>[])
+        if (choices.contains(v)) choices.indexOf(v),
+    };
+    List<int>? selectedIndices;
+    _askSync(
+      'chooseAnySync',
+      () => promptMultiSelectSync(labels,
           title: '$message', initial: initial, options: _options),
       onSelection: (indices) => selectedIndices = indices,
     );

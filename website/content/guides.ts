@@ -778,7 +778,7 @@ await t.waitFor((screen) => screen != first);`,
       { type: "heading", text: "The short version" },
       {
         type: "prose",
-        md: "`package:dart_tui/cli.dart` exports `Logger`, `Level`, `Progress` and `ProgressOptions`. They are shaped like the ones in mason_logger 0.3.6. For most CLIs you change the import and add `await` before each prompt. The library is not exported from `dart_tui.dart`, so a plain `import 'package:dart_tui/dart_tui.dart'` does not add these names.",
+        md: "`package:dart_tui/cli.dart` exports `Logger`, `Level`, `Progress` and `ProgressOptions`. They are shaped like the ones in mason_logger 0.3.6. For most CLIs you change the import and then either add `await` before each prompt, or rename it to its `Sync` twin (`promptSync`, `confirmSync`, `chooseOneSync`) and keep the code synchronous. The library is not exported from `dart_tui.dart`, so a plain `import 'package:dart_tui/dart_tui.dart'` does not add these names.",
       },
       {
         type: "code",
@@ -788,7 +788,8 @@ await t.waitFor((screen) => screen != first);`,
 
  final logger = Logger();
 -final name = logger.prompt('Project name?', defaultValue: 'my_app');
-+final name = await logger.prompt('Project name?', defaultValue: 'my_app');`,
++final name = await logger.prompt('Project name?', defaultValue: 'my_app');
++// Or stay synchronous: logger.promptSync('Project name?', defaultValue: 'my_app')`,
       },
       {
         type: "prose",
@@ -806,11 +807,11 @@ await t.waitFor((screen) => screen != first);`,
           ["`info(msg, style: (m) => ...)`", "Same", "`style` is `String? Function(String?)`. Use dart_tui `Style` inside it."],
           ["`progress(msg)`, `update`, `complete`, `fail`, `cancel`", "Same", "See difference 5."],
           ["`ProgressOptions(animation: ProgressAnimation(frames: f, interval: i))`", "`ProgressOptions(animation: Spinner(f, i))`", "Any `Spinner` preset works, for example `Spinner.dot`."],
-          ["`logger.prompt(msg, defaultValue:, hidden:)`", "`await logger.prompt(...)`", "Returns a `Future<String>`."],
-          ["`logger.promptAny(msg, separator:)`", "`await logger.promptAny(...)`", "Returns a `Future<List<String>>`."],
-          ["`logger.confirm(msg, defaultValue:)`", "`await logger.confirm(...)`", "Returns a `Future<bool>`."],
-          ["`logger.chooseOne(msg, choices:, defaultValue:, display:)`", "`await logger.chooseOne(...)`", "Returns a `Future<T>`."],
-          ["`logger.chooseAny(msg, choices:, defaultValues:, display:)`", "`await logger.chooseAny(...)`", "Returns a `Future<List<T>>`."],
+          ["`logger.prompt(msg, defaultValue:, hidden:)`", "`logger.promptSync(...)` (or `await logger.prompt(...)`)", "`promptSync` is a rename with no `await`. Same parameters and return type as mason_logger. `prompt` returns a `Future<String>`."],
+          ["`logger.promptAny(msg, separator:)`", "`logger.promptAnySync(...)` (or `await logger.promptAny(...)`)", "`promptAnySync` is a rename with no `await`. Same parameters and return type as mason_logger. `promptAny` returns a `Future<List<String>>`."],
+          ["`logger.confirm(msg, defaultValue:)`", "`logger.confirmSync(...)` (or `await logger.confirm(...)`)", "`confirmSync` is a rename with no `await`. Same parameters and return type as mason_logger. `confirm` returns a `Future<bool>`."],
+          ["`logger.chooseOne(msg, choices:, defaultValue:, display:)`", "`logger.chooseOneSync(...)` (or `await logger.chooseOne(...)`)", "`chooseOneSync` is a rename with no `await`. Same parameters and return type as mason_logger. `chooseOne` returns a `Future<T>`."],
+          ["`logger.chooseAny(msg, choices:, defaultValues:, display:)`", "`logger.chooseAnySync(...)` (or `await logger.chooseAny(...)`)", "`chooseAnySync` is a rename with no `await`. Same parameters and return type as mason_logger. `chooseAny` returns a `Future<List<T>>`."],
           ["`Logger(theme: LogTheme(...))`", "No equivalent", "Pass `style:` per call, or colour the text with dart_tui `Style`."],
           ["`lightCyan.wrap('x')`, `styleBold.wrap('x')`, `link(uri: ...)`", "No equivalent", "mason's ansi helpers are not copied. Use `Style(foreground256: 14, isBold: true).render('x')`."],
         ],
@@ -829,7 +830,7 @@ await t.waitFor((screen) => screen != first);`,
         type: "table",
         headers: ["#", "Topic", "mason_logger", "dart_tui"],
         rows: [
-          ["1", "Prompts", "Synchronous.", "They return a `Future`. Write `await logger.prompt(...)`."],
+          ["1", "Prompts", "Synchronous.", "Async: they return a `Future`, so write `await logger.prompt(...)`. The sync twins `promptSync`, `promptAnySync`, `confirmSync`, `chooseOneSync` and `chooseAnySync` have the same parameters and return types as mason_logger, so migrating is a rename. They only read the process stdin: a `Logger` built with a custom `stdin:` stream throws `StateError` from them. They throw `StateError` too while a `Program` or an async prompt is reading stdin."],
           ["2", "Cancel and end of input", "Ctrl+C exits with code 130. Esc does nothing. On end of input, only `prompt` and `confirm` return the default. `chooseOne`, `chooseAny` and `promptAny` throw `NoTerminalAttachedError` without a terminal.", "In the TUI, Esc or Ctrl+C exits the process with code 130. In plain mode, when input ends (for example `cli < /dev/null`), every prompt returns its default: `prompt` returns `defaultValue` or `''`, `confirm` returns `defaultValue`, `chooseOne` returns `defaultValue` or the first choice, `chooseAny` returns `defaultValues` or `[]`, `promptAny` returns `[]`. dart_tui never throws `NoTerminalAttachedError`. Without a terminal (pipes, CI, `ACCESSIBLE=1`), prompts ask plain numbered line questions."],
           ["3", "Theme and ansi helpers", "`LogTheme`, `theme:`, `lightCyan.wrap`, `styleBold`, `link`.", "None of them. The per-call `style:` stays. Use dart_tui `Style` for colours."],
           ["4", "Progress animation", "`ProgressAnimation(frames:, interval:)`.", "`ProgressOptions.animation` is a `Spinner(frames, interval)`. The default frames, interval and trailing text (`...`) are the same as mason's."],
@@ -898,7 +899,22 @@ Future<void> main() async {
       { type: "heading", text: "From interact 2.2.0" },
       {
         type: "prose",
-        md: "interact components are objects with a synchronous `interact()` method. dart_tui has one-shot functions that return a `Future`. They return `null` when the user cancels with Esc or Ctrl+C. They do not exit the process. (`Logger` exits with code 130 instead.)",
+        md: "interact components are objects with a synchronous `interact()` method. dart_tui has one-shot functions that return a `Future`. They return `null` when the user cancels with Esc or Ctrl+C. They do not exit the process. (`Logger` exits with code 130 instead.) If your code is synchronous, use the sync twins (`promptInputSync`, `promptConfirmSync`, `promptSelectSync`, `promptMultiSelectSync`) and keep the call chain as it is. See [Sync prompts](/blocks/prompts).",
+      },
+      {
+        type: "code",
+        lang: "dart",
+        code: `import 'package:dart_tui/dart_tui.dart';
+
+// A fvm-style helper that wrapped Confirm(...).interact().
+bool confirm(String prompt, {bool defaultValue = false}) =>
+    promptConfirmSync(prompt, defaultValue: defaultValue) ?? defaultValue;
+
+// Select(...).interact() returned an index.
+int select(String prompt, List<String> options) {
+  final answer = promptSelectSync(options, title: prompt);
+  return answer == null ? -1 : options.indexOf(answer);
+}`,
       },
       {
         type: "table",
@@ -907,7 +923,7 @@ Future<void> main() async {
           ["`Input(prompt:, defaultValue:).interact()`", "`await promptInput(prompt, defaultValue: ...)`", "Empty input returns `defaultValue`."],
           ["`Input(initialText:)`", "No equivalent", "`promptInput` starts empty."],
           ["`Input(validator:)` with `ValidationError`", "No equivalent in `promptInput`", "Ask again in a loop, or use `Field.input(validate:)` in a `Form`."],
-          ["`Confirm(prompt:, defaultValue:).interact()`", "`await promptConfirm(prompt, defaultValue: ...)`", "`defaultValue` is `false` unless set. There is no \"no default\" mode, so Enter always answers."],
+          ["`Confirm(prompt:, defaultValue:).interact()`", "`await promptConfirm(prompt, defaultValue: ...)`, or `promptConfirmSync(...)` with no `await`", "`defaultValue` is `false` unless set. There is no \"no default\" mode, so Enter always answers."],
           ["`Confirm(waitForNewLine:)`", "No equivalent", "In the TUI, `y` and `n` answer at once."],
           ["`Select(prompt:, options:, initialIndex:).interact()`", "`await promptSelect(options, title: prompt, initial: index)`", "interact returns the index. `promptSelect` returns the chosen string: use `options.indexOf(answer)` if you need the index. The cursor does not wrap. An empty list returns `null`."],
           ["`MultiSelect(prompt:, options:, defaults:).interact()`", "`await promptMultiSelect(options, title: prompt, initial: {0, 2})`", "`defaults` is a `List<bool>`. `initial` is a `Set<int>` of indexes. The result is a list of strings in list order, not indexes."],
@@ -923,7 +939,19 @@ Future<void> main() async {
       { type: "heading", text: "From prompts 2.0.0" },
       {
         type: "prose",
-        md: "The `prompts` package reads lines from stdin with `readLineSync`. Its functions are synchronous.",
+        md: "The `prompts` package reads lines from stdin with `readLineSync`. Its functions are synchronous. If your code wraps them in helpers, such as melos does, keep the helpers synchronous and change only their bodies to the sync functions of dart_tui. No caller needs `async`. See [Sync prompts](/blocks/prompts) for what they can and cannot do.",
+      },
+      {
+        type: "code",
+        lang: "dart",
+        code: `import 'package:dart_tui/dart_tui.dart';
+
+// A melos-style helper. Callers stay as they are.
+bool promptBool(String message, {bool defaultsTo = false}) =>
+    promptConfirmSync(message, defaultValue: defaultsTo) ?? defaultsTo;
+
+String promptString(String message, {String? defaultsTo}) =>
+    promptInputSync(message, defaultValue: defaultsTo) ?? defaultsTo ?? '';`,
       },
       {
         type: "table",
@@ -934,7 +962,7 @@ Future<void> main() async {
           ["`get(validate:)`", "No equivalent in `promptInput`", "Ask again in a loop, or use `Field.input(validate:)` in a `Form`."],
           ["`get(allowMultiline: true)`", "No equivalent", "`promptInput` reads one line."],
           ["`get(chevron:, color:, inputColor:)`", "No equivalent", "dart_tui draws its own prompt. Colour follows the colour profile."],
-          ["`getBool(message, defaultsTo:)`", "`await promptConfirm(message, defaultValue: ...)`", "dart_tui adds the `[y/N]` or `(y/N)` hint itself. There is no `appendYesNo`."],
+          ["`getBool(message, defaultsTo:)`", "`await promptConfirm(message, defaultValue: ...)`, or `promptConfirmSync(...)` with no `await`", "dart_tui adds the `[y/N]` or `(y/N)` hint itself. There is no `appendYesNo`."],
           ["`getInt(message)`, `getDouble(message)`", "No equivalent", "Use `int.tryParse(await promptInput(...) ?? '')` and ask again if it is `null`."],
           ["`choose(message, options, defaultsTo:)`", "`await promptSelect(strings, title: message, initial: index)`", "For other types use `await logger.chooseOne(message, choices: options, defaultValue: ..., display: ...)`."],
           ["`choose(names:)`", "No equivalent", "The numbered list in plain mode uses numbers only."],
