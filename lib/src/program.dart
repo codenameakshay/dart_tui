@@ -19,6 +19,7 @@ import 'view.dart';
 import 'windows_terminal.dart';
 
 part 'plain.dart';
+part 'sync_prompt.dart';
 
 typedef ProgramOption = void Function(Program program);
 
@@ -63,6 +64,20 @@ final class _SharedStdin {
     _pending.insertAll(0, bytes);
     _holdOrphans = true;
   }
+
+  /// Whether a [Program], a plain prompt or an inherited exec is using
+  /// stdin now. A sync prompt must not read it then.
+  bool get busy => _readers.isNotEmpty || _execUsers > 0;
+
+  /// The bytes held for the next reader, for a sync prompt. They are
+  /// removed; [giveBack] returns the ones it did not use.
+  List<int> takePending() {
+    final bytes = List<int>.of(_pending);
+    _pending.clear();
+    return bytes;
+  }
+
+  void giveBack(List<int> bytes) => _pending.insertAll(0, bytes);
 
   List<int>? _takePending() {
     _holdOrphans = false;
@@ -1011,31 +1026,19 @@ final class Program {
     // it ends. ponytail: one owner at a time, so overlapping Programs in one
     // isolate share them; scope them per run (zone value) if that case appears,
     // at the cost of a zone lookup in Style's colour path.
-    final previousProfile = Style.defaultProfile;
-    final previousDarkBackground = Style.hasDarkBackground;
     var defaultsRestored = false;
+    late final void Function() restorePrevious;
     void restoreStyleDefaults() {
       if (defaultsRestored) return;
       defaultsRestored = true;
-      Style.defaultProfile = previousProfile;
-      Style.hasDarkBackground = previousDarkBackground;
+      restorePrevious();
       _restoreStyleDefaults = null;
     }
 
     _restoreStyleDefaults = restoreStyleDefaults;
     try {
-      final profile = _profile ??
-          (identical(_output, stdout)
-              ? detectColorProfile(
-                  environment: _environment,
-                  isTerminal: stdoutIsTerminal(),
-                )
-              : ColorProfile.trueColor);
-      Style.defaultProfile = profile;
-      if (darkBackgroundFromColorFgBg(_environment['COLORFGBG'])
-          case final dark?) {
-        Style.hasDarkBackground = dark;
-      }
+      final profile = _resolveProfile();
+      restorePrevious = _applyStyleDefaults(profile);
       _logSink = _logFile?.openWrite(mode: FileMode.append);
       runLogSink = _logSink;
       _renderer = _disableRenderer
@@ -1208,6 +1211,31 @@ final class Program {
     }
 
     return (_killed ? StateError('program killed') : null, runModel);
+  }
+
+  /// The [withColorProfile] profile, or the detected one.
+  ColorProfile _resolveProfile() =>
+      _profile ??
+      (identical(_output, stdout)
+          ? detectColorProfile(
+              environment: _environment,
+              isTerminal: stdoutIsTerminal(),
+            )
+          : ColorProfile.trueColor);
+
+  /// Sets the [Style] colour defaults for a run; returns what restores them.
+  void Function() _applyStyleDefaults([ColorProfile? profile]) {
+    final previousProfile = Style.defaultProfile;
+    final previousDarkBackground = Style.hasDarkBackground;
+    Style.defaultProfile = profile ?? _resolveProfile();
+    if (darkBackgroundFromColorFgBg(_environment['COLORFGBG'])
+        case final dark?) {
+      Style.hasDarkBackground = dark;
+    }
+    return () {
+      Style.defaultProfile = previousProfile;
+      Style.hasDarkBackground = previousDarkBackground;
+    };
   }
 
   void _shutdown() {

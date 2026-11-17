@@ -30,7 +30,7 @@ class _Probe:
         if pid == 0:
             os.chdir(ROOT)
             env = os.environ.copy()
-            if scenario.startswith("logger-"):
+            if scenario.startswith(("logger-", "sync-")):
                 env["TERM"] = "xterm-256color"
                 for name in ("CI", "ACCESSIBLE", "DART_TUI_ACCESSIBLE"):
                     env.pop(name, None)
@@ -526,6 +526,77 @@ class ProgramRuntimePtyTest(unittest.TestCase):
                 self.assertTrue(probe.data.rfind(b"\x1b[?25h") > probe.data.rfind(b"\x1b[?25l"))
                 self.assert_cooked_mode(probe)
 
+    def _assert_cursor_shown(self, output: bytes) -> None:
+        self.assertGreater(output.rfind(b"\x1b[?25h"), output.rfind(b"\x1b[?25l"))
+
+    def _sync_then_async(self, scenario: str, keys: list[bytes], result: bytes) -> None:
+        probe = self._probe(scenario)
+        probe.read_until(b"SYNC_PROMPT")
+        for key in keys:
+            probe.send(key)
+            time.sleep(0.1)
+        probe.read_until(b"SYNC_RESULT=")
+        probe.read_until(b"SYNC_RESULT=" + result)
+        # The sync prompt restored the terminal before the next program.
+        self.assert_cooked_mode(probe)
+        self._assert_cursor_shown(bytes(probe.data))
+        probe.read_until(b"SYNC_FOLLOWUP_READY")
+        probe.send(b"q")
+        output = probe.finish()
+        self.assertIn(b"SYNC_FOLLOWUP_DONE", output)
+        self.assert_terminal_restored(output)
+        self.assert_cooked_mode(probe)
+
+    def test_sync_prompts_restore_the_terminal_for_a_later_program(self) -> None:
+        cases = [
+            ("sync-tui-confirm", [b"y"], b"true"),
+            ("sync-tui-select", [b"\x1b[B", b"\r"], b"SYNC_B"),
+            ("sync-tui-multi", [b" ", b"\x1b[B", b"x", b"\r"], b"[SYNC_A, SYNC_B]"),
+            ("sync-tui-input", [b"hunter2", b"\r"], b"hunter2"),
+            ("sync-tui-confirm", [b"\x1b"], b"null"),
+        ]
+        for scenario, keys, result in cases:
+            with self.subTest(scenario=scenario, keys=keys):
+                self._sync_then_async(scenario, keys, result)
+
+    def test_sync_hidden_input_is_not_echoed(self) -> None:
+        probe = self._probe("sync-tui-input")
+        probe.read_until(b"SYNC_PROMPT")
+        probe.send(b"hunter2\r")
+        before = bytes(probe.read_until(b"SYNC_RESULT="))
+        self.assertNotIn(b"hunter2", before[: before.rfind(b"SYNC_RESULT=")])
+        probe.read_until(b"SYNC_FOLLOWUP_READY")
+        probe.send(b"q")
+        probe.finish()
+
+    def test_sync_prompts_after_ctrl_c_restore_the_terminal(self) -> None:
+        for kind in ("confirm", "select", "multi", "input"):
+            with self.subTest(kind=kind):
+                self._sync_then_async(f"sync-tui-{kind}-ctrl-c", [b"\x03"], b"exit130")
+
+    def test_sync_prompt_after_a_program_gets_the_keys(self) -> None:
+        probe = self._probe("sync-after-program")
+        probe.read_until(b"SYNC_FOLLOWUP_READY")
+        probe.send(b"q")
+        probe.read_until(b"SYNC_PROMPT")
+        probe.send(b"y")
+        probe.read_until(b"SYNC_RESULT=true")
+        probe.read_until(b"ASYNC_PROMPT")
+        probe.send(b"n")
+        output = probe.finish()
+        self.assertIn(b"SYNC_AFTER_ASYNC=false", output)
+        self.assert_cooked_mode(probe)
+
+    def test_sync_prompt_ctrl_c_exits_130_with_terminal_cooked(self) -> None:
+        probe = self._probe("sync-exit")
+        probe.read_until(b"SYNC_PROMPT")
+        probe.send(b"\x03")
+        self.assertEqual(probe.exit_code(), 130)
+        output = bytes(probe.data)
+        self.assertNotIn(b"SYNC_NOT_EXITED", output)
+        self._assert_cursor_shown(output)
+        self.assert_cooked_mode(probe)
+
     def test_logger_flow_in_the_terminal_ui(self) -> None:
         probe = self._probe("logger-flow")
         probe.read_until(b"Project name?")
@@ -580,6 +651,16 @@ class PlainPipeTest(unittest.TestCase):
     def test_logger_takes_defaults_when_input_ends(self) -> None:
         out = self._run("example/cli_logger.dart", b"")
         self.assertIn("Created my_app with tests, lints.", out)
+
+    def test_sync_prompts_answer_from_a_pipe(self) -> None:
+        out = self._run("example/sync_prompts.dart", b"demo\n2\n1,3\nhunter2\ny\n")
+        self.assertIn("Enter a number: 2\n", out)
+        self.assertNotIn("hunter2", out)
+        self.assertIn("Created demo (server) with tests, ci; token has 7 characters.", out)
+
+    def test_sync_prompts_end_of_input_returns_without_hanging(self) -> None:
+        out = self._run("example/sync_prompts.dart", b"")
+        self.assertEqual(out, "Project name? \n")
 
     def test_form_answers_from_a_pipe(self) -> None:
         out = self._run("example/form.dart", b"billing-api\n2\n\n1,3\n")

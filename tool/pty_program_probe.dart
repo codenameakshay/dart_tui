@@ -94,6 +94,46 @@ Future<void> main(List<String> arguments) async {
     await createProject(Logger(), step: const Duration(milliseconds: 50));
     return;
   }
+  if (scenario.startsWith('sync-tui-')) {
+    await _syncTui(scenario.substring('sync-tui-'.length));
+    return;
+  }
+  if (scenario == 'sync-after-program') {
+    // The paused stdin reader of a finished program must not take the keys.
+    await Program(options: [withAltScreen(), withHideCursor()])
+        .run(const _ProbeModel('sync-followup'));
+    stdout.writeln('SYNC_RESULT=${promptConfirmSync('SYNC_PROMPT')}');
+    stdout.writeln('SYNC_AFTER_ASYNC=${await promptConfirm('ASYNC_PROMPT')}');
+    return;
+  }
+  if (scenario == 'sync-exit') {
+    // Ctrl+C with the real exit: the process ends with code 130.
+    promptSelectSync(const ['SYNC_A', 'SYNC_B'], title: 'SYNC_PROMPT');
+    stdout.writeln('SYNC_NOT_EXITED');
+    return;
+  }
+  if (scenario == 'sync-busy') {
+    final plain = [withPlainMode(), withEnvironment(const {})];
+    final answer = promptInput('ASYNC:', options: plain);
+    try {
+      promptConfirmSync('SYNC?', options: plain);
+    } on StateError catch (error) {
+      stdout.writeln('SYNC_BUSY=$error');
+    }
+    stdout.writeln('ASYNC_ANSWER=${await answer}');
+    return;
+  }
+  if (scenario == 'sync-plain-chain') {
+    // An async plain prompt reads ahead; the sync ones get the rest.
+    final plain = [withPlainMode(), withEnvironment(const {})];
+    final first = await promptInput('FIRST:', options: plain);
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    final second = promptInputSync('SECOND:', options: plain);
+    final third = promptInputSync('THIRD:', options: plain);
+    final fourth = promptInputSync('FOURTH:', options: plain);
+    stdout.writeln('ANSWERS=$first|$second|$third|$fourth');
+    return;
+  }
   if (scenario == 'plain-chain') {
     final first = await promptInput('FIRST:',
         options: [withPlainMode(), withEnvironment(const {})]);
@@ -216,7 +256,13 @@ Future<void> main(List<String> arguments) async {
   killTimer?.cancel();
 }
 
-const _scenarios = {
+final _scenarios = {
+  for (final kind in ['confirm', 'select', 'multi', 'input'])
+    for (final suffix in ['', '-ctrl-c']) 'sync-tui-$kind$suffix',
+  'sync-exit',
+  'sync-after-program',
+  'sync-busy',
+  'sync-plain-chain',
   'logger-interleave',
   'logger-progress-end-complete',
   'logger-progress-end-fail',
@@ -387,6 +433,7 @@ final class _ProbeModel implements Model {
             scenario == 'explicit-exec' ||
             scenario == 'exec-followup' ||
             scenario == 'plain-then-tui' ||
+            scenario == 'sync-followup' ||
             scenario.startsWith('chain-')) &&
         msg is KeyMsg &&
         msg.key == 'q') {
@@ -469,6 +516,7 @@ final class _ProbeModel implements Model {
               'default-init-exec-reads' => 'DEFAULT_INIT_EXEC_READY',
               'explicit-exec' => 'EXPLICIT_EXEC_READY',
               'exec-followup' => 'EXEC_FOLLOWUP_READY',
+              'sync-followup' => 'SYNC_FOLLOWUP_READY',
               _ => throw StateError('unsupported probe scenario: $scenario'),
             },
         altScreen: true,
@@ -493,6 +541,44 @@ final class _RestartReadyModel extends Model {
 
   @override
   View view() => newView('Second run ready. Press q.');
+}
+
+final class _ProbeExit implements Exception {
+  _ProbeExit(this.code);
+  final int code;
+}
+
+/// A sync prompt, a cooked-mode window, then an async program that must
+/// still get input. With `-ctrl-c` the Logger twin runs with an exit that
+/// throws, so the process lives on after Ctrl+C.
+Future<void> _syncTui(String kind) async {
+  final logger = Logger(exit: (code) => throw _ProbeExit(code));
+  Object? result;
+  try {
+    result = switch (kind) {
+      'confirm' => promptConfirmSync('SYNC_PROMPT'),
+      'select' =>
+        promptSelectSync(const ['SYNC_A', 'SYNC_B'], title: 'SYNC_PROMPT'),
+      'multi' =>
+        promptMultiSelectSync(const ['SYNC_A', 'SYNC_B'], title: 'SYNC_PROMPT'),
+      'input' => promptInputSync('SYNC_PROMPT', hidden: true),
+      'confirm-ctrl-c' => logger.confirmSync('SYNC_PROMPT'),
+      'select-ctrl-c' =>
+        logger.chooseOneSync('SYNC_PROMPT', choices: const ['SYNC_A']),
+      'multi-ctrl-c' =>
+        logger.chooseAnySync('SYNC_PROMPT', choices: const ['SYNC_A']),
+      'input-ctrl-c' => logger.promptSync('SYNC_PROMPT', hidden: true),
+      _ => throw StateError('unsupported sync scenario: $kind'),
+    };
+  } on _ProbeExit catch (exit) {
+    result = 'exit${exit.code}';
+  }
+  stdout.writeln('SYNC_RESULT=$result');
+  // The test checks the terminal is cooked during this window.
+  await Future<void>.delayed(const Duration(milliseconds: 600));
+  await Program(options: [withAltScreen(), withHideCursor()])
+      .run(const _ProbeModel('sync-followup'));
+  stdout.writeln('SYNC_FOLLOWUP_DONE');
 }
 
 Cmd _delayedQuit() => () async {

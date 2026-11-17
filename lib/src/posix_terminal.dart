@@ -15,6 +15,8 @@ typedef _DupC = Int32 Function(Int32);
 typedef _DupD = int Function(int);
 typedef _CloseC = Int32 Function(Int32);
 typedef _CloseD = int Function(int);
+typedef _PollC = Int32 Function(Pointer<Uint8>, UnsignedLong, Int32);
+typedef _PollD = int Function(Pointer<Uint8>, int, int);
 
 // Larger than `struct termios` on macOS (72 bytes) and Linux (60 bytes).
 const int _termiosBytes = 256;
@@ -74,6 +76,38 @@ Future<bool> restoreStdin(int savedFd) async {
     return false;
   } finally {
     close(savedFd);
+  }
+}
+
+/// Whether a byte can be read from fd 0 within [timeout], without reading it.
+///
+/// Sync prompts use it after an `ESC` byte: a lone Escape key sends nothing
+/// more, while an arrow key's `ESC [ A` is already waiting. This uses
+/// `poll(2)`, not `VMIN=0`/`VTIME`: with those, `stdin.readByteSync` returns
+/// -1 on a timeout, the same as the end of input. End of input or a hang-up
+/// counts as readable, so the next read returns -1 at once. Returns true off
+/// macOS/Linux, where a blocking read is the only option.
+bool posixInputReady(Duration timeout) {
+  if (!Platform.isMacOS && !Platform.isLinux) return true;
+  final poll = DynamicLibrary.process().lookupFunction<_PollC, _PollD>('poll');
+  // struct pollfd { int fd; short events; short revents; }
+  final fds = calloc<Uint8>(8);
+  try {
+    final data = ByteData.sublistView(fds.asTypedList(8));
+    final clock = Stopwatch()..start();
+    while (true) {
+      data
+        ..setInt32(0, 0, Endian.host)
+        ..setInt16(4, 0x1, Endian.host) // POLLIN
+        ..setInt16(6, 0, Endian.host);
+      final left = timeout.inMilliseconds - clock.elapsedMilliseconds;
+      final ready = poll(fds, 1, left < 0 ? 0 : left);
+      if (ready > 0) return true;
+      if (ready == 0 || left <= 0) return false;
+      // -1: interrupted by a signal; poll again for the time left.
+    }
+  } finally {
+    calloc.free(fds);
   }
 }
 

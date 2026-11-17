@@ -171,6 +171,168 @@ Future<String?> promptInput(
   return program.runForResult(model);
 }
 
+// Sync prompts.
+//
+// Each one draws the same frames as its async twin (the same model and view)
+// but blocks: it reads with `stdin.readByteSync` in raw mode and returns a
+// value, not a Future. They are for code that is already synchronous (helpers
+// that wrap `prompts`, `interact` or mason_logger); new code should use the
+// async prompts.
+
+/// Like [promptSelect], but blocks until the user answers and returns the
+/// value, not a [Future]. It draws the same frames.
+///
+/// Esc returns `null`. Ctrl+C restores the terminal, then exits the process
+/// with code 130. In plain mode it asks the same numbered question as
+/// [promptSelect], read with `stdin.readLineSync`; the end of input returns
+/// `null`.
+///
+/// Sync prompts only read the process stdin: `withInput(stream)` in [options]
+/// throws an [ArgumentError], and `withInput(null)` returns `null` at once.
+/// They throw a [StateError] while a [Program] or an async prompt reads stdin,
+/// so await it first. They run no commands and do not redraw on resize. A
+/// signal from outside (`kill`) during the prompt ends the process without
+/// restoring the terminal: there is no event loop to handle it.
+String? promptSelectSync(
+  List<String> choices, {
+  List<ProgramOption> options = const [],
+  String title = 'Choose one',
+  int? initial,
+}) {
+  if (choices.isEmpty) return null;
+  final start = initial?.clamp(0, choices.length - 1);
+  final program = Program(options: options);
+  final plain = SyncPlainSession.open(program, 'promptSelectSync');
+  if (plain != null) {
+    return plain.run((io) {
+      final i = io.askChoice([title], choices, defaultIndex: start);
+      if (i == null) return null;
+      _reportSelection([i]);
+      return choices[i];
+    });
+  }
+  final done = runModelSync(
+    program,
+    _SelectPromptModel(
+      choices: choices,
+      title: title,
+      cursor: start ?? 0,
+      summary: _summary,
+    ),
+    name: 'promptSelectSync',
+  );
+  final index = done is _SelectPromptModel ? done.result : null;
+  if (index == null) return null;
+  _reportSelection([index]);
+  return choices[index];
+}
+
+/// Like [promptMultiSelect], but blocks until the user answers and returns
+/// the value, not a [Future]. It draws the same frames.
+///
+/// Esc returns `null`; Ctrl+C restores the terminal and exits with code 130.
+/// See [promptSelectSync] for plain mode and the limits.
+List<String>? promptMultiSelectSync(
+  List<String> choices, {
+  List<ProgramOption> options = const [],
+  String title = 'Choose any',
+  Set<int> initial = const {},
+}) {
+  if (choices.isEmpty) return const [];
+  List<String> pick(Iterable<int> picks) =>
+      [for (final i in picks.toList()..sort()) choices[i]];
+  final program = Program(options: options);
+  final plain = SyncPlainSession.open(program, 'promptMultiSelectSync');
+  if (plain != null) {
+    return plain.run((io) {
+      final picks = io.askMany([title], choices,
+          defaults: {
+            for (final i in initial)
+              if (i >= 0 && i < choices.length) i
+          });
+      if (picks != null) _reportSelection(picks.toList()..sort());
+      return picks == null ? null : pick(picks);
+    });
+  }
+  final done = runModelSync(
+    program,
+    _MultiPromptModel(
+      MultiSelectModel(
+        title: title,
+        items: [
+          for (final (i, c) in choices.indexed)
+            MultiSelectItem(label: c, selected: initial.contains(i)),
+        ],
+      ),
+      summary: _summary,
+    ),
+    name: 'promptMultiSelectSync',
+  );
+  final picks = done is _MultiPromptModel ? done.result : null;
+  if (picks != null) _reportSelection(picks);
+  return picks == null ? null : pick(picks);
+}
+
+/// Like [promptConfirm], but blocks until the user answers and returns the
+/// value, not a [Future]. It draws the same frames.
+///
+/// Esc returns `null`; Ctrl+C restores the terminal and exits with code 130.
+/// See [promptSelectSync] for plain mode and the limits.
+bool? promptConfirmSync(
+  String question, {
+  List<ProgramOption> options = const [],
+  bool defaultValue = false,
+}) {
+  final program = Program(options: options);
+  final plain = SyncPlainSession.open(program, 'promptConfirmSync');
+  if (plain != null) {
+    return plain.run((io) => io.askConfirm(question, defaultValue));
+  }
+  final done = runModelSync(
+    program,
+    _ConfirmPromptModel(
+      question: question,
+      defaultValue: defaultValue,
+      summary: _summary,
+    ),
+    name: 'promptConfirmSync',
+  );
+  return done is _ConfirmPromptModel ? done.result : null;
+}
+
+/// Like [promptInput], but blocks until the user answers and returns the
+/// value, not a [Future]. It draws the same frames; with [hidden] it shows
+/// `•` for each character and never echoes the answer.
+///
+/// Esc returns `null`; Ctrl+C restores the terminal and exits with code 130.
+/// See [promptSelectSync] for plain mode and the limits.
+String? promptInputSync(
+  String label, {
+  List<ProgramOption> options = const [],
+  bool hidden = false,
+  String defaultValue = '',
+}) {
+  final program = Program(options: options);
+  final plain = SyncPlainSession.open(program, 'promptInputSync');
+  if (plain != null) {
+    final prompt = label.isEmpty || label.endsWith(' ') ? label : '$label ';
+    return plain.run(
+      (io) => io.askText(prompt, initial: defaultValue, secret: hidden),
+    );
+  }
+  final done = runModelSync(
+    program,
+    _InputPromptModel(
+      label: label,
+      hidden: hidden,
+      defaultValue: defaultValue,
+      summary: _summary,
+    ),
+    name: 'promptInputSync',
+  );
+  return done is _InputPromptModel ? done.result : null;
+}
+
 final class _SelectPromptModel extends Model implements OutcomeModel<String> {
   _SelectPromptModel({
     required this.choices,
