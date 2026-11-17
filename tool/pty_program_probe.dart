@@ -6,6 +6,19 @@ import 'package:dart_tui/dart_tui.dart';
 
 import '../example/cli_logger.dart' show createProject;
 
+final class _FailingSink implements IOSink {
+  @override
+  void write(Object? object) {
+    if ('$object'.contains('\x1b[?25h')) throw StateError('output closed');
+  }
+
+  @override
+  void writeln([Object? object = '']) => write('$object\n');
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 Future<void> main(List<String> arguments) async {
   if (!Platform.isLinux && !Platform.isMacOS) {
     stderr.writeln('PTY program probe requires a Unix host');
@@ -161,6 +174,30 @@ Future<void> main(List<String> arguments) async {
     stdout.writeln('ANSWERS=$first|$second|$third|$fourth');
     return;
   }
+  if (scenario == 'sync-cleanup-failure') {
+    final plain = [withPlainMode(), withEnvironment(const {})];
+    final first = await promptInput('FIRST:', options: plain);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    Style.defaultProfile = ColorProfile.ansi;
+    Style.hasDarkBackground = false;
+    try {
+      promptConfirmSync('FAIL:', options: [
+        withPlainMode(false),
+        withOutput(_FailingSink()),
+        withColorProfile(ColorProfile.trueColor),
+        withEnvironment(const {'COLORFGBG': '15;0'}),
+      ]);
+      throw StateError('expected output failure');
+    } on StateError catch (error) {
+      if (error.message != 'output closed') rethrow;
+    }
+    if (Style.defaultProfile != ColorProfile.ansi || Style.hasDarkBackground) {
+      throw StateError('style not restored');
+    }
+    final rest = promptInputSync('REST:', options: plain);
+    stdout.writeln('CLEANUP=$first|$rest');
+    return;
+  }
   if (scenario == 'plain-chain') {
     final first = await promptInput('FIRST:',
         options: [withPlainMode(), withEnvironment(const {})]);
@@ -290,6 +327,7 @@ final _scenarios = {
   'sync-after-program',
   'sync-busy',
   'sync-plain-chain',
+  'sync-cleanup-failure',
   'sync-busy-eof',
   'sync-utf8-split',
   'logger-interleave',

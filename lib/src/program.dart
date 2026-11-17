@@ -539,11 +539,17 @@ final class Program {
     // become signals. Finish raw mode here (and restore it when leaving raw
     // mode). Each helper is a no-op on the other platforms.
     //
-    // The Windows console mode is saved before echo and line input are
-    // turned off, and restored before they are turned back on, so the saved
-    // mode is the one the program started with.
-    if (raw) enableWindowsVtInput();
-    if (!raw) restoreWindowsVtInput();
+    // The Windows helper owns the complete console input mode, including
+    // echo and line input. Dart's setters would overwrite the restored mode on
+    // repeated release/restore calls.
+    if (Platform.isWindows) {
+      if (raw) {
+        enableWindowsVtInput();
+      } else {
+        restoreWindowsVtInput();
+      }
+      return;
+    }
     try {
       stdin.echoMode = !raw;
       stdin.lineMode = !raw;

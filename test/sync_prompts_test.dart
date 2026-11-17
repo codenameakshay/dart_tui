@@ -56,6 +56,33 @@ final class _Exit implements Exception {
 
 Never _throwExit(int code) => throw _Exit(code);
 
+final class _WindowsReleaseCycle extends Model {
+  _WindowsReleaseCycle(this.program, this.modes);
+  final Program program;
+  final List<(bool, bool)> modes;
+
+  void recordModes() => modes.add((stdin.lineMode, stdin.echoMode));
+
+  @override
+  Cmd? init() => () async {
+        await program.releaseTerminal();
+        recordModes();
+        await program.releaseTerminal();
+        recordModes();
+        await program.restoreTerminal();
+        recordModes();
+        await program.releaseTerminal();
+        recordModes();
+        return quit();
+      };
+
+  @override
+  (Model, Cmd?) update(Msg msg) => (this, null);
+
+  @override
+  View view() => newView('');
+}
+
 /// Runs [body] with [keys] as its input; returns its value and its output.
 ({T value, String out}) _sync<T>(
   T Function(List<ProgramOption> options) body,
@@ -121,6 +148,43 @@ const _down = '\x1b[B';
 const _ctrlC = '\x03';
 
 void main() {
+  test(
+    'Windows raw-mode exit preserves the original echo setting',
+    () async {
+      final originalLineMode = stdin.lineMode;
+      final originalEchoMode = stdin.echoMode;
+      final modes = <(bool, bool)>[];
+      try {
+        stdin.lineMode = true;
+        stdin.echoMode = false;
+        final program = Program(options: [
+          withInput(null),
+          withOutput(CaptureSink()),
+          withoutSignalHandler(),
+        ]);
+        await program.run(_WindowsReleaseCycle(program, modes));
+        expect(modes, [
+          (true, false),
+          (true, false),
+          (false, false),
+          (true, false),
+        ]);
+        // Shutdown while already released must not replace the original
+        // console mode with cooked/echoing input.
+        expect(stdin.echoMode, isFalse);
+        expect(stdin.lineMode, isTrue);
+      } finally {
+        stdin.echoMode = originalEchoMode;
+        stdin.lineMode = originalLineMode;
+      }
+    },
+    skip: !Platform.isWindows
+        ? 'requires Windows'
+        : !stdin.hasTerminal
+            ? 'requires a real Windows console on stdin'
+            : false,
+  );
+
   group('frames equal the async prompt', () {
     final cases = <(
       String,
@@ -618,7 +682,7 @@ void main() {
         }
       });
       final errors = process.stderr.transform(utf8.decoder).join();
-      // '€' is E2 82 AC: the first chunk ends after E2 82.
+      // '€' is E2 82 AC: the first write ends after E2 82.
       process.stdin.add([...utf8.encode('Ada\n'), 0xe2, 0x82]);
       await process.stdin.flush();
       await firstDone.future.timeout(const Duration(seconds: 30));
@@ -635,6 +699,11 @@ void main() {
       final text = await probe('sync-plain-chain', 'Ada\nGrace\nHopper\n');
       expect(text, contains('ANSWERS=Ada|Grace|Hopper|null'));
       expect(text, isNot(contains('\x1b')));
+    });
+
+    test('failed sync cleanup restores styles and unread stdin', () async {
+      final text = await probe('sync-cleanup-failure', 'Ada\nyGrace\n');
+      expect(text, contains('CLEANUP=Ada|Grace'));
     });
   }, skip: Platform.isWindows ? 'the probe needs a Unix host' : false);
 }
