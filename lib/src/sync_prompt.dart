@@ -51,27 +51,24 @@ final class _StdinSyncInput implements SyncPromptInput {
 
   /// One line, without its newline, or null at the end of input.
   String? readLine() {
-    final newline = _pending.indexOf(0x0a);
-    final end = newline < 0 ? _pending.length : newline;
-    final held = _pending.sublist(0, end);
-    _pending.removeRange(0, newline < 0 ? end : end + 1);
-    String decode(List<int> bytes) => utf8.decode(bytes, allowMalformed: true);
-    if (newline >= 0) return decode(held);
-    String? rest;
-    if (!_ended) {
+    if (_pending.isEmpty && !_ended) {
+      String? line;
       try {
-        rest = stdin.readLineSync(
+        line = stdin.readLineSync(
           encoding: const Utf8Codec(allowMalformed: true),
           retainNewlines: true,
         );
       } on StdinException {
-        rest = null;
+        line = null;
       }
-      if (rest == null || !rest.endsWith('\n')) _ended = true;
+      if (line == null || !line.endsWith('\n')) _ended = true;
+      return line == null || !line.endsWith('\n')
+          ? line
+          : line.substring(0, line.length - 1);
     }
-    if (rest == null) return held.isEmpty ? null : decode(held);
-    final line = decode(held) + rest;
-    return line.endsWith('\n') ? line.substring(0, line.length - 1) : line;
+    // Held bytes may end inside a character: read the rest of the line as
+    // bytes too, and decode it once.
+    return _readLineBytes(this);
   }
 
   @override
@@ -191,13 +188,20 @@ Model? runModelSync(Program program, Model initial, {required String name}) {
     }
   } finally {
     // The same order as Program's shutdown: cook the terminal, reset its
-    // modes (showing the cursor), then end on a fresh line.
-    if (raw) program._setRawMode(false);
-    final altScreen = renderer.altScreenActive;
-    renderer.close();
-    if (!program._disableRenderer && !altScreen) program._output.writeln();
-    restoreStyle();
-    _closeSyncInput(input);
+    // modes (showing the cursor), then end on a fresh line. A failing write
+    // must not skip the rest.
+    try {
+      if (raw) program._setRawMode(false);
+    } finally {
+      try {
+        final altScreen = renderer.altScreenActive;
+        renderer.close();
+        if (!program._disableRenderer && !altScreen) program._output.writeln();
+      } finally {
+        restoreStyle();
+        _closeSyncInput(input);
+      }
+    }
   }
   if (interrupted) {
     final onExit = Zone.current[promptExitKey];
@@ -309,13 +313,20 @@ final class SyncPlainSession {
     final input = _input;
     if (input == null) return null;
     if (input is _StdinSyncInput) return input.readLine();
-    final bytes = <int>[];
-    String decode() => utf8.decode(bytes, allowMalformed: true);
-    while (true) {
-      final byte = input.readByte();
-      if (byte < 0) return bytes.isEmpty ? null : decode();
-      if (byte == 0x0a) return decode();
-      bytes.add(byte);
+    return _readLineBytes(input);
+  }
+}
+
+/// One line from [input]'s bytes, decoded once, without its newline; null at
+/// the end of input.
+String? _readLineBytes(SyncPromptInput input) {
+  final bytes = <int>[];
+  while (true) {
+    final byte = input.readByte();
+    if (byte < 0 && bytes.isEmpty) return null;
+    if (byte < 0 || byte == 0x0a) {
+      return utf8.decode(bytes, allowMalformed: true);
     }
+    bytes.add(byte);
   }
 }

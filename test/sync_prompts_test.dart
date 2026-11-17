@@ -252,6 +252,24 @@ void main() {
     }
   });
 
+  test('a write that fails while closing still restores the colour defaults',
+      () {
+    final before = Style.defaultProfile;
+    Style.defaultProfile = ColorProfile.ansi;
+    addTearDown(() => Style.defaultProfile = before);
+    final sink = _FailingSink('\x1b[?25h');
+    expect(
+      () => runZoned(
+        () => promptConfirmSync('Go?', options: [withOutput(sink)]),
+        zoneValues: {
+          syncPromptInputKey: _Keys(['y'])
+        },
+      ),
+      throwsA(isA<StateError>()),
+    );
+    expect(Style.defaultProfile, ColorProfile.ansi);
+  });
+
   group('promptSelectSync', () {
     test('arrows and Enter pick; an arrow is not a lone Esc', () {
       final r = _sync(
@@ -577,6 +595,42 @@ void main() {
       expect(text, contains('ASYNC_ANSWER=Ada'));
     });
 
+    test('an async prompt draining input after EOF still blocks a sync one',
+        () async {
+      final text = await probe('sync-busy-eof', 'Ada\nGrace\n');
+      expect(text, contains('SYNC_BUSY=Bad state: promptConfirmSync'));
+      expect(text, contains('ANSWERS=Ada|Grace'));
+    });
+
+    test('a character split between async and sync reads decodes whole',
+        () async {
+      final process = await Process.start(
+        Platform.resolvedExecutable,
+        ['run', 'tool/pty_program_probe.dart', 'sync-utf8-split'],
+      );
+      addTearDown(() => process.kill(ProcessSignal.sigkill));
+      final output = StringBuffer();
+      final firstDone = Completer<void>();
+      final stdoutDone = process.stdout.transform(utf8.decoder).forEach((t) {
+        output.write(t);
+        if ('$output'.contains('FIRST_DONE') && !firstDone.isCompleted) {
+          firstDone.complete();
+        }
+      });
+      final errors = process.stderr.transform(utf8.decoder).join();
+      // '€' is E2 82 AC: the first chunk ends after E2 82.
+      process.stdin.add([...utf8.encode('Ada\n'), 0xe2, 0x82]);
+      await process.stdin.flush();
+      await firstDone.future.timeout(const Duration(seconds: 30));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      process.stdin.add([0xac, ...utf8.encode('!\n')]);
+      await process.stdin.close();
+      expect(await process.exitCode.timeout(const Duration(seconds: 30)), 0,
+          reason: await errors);
+      await stdoutDone;
+      expect('$output', contains('ANSWERS=Ada|€!'));
+    });
+
     test('async and sync plain prompts share piped stdin in order', () async {
       final text = await probe('sync-plain-chain', 'Ada\nGrace\nHopper\n');
       expect(text, contains('ANSWERS=Ada|Grace|Hopper|null'));
@@ -596,4 +650,23 @@ final class _Hook implements ProgramTestHook {
   Model unwrap(Model model) => model;
   @override
   void detach(Program program) {}
+}
+
+/// Throws once [trigger] is written, like an output that closes mid-prompt.
+final class _FailingSink implements IOSink {
+  _FailingSink(this.trigger);
+  final String trigger;
+  final _text = StringBuffer();
+
+  @override
+  void write(Object? object) {
+    if ('$object'.contains(trigger)) throw StateError('output closed');
+    _text.write(object);
+  }
+
+  @override
+  void writeln([Object? object = '']) => write('$object\n');
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

@@ -123,6 +123,33 @@ Future<void> main(List<String> arguments) async {
     stdout.writeln('ASYNC_ANSWER=${await answer}');
     return;
   }
+  if (scenario == 'sync-busy-eof') {
+    // After stdin ends, an async prompt draining the held bytes still counts
+    // as a reader.
+    final plain = [withPlainMode(), withEnvironment(const {})];
+    final first = await promptInput('FIRST:', options: plain);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    final second = promptInput('SECOND:', options: plain);
+    try {
+      promptConfirmSync('SYNC?', options: plain);
+      stdout.writeln('SYNC_NOT_BUSY');
+    } on StateError catch (error) {
+      stdout.writeln('SYNC_BUSY=$error');
+    }
+    stdout.writeln('ANSWERS=$first|${await second}');
+    return;
+  }
+  if (scenario == 'sync-utf8-split') {
+    // The async prompt reads a chunk that ends inside a character; the sync
+    // prompt gets those bytes back and reads the rest from stdin.
+    final first = await promptInput('FIRST:',
+        options: [withPlainMode(), withEnvironment(const {})]);
+    stdout.writeln('FIRST_DONE');
+    final second = promptInputSync('SECOND:',
+        options: [withPlainMode(), withEnvironment(const {})]);
+    stdout.writeln('ANSWERS=$first|$second');
+    return;
+  }
   if (scenario == 'sync-plain-chain') {
     // An async plain prompt reads ahead; the sync ones get the rest.
     final plain = [withPlainMode(), withEnvironment(const {})];
@@ -263,6 +290,8 @@ final _scenarios = {
   'sync-after-program',
   'sync-busy',
   'sync-plain-chain',
+  'sync-busy-eof',
+  'sync-utf8-split',
   'logger-interleave',
   'logger-progress-end-complete',
   'logger-progress-end-fail',

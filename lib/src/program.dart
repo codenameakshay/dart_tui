@@ -89,10 +89,18 @@ final class _SharedStdin {
 
   Stream<List<int>> claim() {
     if (_closed) {
+      // Still a reader while it drains what is left, so [busy] sees it.
       final rest = _takePending();
-      return rest == null
-          ? const Stream<List<int>>.empty()
-          : Stream<List<int>>.value(rest);
+      late final StreamController<List<int>> leftover;
+      leftover = StreamController<List<int>>(
+        onListen: () {
+          _readers.add(leftover);
+          if (rest != null) leftover.add(rest);
+          unawaited(leftover.close());
+        },
+        onCancel: () => _readers.remove(leftover),
+      );
+      return leftover.stream;
     }
     late final StreamController<List<int>> reader;
     reader = StreamController<List<int>>(
@@ -525,23 +533,27 @@ final class Program {
   int _runs = 0;
 
   void _setRawMode(bool raw) {
+    // On Windows, lineMode/echoMode alone leave the console in legacy input
+    // mode, where arrow keys / Esc / Shift+Tab / mouse never reach the byte
+    // stream. On macOS/Linux they leave ISIG/IEXTEN/IXON set, so Ctrl+C/Z/\
+    // become signals. Finish raw mode here (and restore it when leaving raw
+    // mode). Each helper is a no-op on the other platforms.
+    //
+    // The Windows console mode is saved before echo and line input are
+    // turned off, and restored before they are turned back on, so the saved
+    // mode is the one the program started with.
+    if (raw) enableWindowsVtInput();
+    if (!raw) restoreWindowsVtInput();
     try {
       stdin.echoMode = !raw;
       stdin.lineMode = !raw;
     } on StdinException {
       // stdin is not a TTY (e.g. in tests or piped input) — ignore.
     }
-    // On Windows, lineMode/echoMode alone leave the console in legacy input
-    // mode, where arrow keys / Esc / Shift+Tab / mouse never reach the byte
-    // stream. On macOS/Linux they leave ISIG/IEXTEN/IXON set, so Ctrl+C/Z/\
-    // become signals. Finish raw mode here (and restore it when leaving raw
-    // mode). Each helper is a no-op on the other platforms.
     if (raw) {
-      enableWindowsVtInput();
       enablePosixRawInput();
     } else {
       restorePosixRawInput();
-      restoreWindowsVtInput();
     }
   }
 
