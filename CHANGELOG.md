@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 3.1.0 - 2026-11-18
+
+dart_tui now does CLIs: `CliRunner` with shell completions, a `Logger` with
+task lists and sync prompts, and spinner presets. Programs also run inline,
+detect colours, fall back to plain mode, and test with `testing.dart`.
 
 ### Features
 
