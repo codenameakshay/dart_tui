@@ -190,7 +190,8 @@ Future<String?> promptInput(
 /// Sync prompts only read the process stdin: `withInput(stream)` in [options]
 /// throws an [ArgumentError], and `withInput(null)` returns `null` at once.
 /// They throw a [StateError] while a [Program] or an async prompt reads stdin,
-/// so await it first. They run no commands and do not redraw on resize. A
+/// so await it first. They start no stdin reader, so they also work outside
+/// the main isolate. They run no commands and do not redraw on resize. A
 /// signal from outside (`kill`) during the prompt ends the process without
 /// restoring the terminal: there is no event loop to handle it.
 String? promptSelectSync(

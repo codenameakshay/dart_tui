@@ -102,7 +102,7 @@ final class _StdinSyncInput implements SyncPromptInput {
       'Use the async prompt to read a stream.',
     );
   }
-  program._checkStdinIsolate();
+  // No main-isolate check: a sync prompt starts no stdin reader (#45).
   if (_sharedStdin.busy) {
     throw StateError(
       '$name cannot run while a Program or an async prompt reads stdin: '
