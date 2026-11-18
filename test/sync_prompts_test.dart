@@ -147,34 +147,8 @@ Future<({Object? value, String out})> _async(
 const _esc = '\x1b';
 const _down = '\x1b[B';
 const _ctrlC = '\x03';
-final _hasPython3 = !Platform.isWindows &&
-    Process.runSync('sh', ['-c', 'command -v python3']).exitCode == 0;
 
-Future<void> main([List<String> args = const []]) async {
-  if (args.length == 1 && args.single == 'sync-worker-pipe') {
-    final answers = await Isolate.run(() {
-      final direct = promptInputSync('Name', options: [
-        withPlainMode(),
-        withOutput(CaptureSink()),
-      ]);
-      final logger = Logger(
-        stdout: CaptureSink(),
-        stderr: CaptureSink(),
-        environment: const {'ACCESSIBLE': '1'},
-      );
-      return [direct, logger.promptSync('Role?')];
-    });
-    stdout.writeln('WORKER_ANSWERS=${answers.join('|')}');
-    return;
-  }
-  if (args.length == 1 && args.single == 'sync-worker-ctrl-c') {
-    await Isolate.run(() => promptInputSync('Worker prompt?', options: [
-          withPlainMode(false),
-          withEnvironment(const {}),
-        ]));
-    return;
-  }
-
+void main() {
   test(
     'Windows raw-mode exit preserves the original echo setting',
     () async {
@@ -562,7 +536,9 @@ Future<void> main([List<String> args = const []]) async {
   });
 
   group('outside the main isolate', () {
-    test('reads overridden stdin outside the main isolate', () {
+    // package:test runs each test body in a non-main isolate. Sync prompts
+    // start no stdin reader, so the main-isolate rule does not apply (#45).
+    test('reads overridden stdin', () {
       expect(Isolate.current.debugName, isNot('main'));
       String? ask(List<String> lines) => IOOverrides.runZoned(
             () => promptInputSync('Name',
@@ -675,11 +651,10 @@ Future<void> main([List<String> args = const []]) async {
   });
 
   group('shared stdin (subprocess)', () {
-    Future<String> probe(String scenario, String input,
-        {String script = 'tool/pty_program_probe.dart'}) async {
+    Future<String> probe(String scenario, String input) async {
       final process = await Process.start(
         Platform.resolvedExecutable,
-        ['run', script, scenario],
+        ['run', 'tool/pty_program_probe.dart', scenario],
       );
       addTearDown(() => process.kill(ProcessSignal.sigkill));
       final output = process.stdout.transform(utf8.decoder).join();
@@ -747,38 +722,14 @@ Future<void> main([List<String> args = const []]) async {
       expect(text, contains('CLEANUP=Ada|Grace'));
     });
 
-    test('Isolate.run reads piped process stdin', () async {
-      final text = await probe('sync-worker-pipe', 'Ada\nEngineer\n',
-          script: 'test/sync_prompts_test.dart');
+    test('a worker isolate reads piped process stdin (#45)', () async {
+      final text = await probe('sync-worker-pipe', 'Ada\nEngineer\n');
       expect(text, contains('WORKER_ANSWERS=Ada|Engineer'));
     });
-
-    test('Isolate.run restores the PTY after Ctrl+C', () async {
-      const script = '''
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path("tool").resolve()))
-import pty_program_runtime_test as runtime
-runtime.PROBE = runtime.ROOT / "test" / "sync_prompts_test.dart"
-probe = runtime._Probe("sync-worker-ctrl-c")
-try:
-    probe.read_until(b"Worker prompt?")
-    prompt_at = bytes(probe.data).find(b"Worker prompt?")
-    probe.send(b"\\x03")
-    if probe.exit_code() != 130:
-        probe.fail(f"expected exit 130; output={bytes(probe.data)!r}")
-    runtime.ProgramRuntimePtyTest().assert_cooked_mode(probe)
-    if bytes(probe.data).rfind(b"\\x1b[?25h") <= prompt_at:
-        probe.fail(f"cursor was not restored; output={bytes(probe.data)!r}")
-finally:
-    probe.close()
-''';
-      final result = await Process.run('python3', ['-B', '-c', script]);
-      expect(result.exitCode, 0, reason: '${result.stdout}${result.stderr}');
-    }, skip: _hasPython3 ? false : 'requires python3');
   }, skip: Platform.isWindows ? 'the probe needs a Unix host' : false);
 }
 
+/// A piped stdin that answers [readLineSync] from [_lines].
 final class _PipedStdin implements Stdin {
   _PipedStdin(this._lines);
 

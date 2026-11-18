@@ -597,6 +597,16 @@ class ProgramRuntimePtyTest(unittest.TestCase):
         self._assert_cursor_shown(output)
         self.assert_cooked_mode(probe)
 
+    def test_sync_prompt_in_a_worker_isolate_ctrl_c_exits_130(self) -> None:
+        probe = self._probe("sync-worker-exit")
+        probe.read_until(b"SYNC_PROMPT")
+        probe.send(b"\x03")
+        self.assertEqual(probe.exit_code(), 130)
+        output = bytes(probe.data)
+        self.assertNotIn(b"SYNC_NOT_EXITED", output)
+        self._assert_cursor_shown(output)
+        self.assert_cooked_mode(probe)
+
     def test_logger_flow_in_the_terminal_ui(self) -> None:
         probe = self._probe("logger-flow")
         probe.read_until(b"Project name?")

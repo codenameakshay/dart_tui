@@ -4,9 +4,13 @@
 
 ### Fixes
 
-- **Sync prompts and `Logger` sync methods now work outside the main isolate
-  (#45).** Keep chained reads in one isolate, and do not let another isolate
-  read stdin or change terminal mode at the same time.
+- **Sync prompts work outside the main isolate.** `promptSelectSync`,
+  `promptMultiSelectSync`, `promptConfirmSync`, `promptInputSync` and the
+  `Logger` sync methods threw a `StateError` in any isolate other than
+  `main`, which includes every test under `package:test`. They start no stdin
+  reader, so the main-isolate rule for `Program` does not apply to them (#45).
+  The `StateError` guard sees only readers in the same isolate: do not let
+  another isolate read stdin or change the terminal mode during a prompt.
 
 ## 3.1.0 - 2026-11-18
 
@@ -31,11 +35,10 @@ detect colours, fall back to plain mode, and test with `testing.dart`.
   of input returns `null`. Limits: no Cmds run, no spinner, no redraw on
   resize, only the process stdin (`withInput(stream)` throws `ArgumentError`,
   `withInput(null)` returns `null` at once), `StateError` while a `Program` or
-  an async prompt in the same isolate reads stdin, or under `TuiTester` in that
-  isolate, and a signal from outside during a prompt ends the process without
-  restoring the terminal. The `Logger` in `package:dart_tui/cli.dart` gains
-  `promptSync`, `promptAnySync`, `confirmSync`, `chooseOneSync` and
-  `chooseAnySync`, with the parameters and
+  an async prompt reads stdin and under `TuiTester`, and a signal from outside
+  during a prompt ends the process without restoring the terminal. `Logger` in
+  `package:dart_tui/cli.dart` gains `promptSync`, `promptAnySync`,
+  `confirmSync`, `chooseOneSync` and `chooseAnySync`, with the parameters and
   return types of mason_logger's methods, so moving from mason_logger is a
   rename with no `await`. A `Logger` with a custom `stdin:` stream throws
   `StateError` from them. Use them to migrate existing synchronous code; write
