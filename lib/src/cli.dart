@@ -99,6 +99,10 @@ abstract interface class _Live {
 /// twin ([promptSync], [promptAnySync], [confirmSync], [chooseOneSync],
 /// [chooseAnySync]) for code that is already synchronous.
 ///
+/// Sync prompts work in any isolate, but their stdin guard only checks the
+/// calling isolate. Do not let another isolate read stdin or change terminal
+/// mode at the same time (see [promptSelectSync]).
+///
 /// Cancelling a prompt (Esc or Ctrl+C in the TUI) exits the process with
 /// code 130, as `mason_logger` does on Ctrl+C. When input ends in plain
 /// mode, the prompt returns its default instead.

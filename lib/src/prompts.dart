@@ -187,13 +187,19 @@ Future<String?> promptInput(
 /// [promptSelect], read with `stdin.readLineSync`; the end of input returns
 /// `null`.
 ///
-/// Sync prompts only read the process stdin: `withInput(stream)` in [options]
-/// throws an [ArgumentError], and `withInput(null)` returns `null` at once.
-/// They throw a [StateError] while a [Program] or an async prompt reads stdin,
-/// so await it first. They start no stdin reader, so they also work outside
-/// the main isolate. They run no commands and do not redraw on resize. A
-/// signal from outside (`kill`) during the prompt ends the process without
-/// restoring the terminal: there is no event loop to handle it.
+/// Sync prompts use only process stdin (`withInput(stream)` in [options]
+/// throws an [ArgumentError], and `withInput(null)` returns `null`) and work
+/// in any isolate. Keep chained reads in one isolate because read-ahead and
+/// EOF state stay there.
+///
+/// Sync prompts throw a [StateError] if a [Program] or async prompt in the
+/// same isolate owns stdin. Do not let another isolate read stdin or change
+/// terminal mode at the same time, or the prompt can lose input or leave the
+/// terminal in the wrong mode.
+///
+/// They run no commands and do not redraw on resize. A signal from outside
+/// (`kill`) during the prompt ends the process without restoring the terminal:
+/// there is no event loop to handle it.
 String? promptSelectSync(
   List<String> choices, {
   List<ProgramOption> options = const [],
