@@ -13,5 +13,5 @@ export const siteConfig = {
   url: "https://dart-tui.vercel.app",
   github: "https://github.com/codenameakshay/dart_tui",
   pub: "https://pub.dev/packages/dart_tui",
-  version: "3.1.0",
+  version: "3.1.1",
 };

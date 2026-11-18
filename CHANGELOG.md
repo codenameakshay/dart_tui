@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.1.1 - 2026-11-18
+
+### Fixes
+
+- **Sync prompts work outside the main isolate.** `promptSelectSync`,
+  `promptMultiSelectSync`, `promptConfirmSync`, `promptInputSync` and the
+  `Logger` sync methods threw a `StateError` in any isolate other than
+  `main`, which includes every test under `package:test`. They start no stdin
+  reader, so the main-isolate rule for `Program` does not apply to them (#45).
+
 ## 3.1.0 - 2026-11-18
 
 dart_tui now does CLIs: `CliRunner` with shell completions, a `Logger` with
