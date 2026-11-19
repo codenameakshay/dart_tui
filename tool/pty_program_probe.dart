@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:dart_tui/cli.dart';
 import 'package:dart_tui/dart_tui.dart';
@@ -122,6 +123,26 @@ Future<void> main(List<String> arguments) async {
   if (scenario == 'sync-exit') {
     // Ctrl+C with the real exit: the process ends with code 130.
     promptSelectSync(const ['SYNC_A', 'SYNC_B'], title: 'SYNC_PROMPT');
+    stdout.writeln('SYNC_NOT_EXITED');
+    return;
+  }
+  if (scenario == 'sync-worker-pipe') {
+    // Sync prompts in a worker isolate read the real piped stdin (#45).
+    final answers = await Isolate.run(() {
+      final plain = [withPlainMode(), withEnvironment(const {})];
+      final logger = Logger(environment: const {'ACCESSIBLE': '1'});
+      return [
+        promptInputSync('NAME:', options: plain),
+        logger.promptSync('ROLE:')
+      ];
+    });
+    stdout.writeln('WORKER_ANSWERS=${answers.join('|')}');
+    return;
+  }
+  if (scenario == 'sync-worker-exit') {
+    // Ctrl+C in a worker isolate still exits the process with code 130.
+    await Isolate.run(() =>
+        promptSelectSync(const ['SYNC_A', 'SYNC_B'], title: 'SYNC_PROMPT'));
     stdout.writeln('SYNC_NOT_EXITED');
     return;
   }
@@ -324,6 +345,8 @@ final _scenarios = {
   for (final kind in ['confirm', 'select', 'multi', 'input'])
     for (final suffix in ['', '-ctrl-c']) 'sync-tui-$kind$suffix',
   'sync-exit',
+  'sync-worker-pipe',
+  'sync-worker-exit',
   'sync-after-program',
   'sync-busy',
   'sync-plain-chain',

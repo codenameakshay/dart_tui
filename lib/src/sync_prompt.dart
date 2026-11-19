@@ -83,9 +83,9 @@ final class _StdinSyncInput implements SyncPromptInput {
 /// Opens the input for a sync prompt that [program] describes, or returns
 /// null when it has no input (`withInput(null)`).
 ///
-/// Throws a [StateError] while a [Program] or an async prompt reads stdin, or
-/// under `TuiTester`, and an [ArgumentError] for `withInput(stream)`: a stream
-/// cannot be read synchronously.
+/// Throws a [StateError] while a [Program] or an async prompt in this isolate
+/// owns stdin, or under `TuiTester`. Throws an [ArgumentError] for
+/// `withInput(stream)`: a stream cannot be read synchronously.
 (SyncPromptInput, bool)? _openSyncInput(Program program, String name) {
   final injected = Zone.current[syncPromptInputKey];
   if (injected is SyncPromptInput) return (injected, false);
@@ -102,7 +102,6 @@ final class _StdinSyncInput implements SyncPromptInput {
       'Use the async prompt to read a stream.',
     );
   }
-  program._checkStdinIsolate();
   if (_sharedStdin.busy) {
     throw StateError(
       '$name cannot run while a Program or an async prompt reads stdin: '

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:dart_tui/cli.dart';
 import 'package:dart_tui/dart_tui.dart';
@@ -534,6 +535,21 @@ void main() {
     });
   });
 
+  group('outside the main isolate', () {
+    // package:test runs each test body in a non-main isolate. Sync prompts
+    // start no stdin reader, so the main-isolate rule does not apply (#45).
+    test('reads overridden stdin', () {
+      expect(Isolate.current.debugName, isNot('main'));
+      String? ask(List<String> lines) => IOOverrides.runZoned(
+            () => promptInputSync('Name',
+                options: [withPlainMode(), withOutput(CaptureSink())]),
+            stdin: () => _PipedStdin(lines),
+          );
+      expect(ask(['Ada\n']), 'Ada');
+      expect(ask([]), isNull);
+    });
+  });
+
   group('Logger', () {
     Logger logger({Map<String, String> env = const {}, CaptureSink? out}) =>
         Logger(
@@ -705,7 +721,32 @@ void main() {
       final text = await probe('sync-cleanup-failure', 'Ada\nyGrace\n');
       expect(text, contains('CLEANUP=Ada|Grace'));
     });
+
+    test('a worker isolate reads piped process stdin (#45)', () async {
+      final text = await probe('sync-worker-pipe', 'Ada\nEngineer\n');
+      expect(text, contains('WORKER_ANSWERS=Ada|Engineer'));
+    });
   }, skip: Platform.isWindows ? 'the probe needs a Unix host' : false);
+}
+
+/// A piped stdin that answers [readLineSync] from [_lines].
+final class _PipedStdin implements Stdin {
+  _PipedStdin(this._lines);
+
+  final List<String> _lines;
+
+  @override
+  bool get hasTerminal => false;
+
+  @override
+  String? readLineSync({
+    Encoding encoding = systemEncoding,
+    bool retainNewlines = false,
+  }) =>
+      _lines.isEmpty ? null : _lines.removeAt(0);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 final class _Hook implements ProgramTestHook {
