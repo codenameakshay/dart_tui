@@ -1,5 +1,19 @@
 # Changelog
 
+## 3.2.0 - 2026-11-19
+
+### Changes
+
+- **Answered sync prompts draw compact frames.** On an interactive terminal,
+  `promptSelectSync`, `promptMultiSelectSync`, `promptConfirmSync` and
+  `promptInputSync` collapse to one line with the answer. Esc cancels without
+  replacing the full prompt with an answer summary. Plain mode still uses
+  line-based questions. The summary can be truncated to the terminal width.
+- **Single-choice navigation wraps in compact prompts.** Arrow navigation
+  wraps only in interactive `promptSelectSync`, `Logger.chooseOne` and
+  `Logger.chooseOneSync`. Bare `promptSelect` and the multi-select prompts
+  still stop at the ends.
+
 ## 3.1.1 - 2026-11-18
 
 ### Fixes

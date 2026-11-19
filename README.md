@@ -626,9 +626,15 @@ final result  = await spin(fetchData(), label: 'Loading…'); // spinner while a
 await pager(longText);                                       // scrollable viewer (q/Esc to exit)
 ```
 
-All prompts and `filter` return `null` when cancelled with `Esc` / `Ctrl+C`.
+Async one-shot prompts and `filter` return `null` when cancelled with `Esc` or `Ctrl+C`.
 
-For code that is already synchronous (helpers that wrap `prompts` or `interact`), `promptSelectSync`, `promptMultiSelectSync`, `promptConfirmSync` and `promptInputSync` take the same parameters and return the value with no `Future`. Esc returns `null`, Ctrl+C exits with code 130. They read only the process stdin and run no Cmds, so use the async prompts in new code. The raw path on Windows is checked by CI unit tests only, not in an interactive console.
+Use `promptSelectSync`, `promptMultiSelectSync`, `promptConfirmSync` and `promptInputSync` in code that is already synchronous, such as wrappers for `prompts` or `interact`. They take the same parameters as the async prompts and return values directly, not a `Future`.
+
+On an interactive terminal, an answered sync prompt collapses to one line. Esc cancels without replacing the full prompt with an answer summary. Plain mode keeps its line-based questions. The summary can be truncated to the terminal width.
+
+Arrow navigation wraps only at the ends of interactive `promptSelectSync`, `Logger.chooseOne` and `Logger.chooseOneSync` prompts. `promptSelect`, `promptMultiSelect` and `promptMultiSelectSync` stop at the ends. Sync prompts return `null` for Esc. On a terminal, Ctrl+C in a sync prompt restores the terminal and exits with code 130.
+
+Sync prompts read only the process stdin and run no Cmds. Use the async prompts in new code. Windows raw mode is checked by CI unit tests only, not in an interactive console.
 
 ### CLI logger (mason_logger-shaped)
 
@@ -651,7 +657,7 @@ if (await logger.confirm('Create $name?', defaultValue: true)) {
 }
 ```
 
-Esc or Ctrl+C exits with code 130. When input ends in plain mode, every prompt returns its default. To stay synchronous like mason_logger, use the twins `promptSync`, `promptAnySync`, `confirmSync`, `chooseOneSync` and `chooseAnySync`: the migration is a rename with no `await`. See the [migration guide](https://dart-tui.vercel.app/guides/migrating-from-mason-logger) for every difference from mason_logger, and for how interact and prompts calls map to dart_tui.
+On a terminal, Esc or Ctrl+C exits with code 130. When input ends in plain mode, every prompt returns its default. To stay synchronous like mason_logger, use the twins `promptSync`, `promptAnySync`, `confirmSync`, `chooseOneSync` and `chooseAnySync`: the migration is a rename with no `await`. See the [migration guide](https://dart-tui.vercel.app/guides/migrating-from-mason-logger) for every difference from mason_logger, and for how interact and prompts calls map to dart_tui.
 
 ![cli_logger](https://dart-tui.vercel.app/gifs/cli_logger.gif)
 
