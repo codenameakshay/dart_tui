@@ -313,6 +313,13 @@ void main() {
         }
         expect(error, 130);
         final out = sink.text;
+        if (name == 'select') {
+          final finalFrame =
+              plainScreen(out.substring(out.lastIndexOf('Choose one')));
+          expect(
+              finalFrame, contains('↑/↓ navigate, Enter confirm, Esc cancel'));
+          expect(finalFrame, isNot(contains('Choose one a')));
+        }
         // The cursor is shown again after it was hidden, on a fresh line.
         expect(out.lastIndexOf('\x1b[?25h'),
             greaterThan(out.lastIndexOf('\x1b[?25l')));
@@ -361,25 +368,53 @@ void main() {
               keys)
           .value;
       expect(pick([_up, '\r']), 'c');
+      expect(pick(['k', '\r']), 'c');
       expect(pick([_down, '\r'], initial: 2), 'a');
+      expect(pick(['j', '\r'], initial: 2), 'a');
+      expect(pick(['\r'], initial: -1), 'a');
+      expect(pick(['\r'], initial: 99), 'c');
+      expect(pick([_up, '\r'], initial: -1), 'c');
+      expect(pick([_down, '\r'], initial: 99), 'a');
+      for (final key in [_up, _down, 'k', 'j']) {
+        expect(
+          _sync((o) => promptSelectSync(['only'], options: o), [key, '\r'])
+              .value,
+          'only',
+        );
+      }
     });
 
     test('the answered prompt collapses to one line', () {
-      final out =
-          _sync((o) => promptSelectSync(['a', 'b'], options: o), [_down, '\r'])
-              .out;
-      final last = out.substring(out.lastIndexOf('Choose one'));
-      expect(last, contains('b'));
-      expect(last, isNot(contains('navigate')));
+      final out = _sync(
+        (o) => promptSelectSync(['a', 'b'], options: o),
+        [_down, '\r'],
+      ).out;
+      final summary = plainScreen(out.substring(out.lastIndexOf('Choose one')));
+      expect(summary.trimRight().split('\n'), ['Choose one b']);
     });
 
-    test('the async promptSelect keeps full frames and does not wrap',
+    test('compact navigation wraps while bare async navigation clamps',
         () async {
-      final r = await _async(
-          (o) => promptSelect(['a', 'b', 'c'], options: o), [_up, '\r']);
-      expect(r.value, 'a');
-      expect(r.out.substring(r.out.lastIndexOf('Choose one')),
-          contains('navigate'));
+      for (final (initial, key, compactValue, asyncValue) in [
+        (0, _up, 'c', 'a'),
+        (2, _down, 'a', 'c'),
+      ]) {
+        final compact = _sync(
+          (o) =>
+              promptSelectSync(['a', 'b', 'c'], initial: initial, options: o),
+          [key, '\r'],
+        );
+        final full = await _async(
+          (o) => promptSelect(['a', 'b', 'c'], initial: initial, options: o),
+          [key, '\r'],
+        );
+        expect(compact.value, compactValue);
+        expect(full.value, asyncValue);
+        expect(
+          plainScreen(full.out.substring(full.out.lastIndexOf('Choose one'))),
+          contains('↑/↓ navigate, Enter confirm, Esc cancel'),
+        );
+      }
     });
 
     test('empty choices return null without reading', () {
@@ -405,6 +440,23 @@ void main() {
       expect(all.value, ['a', 'b', 'c']);
     });
 
+    test('navigation stays clamped at both ends', () {
+      final low = _sync(
+        (o) => promptMultiSelectSync(['a', 'b'], options: o),
+        ['k', ' ', '\r'],
+      );
+      final high = _sync(
+        (o) => promptMultiSelectSync(['a', 'b'], options: o),
+        ['j', 'j', ' ', '\r'],
+      );
+      expect(low.value, ['a']);
+      expect(high.value, ['b']);
+      expect(
+          plainScreen(high.out.substring(high.out.lastIndexOf('Choose any')))
+              .trimRight(),
+          'Choose any [b]');
+    });
+
     test('Enter keeps initial; empty choices return []', () {
       expect(
           _sync(
@@ -417,6 +469,22 @@ void main() {
   });
 
   group('promptInputSync', () {
+    test('answered summaries keep CRLF and bare line breaks on one line', () {
+      for (final lineBreak in ['\r\n', '\r', '\n']) {
+        final title = 'Name${lineBreak}field';
+        final answer = 'Ada${lineBreak}Lovelace';
+        final result = _sync(
+            (o) => promptInputSync(title, defaultValue: answer, options: o),
+            ['\r']);
+        expect(result.value, answer);
+        expect(
+          plainScreen(result.out.substring(result.out.lastIndexOf('Name')))
+              .trimRight(),
+          'Name field Ada Lovelace',
+        );
+      }
+    });
+
     test('typing, backspace and a multi-byte character', () {
       final r = _sync((o) => promptInputSync('Name', options: o),
           ['A', 'd', 'x', '\x7f', 'é', '😀', '\r']);
@@ -609,17 +677,23 @@ void main() {
       expect(
           keys(['\r'], () => l.confirmSync('Go?', defaultValue: true)), isTrue);
       expect(
-          keys(
-              [_down, '\r'],
-              () =>
-                  l.chooseOneSync('Pick', choices: [1, 2, 3], defaultValue: 2)),
-          3);
+        keys(
+          [_down, '\r'],
+          () => l.chooseOneSync(
+            'Pick',
+            choices: [1, 2, 3],
+            defaultValue: 2,
+            display: (_) => 'same',
+          ),
+        ),
+        3,
+      );
       expect(
           keys(
-              [' ', '\r'],
+              [' ', 'j', ' ', '\r'],
               () => l.chooseAnySync('Any',
-                  choices: ['x', 'y'], defaultValues: ['y'])),
-          ['x', 'y']);
+                  choices: [1, 2], defaultValues: [1], display: (_) => 'same')),
+          [2]);
       // An answered prompt collapses to one line, as in the async Logger.
       expect(out.text, contains('Go?'));
       expect(out.text, contains('Yes'));

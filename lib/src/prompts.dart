@@ -16,8 +16,9 @@ import 'view.dart';
 /// it asks a plain line question and writes no escape codes. The end of input
 /// cancels, like Esc.
 
-/// Internal Logger zone key. `true` enables compact answered frames; a
-/// `void Function(List<int>)` also receives the selected indexes.
+/// Internal Logger zone key. `true` enables compact answered frames for
+/// interactive async prompts; a `void Function(List<int>)` also receives
+/// selected indexes for async and sync prompts.
 final Object promptSummaryKey = Object();
 
 Object? get _summaryValue => Zone.current[promptSummaryKey];
@@ -31,8 +32,12 @@ void _reportSelection(List<int> indexes) {
 }
 
 String _answered(String title, String answer) {
-  final shown = const Style(foreground256: 14, isDim: true).render(answer);
-  return title.isEmpty ? shown : '$title $shown';
+  final lineBreaks = RegExp(r'\r\n|[\r\n]');
+  String oneLine(String text) => text.replaceAll(lineBreaks, ' ');
+  final oneLineTitle = oneLine(title);
+  final shown =
+      const Style(foreground256: 14, isDim: true).render(oneLine(answer));
+  return oneLineTitle.isEmpty ? shown : '$oneLineTitle $shown';
 }
 
 /// Single-choice list; returns the selected string, or `null` if cancelled.
@@ -173,23 +178,20 @@ Future<String?> promptInput(
 
 // Sync prompts.
 //
-// Each one uses the same model and view as its async twin, in the compact
-// style of the `Logger` prompts, but blocks: it reads with
-// `stdin.readByteSync` in raw mode and returns a value, not a Future. They are for code that is already synchronous (helpers
-// that wrap `prompts`, `interact` or mason_logger); new code should use the
-// async prompts.
+// Each uses its async twin's model and view, but blocks on process stdin in
+// raw mode. These are for synchronous wrappers; new code should use async
+// prompts.
 
 /// Like [promptSelect], but blocks until the user answers and returns the
 /// value, not a [Future].
 ///
-/// It draws the same frames as a `Logger` prompt: once answered, the prompt
-/// collapses to one line with the answer, and in a list the arrow keys wrap
-/// from the last choice to the first.
+/// In interactive mode, once answered, the prompt collapses to one line with
+/// the answer. Arrow keys and `k`/`j` wrap from either end of the list.
 ///
-/// Esc returns `null`. Ctrl+C restores the terminal, then exits the process
-/// with code 130. In plain mode it asks the same numbered question as
-/// [promptSelect], read with `stdin.readLineSync`; the end of input returns
-/// `null`.
+/// Esc cancels, keeps the full prompt frame, and returns `null`. Ctrl+C
+/// restores the terminal, then exits the process with code 130. In plain mode
+/// it asks the same numbered question as [promptSelect], then reads the answer
+/// with `stdin.readLineSync`; end of input cancels.
 ///
 /// Sync prompts use only process stdin (`withInput(stream)` in [options]
 /// throws an [ArgumentError], and `withInput(null)` returns `null`) and work
@@ -239,10 +241,11 @@ String? promptSelectSync(
 }
 
 /// Like [promptMultiSelect], but blocks until the user answers and returns
-/// the value, not a [Future]. Once answered, it collapses to one line, like
-/// [promptSelectSync].
+/// the value, not a [Future]. Once answered, the interactive prompt collapses
+/// to one line, like [promptSelectSync].
 ///
-/// Esc returns `null`; Ctrl+C restores the terminal and exits with code 130.
+/// Esc cancels, keeps the full prompt frame, and returns `null`; Ctrl+C
+/// restores the terminal and exits with code 130.
 /// See [promptSelectSync] for plain mode and the limits.
 List<String>? promptMultiSelectSync(
   List<String> choices, {
@@ -286,10 +289,11 @@ List<String>? promptMultiSelectSync(
 }
 
 /// Like [promptConfirm], but blocks until the user answers and returns the
-/// value, not a [Future]. Once answered, it collapses to one line, like
-/// [promptSelectSync].
+/// value, not a [Future]. Once answered, the interactive prompt collapses to
+/// one line, like [promptSelectSync].
 ///
-/// Esc returns `null`; Ctrl+C restores the terminal and exits with code 130.
+/// Esc cancels, keeps the full prompt frame, and returns `null`; Ctrl+C
+/// restores the terminal and exits with code 130.
 /// See [promptSelectSync] for plain mode and the limits.
 bool? promptConfirmSync(
   String question, {
@@ -314,11 +318,13 @@ bool? promptConfirmSync(
 }
 
 /// Like [promptInput], but blocks until the user answers and returns the
-/// value, not a [Future]. Once answered, it collapses to one line, like
-/// [promptSelectSync]; with [hidden] it shows `•` for each character and
-/// never echoes the answer.
+/// value, not a [Future]. Once answered, the interactive prompt collapses to
+/// one line, like [promptSelectSync]. With [hidden], it shows `•` for each
+/// character while typing and `******` on completion; plain mode does not
+/// echo the answer.
 ///
-/// Esc returns `null`; Ctrl+C restores the terminal and exits with code 130.
+/// Esc cancels, keeps the full prompt frame, and returns `null`; Ctrl+C
+/// restores the terminal and exits with code 130.
 /// See [promptSelectSync] for plain mode and the limits.
 String? promptInputSync(
   String label, {
