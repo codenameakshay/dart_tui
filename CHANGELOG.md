@@ -4,14 +4,15 @@
 
 ### Changes
 
-- **Sync prompts draw compact frames.** Once answered, `promptSelectSync`,
-  `promptMultiSelectSync`, `promptConfirmSync` and `promptInputSync` collapse
-  to one line with the answer, like the `Logger` prompts. Before, the whole
-  list and the key help line stayed in the scrollback.
-- **The arrow keys wrap in compact select lists.** In `promptSelectSync`,
-  `Logger.chooseOne` and `Logger.chooseOneSync`, Up on the first choice moves
-  to the last and Down on the last moves to the first, as in mason_logger and
-  interact. `promptSelect` keeps its full frames and does not wrap.
+- **Answered sync prompts draw compact frames.** On an interactive terminal,
+  `promptSelectSync`, `promptMultiSelectSync`, `promptConfirmSync` and
+  `promptInputSync` collapse to one line with the answer. Esc cancels without
+  replacing the full prompt with an answer summary. Plain mode still uses
+  line-based questions. The summary can be truncated to the terminal width.
+- **Single-choice navigation wraps in compact prompts.** Arrow navigation
+  wraps only in interactive `promptSelectSync`, `Logger.chooseOne` and
+  `Logger.chooseOneSync`. Bare `promptSelect` and the multi-select prompts
+  still stop at the ends.
 
 ## 3.1.1 - 2026-11-18
 

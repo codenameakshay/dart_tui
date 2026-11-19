@@ -71,7 +71,7 @@ final regions = values?.get<List<String>>('regions');`,
     featured: true,
     tagline: "One-shot promptSelect / promptConfirm / promptInput.",
     description:
-      "Self-contained, one-shot flows built on `Program` — no model to write. Each returns a `Future` and accepts a `options` list so it can be scripted or tested headlessly. All return `null` when cancelled with `Esc`/`Ctrl+C`.",
+      "Self-contained one-shot async flows built on `Program`. They need no model to write. Each returns a `Future` and accepts an `options` list, so you can script or test it headlessly. Async prompts return `null` when the user cancels with `Esc` or `Ctrl+C`.",
     gif: "prompts_chain.gif",
     snippets: [
       {
@@ -101,7 +101,7 @@ print('Hello, \$name!');`,
       { type: "heading", text: "Sync prompts" },
       {
         type: "prose",
-        md: "`promptSelectSync`, `promptMultiSelectSync`, `promptConfirmSync` and `promptInputSync` take the same parameters as the async prompts and return the value itself, not a `Future`. They use the same models and views, in the compact style of the `Logger` prompts: once answered, a prompt collapses to one line with the answer, and the arrow keys in a list wrap from the last choice to the first. Use them in code that is already synchronous, so you can switch to dart_tui by changing only your helper functions and no call chain has to become `async`. Examples are helpers that wrap the `prompts` package (`get`, `getBool`, `choose`) or interact's `Confirm` and `Select` (`.interact()`), and mason_logger's sync prompts.",
+        md: "`promptSelectSync`, `promptMultiSelectSync`, `promptConfirmSync` and `promptInputSync` take the same parameters as the async prompts and return values directly, not a `Future`. Use them in code that already calls `prompts`, `interact` or mason_logger synchronously. On an interactive terminal, an answered sync prompt collapses to one line. Esc cancels without replacing the full prompt with an answer summary. Plain mode keeps its line-based questions. The summary can be truncated to the terminal width. Arrow navigation wraps only at the ends of interactive `promptSelectSync`, `Logger.chooseOne` and `Logger.chooseOneSync` prompts. `promptSelect` and the multi-select prompts stop at the ends. Use async prompts in new code.",
       },
       {
         type: "prose",
@@ -130,7 +130,7 @@ void main() {
       },
       {
         type: "table",
-        headers: ["Event", "Sync prompts", "Async prompts"],
+        headers: ["Event", "Sync prompts", "Async one-shot prompts"],
         rows: [
           ["Esc", "Returns `null`.", "Returns `null`."],
           ["Ctrl+C", "Restores the terminal, then exits the process with code 130.", "Returns `null`."],
@@ -157,7 +157,7 @@ void main() {
       {
         type: "callout",
         variant: "note",
-        md: "`Logger` in `package:dart_tui/cli.dart` has thin wrappers: `promptSync`, `promptAnySync`, `confirmSync`, `chooseOneSync` and `chooseAnySync`. They match mason_logger's methods, so moving from mason_logger is a rename with no `await`. Esc or Ctrl+C exits with code 130. A `Logger` built with a custom `stdin:` stream throws `StateError` from them.",
+        md: "`Logger` in `package:dart_tui/cli.dart` has wrappers: `promptSync`, `promptAnySync`, `confirmSync`, `chooseOneSync` and `chooseAnySync`. They match mason_logger's methods, so moving from mason_logger is a rename with no `await`. On a terminal, `Logger` prompts exit with code 130 for Esc or Ctrl+C. A `Logger` built with a custom `stdin:` stream throws `StateError` from the sync methods.",
       },
       {
         type: "callout",
