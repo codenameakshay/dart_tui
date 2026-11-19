@@ -628,7 +628,7 @@ await pager(longText);                                       // scrollable viewe
 
 All prompts and `filter` return `null` when cancelled with `Esc` / `Ctrl+C`.
 
-For code that is already synchronous (helpers that wrap `prompts` or `interact`), `promptSelectSync`, `promptMultiSelectSync`, `promptConfirmSync` and `promptInputSync` take the same parameters and return the value with no `Future`. Esc returns `null`, Ctrl+C exits with code 130. They read only the process stdin and run no Cmds, so use the async prompts in new code. The raw path on Windows is checked by CI unit tests only, not in an interactive console.
+For code that is already synchronous (helpers that wrap `prompts` or `interact`), `promptSelectSync`, `promptMultiSelectSync`, `promptConfirmSync` and `promptInputSync` take the same parameters and return the value with no `Future`. Once answered, a sync prompt collapses to one line with the answer, and the arrow keys in a list wrap at the ends. Esc returns `null`, Ctrl+C exits with code 130. They read only the process stdin and run no Cmds, so use the async prompts in new code. The raw path on Windows is checked by CI unit tests only, not in an interactive console.
 
 ### CLI logger (mason_logger-shaped)
 

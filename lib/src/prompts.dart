@@ -173,14 +173,18 @@ Future<String?> promptInput(
 
 // Sync prompts.
 //
-// Each one draws the same frames as its async twin (the same model and view)
-// but blocks: it reads with `stdin.readByteSync` in raw mode and returns a
-// value, not a Future. They are for code that is already synchronous (helpers
+// Each one uses the same model and view as its async twin, in the compact
+// style of the `Logger` prompts, but blocks: it reads with
+// `stdin.readByteSync` in raw mode and returns a value, not a Future. They are for code that is already synchronous (helpers
 // that wrap `prompts`, `interact` or mason_logger); new code should use the
 // async prompts.
 
 /// Like [promptSelect], but blocks until the user answers and returns the
-/// value, not a [Future]. It draws the same frames.
+/// value, not a [Future].
+///
+/// It draws the same frames as a `Logger` prompt: once answered, the prompt
+/// collapses to one line with the answer, and in a list the arrow keys wrap
+/// from the last choice to the first.
 ///
 /// Esc returns `null`. Ctrl+C restores the terminal, then exits the process
 /// with code 130. In plain mode it asks the same numbered question as
@@ -224,7 +228,7 @@ String? promptSelectSync(
       choices: choices,
       title: title,
       cursor: start ?? 0,
-      summary: _summary,
+      summary: true,
     ),
     name: 'promptSelectSync',
   );
@@ -235,7 +239,8 @@ String? promptSelectSync(
 }
 
 /// Like [promptMultiSelect], but blocks until the user answers and returns
-/// the value, not a [Future]. It draws the same frames.
+/// the value, not a [Future]. Once answered, it collapses to one line, like
+/// [promptSelectSync].
 ///
 /// Esc returns `null`; Ctrl+C restores the terminal and exits with code 130.
 /// See [promptSelectSync] for plain mode and the limits.
@@ -271,7 +276,7 @@ List<String>? promptMultiSelectSync(
             MultiSelectItem(label: c, selected: initial.contains(i)),
         ],
       ),
-      summary: _summary,
+      summary: true,
     ),
     name: 'promptMultiSelectSync',
   );
@@ -281,7 +286,8 @@ List<String>? promptMultiSelectSync(
 }
 
 /// Like [promptConfirm], but blocks until the user answers and returns the
-/// value, not a [Future]. It draws the same frames.
+/// value, not a [Future]. Once answered, it collapses to one line, like
+/// [promptSelectSync].
 ///
 /// Esc returns `null`; Ctrl+C restores the terminal and exits with code 130.
 /// See [promptSelectSync] for plain mode and the limits.
@@ -300,7 +306,7 @@ bool? promptConfirmSync(
     _ConfirmPromptModel(
       question: question,
       defaultValue: defaultValue,
-      summary: _summary,
+      summary: true,
     ),
     name: 'promptConfirmSync',
   );
@@ -308,8 +314,9 @@ bool? promptConfirmSync(
 }
 
 /// Like [promptInput], but blocks until the user answers and returns the
-/// value, not a [Future]. It draws the same frames; with [hidden] it shows
-/// `•` for each character and never echoes the answer.
+/// value, not a [Future]. Once answered, it collapses to one line, like
+/// [promptSelectSync]; with [hidden] it shows `•` for each character and
+/// never echoes the answer.
 ///
 /// Esc returns `null`; Ctrl+C restores the terminal and exits with code 130.
 /// See [promptSelectSync] for plain mode and the limits.
@@ -333,7 +340,7 @@ String? promptInputSync(
       label: label,
       hidden: hidden,
       defaultValue: defaultValue,
-      summary: _summary,
+      summary: true,
     ),
     name: 'promptInputSync',
   );
@@ -353,6 +360,9 @@ final class _SelectPromptModel extends Model implements OutcomeModel<String> {
   final String title;
   final int cursor;
   final int? result;
+
+  /// The compact `Logger` style: the answered prompt collapses to one line,
+  /// and the cursor wraps at the ends of the list.
   final bool summary;
 
   /// The picked index; [outcome] is its label.
@@ -374,19 +384,16 @@ final class _SelectPromptModel extends Model implements OutcomeModel<String> {
   (Model, Cmd?) update(Msg msg) {
     if (msg is WindowSizeMsg || msg is TickMsg) return (this, null);
     if (msg is! KeyMsg) return (this, null);
+    final last = choices.length - 1;
     switch (msg.key) {
       case 'up':
       case 'k':
-        return (_copy(cursor: _c > 0 ? _c - 1 : 0, result: result), null);
+        final up = _c > 0 ? _c - 1 : (summary ? last : 0);
+        return (_copy(cursor: up, result: result), null);
       case 'down':
       case 'j':
-        return (
-          _copy(
-            cursor: _c < choices.length - 1 ? _c + 1 : choices.length - 1,
-            result: result,
-          ),
-          null,
-        );
+        final down = _c < last ? _c + 1 : (summary ? 0 : last);
+        return (_copy(cursor: down, result: result), null);
       case 'enter':
       // LF (0x0a) maps to ctrl+j; CR (0x0d) maps to enter — terminals differ.
       case 'ctrl+j':

@@ -7,6 +7,7 @@ import 'dart:isolate';
 import 'package:dart_tui/cli.dart';
 import 'package:dart_tui/dart_tui.dart';
 import 'package:dart_tui/src/posix_terminal.dart' show posixInputReady;
+import 'package:dart_tui/src/prompts.dart' show promptSummaryKey;
 import 'package:dart_tui/src/program.dart'
     show
         ProgramTestHook,
@@ -146,6 +147,7 @@ Future<({Object? value, String out})> _async(
 
 const _esc = '\x1b';
 const _down = '\x1b[B';
+const _up = '\x1b[A';
 const _ctrlC = '\x03';
 
 void main() {
@@ -186,7 +188,8 @@ void main() {
             : false,
   );
 
-  group('frames equal the async prompt', () {
+  // The sync prompts draw the compact frames of the `Logger` prompts.
+  group('frames equal the async prompt in Logger style', () {
     final cases = <(
       String,
       Object? Function(List<ProgramOption>),
@@ -232,7 +235,8 @@ void main() {
     ];
     for (final (name, sync, asyncPrompt, keys) in cases) {
       test(name, () async {
-        final expected = await _async(asyncPrompt, keys);
+        final expected = await runZoned(() => _async(asyncPrompt, keys),
+            zoneValues: {promptSummaryKey: true});
         final actual = _sync(sync, keys);
         expect(actual.value, expected.value);
         expect(actual.out, expected.out);
@@ -348,6 +352,34 @@ void main() {
               (o) => promptSelectSync(['a', 'b', 'c'], initial: 2, options: o),
               ['\r']).value,
           'c');
+    });
+
+    test('the arrows wrap at the ends of the list', () {
+      String? pick(List<String> keys, {int? initial}) => _sync(
+              (o) => promptSelectSync(['a', 'b', 'c'],
+                  initial: initial, options: o),
+              keys)
+          .value;
+      expect(pick([_up, '\r']), 'c');
+      expect(pick([_down, '\r'], initial: 2), 'a');
+    });
+
+    test('the answered prompt collapses to one line', () {
+      final out =
+          _sync((o) => promptSelectSync(['a', 'b'], options: o), [_down, '\r'])
+              .out;
+      final last = out.substring(out.lastIndexOf('Choose one'));
+      expect(last, contains('b'));
+      expect(last, isNot(contains('navigate')));
+    });
+
+    test('the async promptSelect keeps full frames and does not wrap',
+        () async {
+      final r = await _async(
+          (o) => promptSelect(['a', 'b', 'c'], options: o), [_up, '\r']);
+      expect(r.value, 'a');
+      expect(r.out.substring(r.out.lastIndexOf('Choose one')),
+          contains('navigate'));
     });
 
     test('empty choices return null without reading', () {

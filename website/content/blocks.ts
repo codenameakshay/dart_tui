@@ -101,7 +101,7 @@ print('Hello, \$name!');`,
       { type: "heading", text: "Sync prompts" },
       {
         type: "prose",
-        md: "`promptSelectSync`, `promptMultiSelectSync`, `promptConfirmSync` and `promptInputSync` take the same parameters as the async prompts and return the value itself, not a `Future`. They use the same models and views, so the frames are the same. Use them in code that is already synchronous, so you can switch to dart_tui by changing only your helper functions and no call chain has to become `async`. Examples are helpers that wrap the `prompts` package (`get`, `getBool`, `choose`) or interact's `Confirm` and `Select` (`.interact()`), and mason_logger's sync prompts.",
+        md: "`promptSelectSync`, `promptMultiSelectSync`, `promptConfirmSync` and `promptInputSync` take the same parameters as the async prompts and return the value itself, not a `Future`. They use the same models and views, in the compact style of the `Logger` prompts: once answered, a prompt collapses to one line with the answer, and the arrow keys in a list wrap from the last choice to the first. Use them in code that is already synchronous, so you can switch to dart_tui by changing only your helper functions and no call chain has to become `async`. Examples are helpers that wrap the `prompts` package (`get`, `getBool`, `choose`) or interact's `Confirm` and `Select` (`.interact()`), and mason_logger's sync prompts.",
       },
       {
         type: "prose",

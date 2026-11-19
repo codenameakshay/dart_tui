@@ -476,6 +476,16 @@ void main() {
       expect(result.screen, 'Size? size 3');
     });
 
+    test('chooseOne wraps from the last choice to the first', () async {
+      final logger = _logger(CaptureSink(), CaptureSink());
+      final t = _drive(() => logger.chooseOne('Pick',
+          choices: ['a', 'b', 'c'], defaultValue: 'c'));
+      await t.waitFor((s) => s.contains('> c'));
+      await t.press('down');
+      await t.press('enter');
+      expect((await t.done()).value, 'a');
+    });
+
     test('chooseOne with no choices throws', () {
       final logger = _logger(CaptureSink(), CaptureSink());
       expect(() => logger.chooseOne('x', choices: const <String>[]),
