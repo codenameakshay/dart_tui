@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.2.0 - 2026-11-19
+
+### Changes
+
+- **Sync prompts draw compact frames.** Once answered, `promptSelectSync`,
+  `promptMultiSelectSync`, `promptConfirmSync` and `promptInputSync` collapse
+  to one line with the answer, like the `Logger` prompts. Before, the whole
+  list and the key help line stayed in the scrollback.
+- **The arrow keys wrap in compact select lists.** In `promptSelectSync`,
+  `Logger.chooseOne` and `Logger.chooseOneSync`, Up on the first choice moves
+  to the last and Down on the last moves to the first, as in mason_logger and
+  interact. `promptSelect` keeps its full frames and does not wrap.
+
 ## 3.1.1 - 2026-11-18
 
 ### Fixes
