@@ -14,7 +14,7 @@ const nav = [
   { href: "/components", label: "Components" },
   { href: "/blocks", label: "Blocks" },
   { href: "/examples", label: "Examples" },
-  { href: "/guides/installation", label: "Guides", match: "/guides" },
+  { href: "/guides/get-started", label: "Guides", match: "/guides" },
   { href: "/changelog", label: "Changelog" },
 ];
 

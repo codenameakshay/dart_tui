@@ -641,3 +641,7 @@ final class Progress implements _Live {
     }
   }
 }
+
+/// Whether [logger]'s prompts ask plain line questions (pipes, CI,
+/// `ACCESSIBLE`, `--plain`). Internal, for `dart_tui create`; not exported.
+bool loggerIsPlain(Logger logger) => logger._plain;

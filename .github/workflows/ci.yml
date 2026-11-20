@@ -35,6 +35,9 @@ jobs:
         run: bash tool/coverage.sh 90
       # The example tests show package:dart_tui/testing.dart in use.
       - run: dart test example/test
+      # Builds each `dart_tui create` starter: pub get, analyze, test.
+      - if: runner.os == 'Linux'
+        run: dart test -P starters
       # The PTY smoke test relies on Python's Unix-only `pty` module.
       - if: runner.os != 'Windows'
         run: python3 tool/pty_examples_smoke.py
@@ -55,6 +58,8 @@ jobs:
       - run: dart analyze --fatal-infos
       - run: dart test
       - run: dart test example/test
+      # The starters' users get this SDK floor too.
+      - run: dart test -P starters
 
   # Parse every VHS tape so a broken tape fails CI. Never records GIFs.
   tapes:

@@ -10,6 +10,15 @@ Build rich, interactive CLI applications with a clean **Model–Update–View** 
 
 **📖 [Documentation & component gallery](https://dart-tui.vercel.app)** — browse every component, block and guide with live previews.
 
+```bash
+dart pub global activate dart_tui && dart_tui create
+```
+
+The wizard makes a script, a CLI with commands, or a full-screen app, each
+with tests that pass. In CI or from an agent, give everything as flags:
+`dart_tui create my_app --template app`. See
+[Get started in one minute](https://dart-tui.vercel.app/guides/get-started).
+
 ![showcase](https://dart-tui.vercel.app/gifs/showcase.gif)
 
 ---

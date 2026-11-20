@@ -1,0 +1,11 @@
+# test/create_starters_test.dart builds every `dart_tui create` starter (a
+# pub get and a test run each), so it runs only with: dart test -P starters
+tags:
+  starters:
+    skip: "Slow. Run with: dart test -P starters"
+presets:
+  starters:
+    include_tags: starters
+    tags:
+      starters:
+        skip: false
