@@ -60,6 +60,7 @@ final class AppModel extends Model {
   (Model, Cmd?) update(Msg msg) {
     if (msg is! KeyMsg) return (this, null);
     if (AppKeys.quit.matches(msg)) return (this, () => quit());
+    if (items.isEmpty) return (this, null);
     if (AppKeys.check.matches(msg)) {
       final next = {...checked};
       if (!next.remove(cursor)) next.add(cursor);
@@ -86,7 +87,7 @@ final class AppModel extends Model {
     ].join(' • ');
     return newView(
       '${_title.render('Checklist')}\n\n'
-      '${_list.view().content}\n'
+      '${items.isEmpty ? '' : _list.view().content}\n'
       '${_helpBar.render(help)}',
     );
   }

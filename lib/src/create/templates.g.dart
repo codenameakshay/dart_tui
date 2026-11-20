@@ -116,6 +116,7 @@ final class AppModel extends Model {
   (Model, Cmd?) update(Msg msg) {
     if (msg is! KeyMsg) return (this, null);
     if (AppKeys.quit.matches(msg)) return (this, () => quit());
+    if (items.isEmpty) return (this, null);
     if (AppKeys.check.matches(msg)) {
       final next = {...checked};
       if (!next.remove(cursor)) next.add(cursor);
@@ -142,7 +143,7 @@ final class AppModel extends Model {
     ].join(' • ');
     return newView(
       '${_title.render('Checklist')}\n\n'
-      '${_list.view().content}\n'
+      '${items.isEmpty ? '' : _list.view().content}\n'
       '${_helpBar.render(help)}',
     );
   }
@@ -185,6 +186,20 @@ void main() {
     expect(t.screen, contains('› [x] Read lib/__name__.dart'));
     await t.press('enter');
     expect(t.screen, contains('› [ ] Read lib/__name__.dart'));
+  });
+
+  test('checking an empty list does not add a nonexistent item', () async {
+    final t = TuiTester(AppModel(items: const []));
+    addTearDown(t.dispose);
+    expect(t.screen, contains('q quit'));
+    await t.press('down');
+    expect((t.model as AppModel).cursor, 0);
+    await t.press('enter');
+    expect((t.model as AppModel).checked, isEmpty);
+    await t.press('space');
+    expect((t.model as AppModel).checked, isEmpty);
+    await t.press('q');
+    expect((await t.done()).model, isA<AppModel>());
   });
 
   test('q quits', () async {

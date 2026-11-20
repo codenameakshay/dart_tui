@@ -146,14 +146,18 @@ class CreateCommand extends CliCommand<int> {
 
     final root = p.normalize(p.absolute(dir));
     final shown = _shown(root);
+    final files = {
+      for (final entry in starterFiles[template]!.entries)
+        entry.key.replaceAll('__name__', name):
+            entry.value.replaceAll('__name__', name),
+    };
+    if (_refuseFiles(root, files.keys)) return 73;
     logger.info('Writing the $template starter in $shown:');
-    for (final MapEntry(key: path, value: content)
-        in starterFiles[template]!.entries) {
-      final relative = path.replaceAll('__name__', name);
+    for (final MapEntry(key: relative, value: content) in files.entries) {
       final file = File(p.joinAll([root, ...relative.split('/')]));
       final existed = file.existsSync();
       file.parent.createSync(recursive: true);
-      file.writeAsStringSync(content.replaceAll('__name__', name));
+      file.writeAsStringSync(content);
       logger.info('  ${existed ? 'overwrote' : 'created'} $relative');
     }
 
@@ -211,6 +215,33 @@ class CreateCommand extends CliCommand<int> {
     return failed.isEmpty ? 0 : 1;
   }
 
+  bool _refuseFiles(String root, Iterable<String> paths) {
+    for (final relative in paths) {
+      final path = p.joinAll([root, ...relative.split('/')]);
+      var current = path;
+      var isFile = true;
+      while (true) {
+        final type = FileSystemEntity.typeSync(current,
+            followLinks: !isFile && !p.isWithin(root, current));
+        if ((type != FileSystemEntityType.notFound ||
+                FileSystemEntity.isLinkSync(current)) &&
+            type !=
+                (isFile
+                    ? FileSystemEntityType.file
+                    : FileSystemEntityType.directory)) {
+          logger.err('${_shown(current)} is in the way; cannot write '
+              '$relative.');
+          return true;
+        }
+        final parent = p.dirname(current);
+        if (parent == current) break;
+        current = parent;
+        isFile = false;
+      }
+    }
+    return false;
+  }
+
   /// Prints why [dir] cannot be used and returns true, or returns false.
   bool _refuse(String dir, bool force) {
     final path = p.absolute(dir);
@@ -262,15 +293,24 @@ const _reservedWords = {
   'if', 'implements', 'import', 'in', 'inout', 'interface', 'is', 'late',
   'library', 'mixin', 'native', 'new', 'null', 'of', 'on', 'operator', 'out',
   'part', 'patch', 'required', 'rethrow', 'return', 'set', 'show', 'source',
-  'static', 'super', 'switch', 'sync', 'this', 'throw', 'true', 'try',
-  'typedef', 'var', 'void', 'while', 'with', 'yield',
+  'sealed', 'static', 'super', 'switch', 'sync', 'this', 'throw', 'true', 'try',
+  'type', 'typedef', 'var', 'void', 'while', 'with', 'yield',
 };
 
 /// [path] relative to the current directory when it is inside it.
 String _shown(String path) =>
     p.isWithin(p.current, path) ? p.relative(path) : path;
 
-String _quote(String path) => path.contains(' ') ? '"$path"' : path;
+String _quote(String path) {
+  if (RegExp(r'^[a-zA-Z0-9_./:-]+$').hasMatch(path)) return path;
+  if (Platform.isWindows) return '"$path"';
+  final escaped = path
+      .replaceAll(r'\', r'\\')
+      .replaceAll('"', r'\"')
+      .replaceAll(r'$', r'\$')
+      .replaceAll('`', r'\`');
+  return '"$escaped"';
+}
 
 /// The running `dart`, or `dart` from PATH in a compiled executable.
 String get _dart {

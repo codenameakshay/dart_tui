@@ -23,6 +23,7 @@ void main() {
   late CaptureSink err;
   late List<String> ran;
   var failPubGet = false;
+  var failGit = false;
 
   setUp(() {
     tmp = Directory.systemTemp.createTempSync('dart_tui_create');
@@ -31,6 +32,7 @@ void main() {
     err = CaptureSink();
     ran = [];
     failPubGet = false;
+    failGit = false;
   });
 
   Future<int> fakeRun(
@@ -46,6 +48,7 @@ void main() {
           'failed.');
       return 69;
     }
+    if (command == 'git init' && failGit) return 1;
     return 0;
   }
 
@@ -183,7 +186,15 @@ void main() {
     });
   });
 
-  for (final name in ['My-App', '1app', 'class', 'dart_tui', '']) {
+  for (final name in [
+    'My-App',
+    '1app',
+    'class',
+    'dart_tui',
+    'sealed',
+    'type',
+    ''
+  ]) {
     test('--name "$name" is refused', () async {
       expect(
           await exitCodeOf(['create', dir('a'), '-t', 'cli', '--name', name]),
@@ -197,6 +208,8 @@ void main() {
     expect(packageNameFor('My-App'), 'my_app');
     expect(packageNameFor('/x/2048'), 'app_2048');
     expect(packageNameFor('class'), 'class_app');
+    expect(packageNameFor('sealed'), 'sealed_app');
+    expect(packageNameFor('type'), 'type_app');
     expect(packageNameFor('dart_tui'), 'dart_tui_app');
     expect(packageNameFor('---'), 'my_app');
   });
@@ -238,6 +251,69 @@ void main() {
     });
   });
 
+  for (final blocked in ['bin', 'pubspec.yaml', 'bin/demo.dart']) {
+    test('refuses a conflicting template path $blocked before writing',
+        () async {
+      final target = dir('demo');
+      Directory(target).createSync();
+      final path = p.join(target, blocked);
+      if (blocked == 'bin') {
+        File(path).writeAsStringSync('keep me');
+      } else {
+        Directory(path).createSync(recursive: true);
+      }
+      expect(
+          await exitCodeOf(['create', target, '-t', 'script', '--force']), 73);
+      expect(err.text, contains('cannot write'));
+      expect(File(p.join(target, 'README.md')).existsSync(), isFalse);
+      expect(ran, isEmpty);
+    });
+  }
+
+  test('refuses a file above a new target directory', () async {
+    final parent = dir('file');
+    File(parent).writeAsStringSync('keep me');
+    expect(await exitCodeOf(['create', p.join(parent, 'demo'), '-t', 'script']),
+        73);
+    expect(File(parent).readAsStringSync(), 'keep me');
+    expect(ran, isEmpty);
+  });
+
+  test('refuses a dangling symlink at or above the target', () async {
+    final link = dir('broken');
+    Link(link).createSync(dir('missing'));
+    for (final target in [link, p.join(link, 'demo')]) {
+      expect(
+          await exitCodeOf(['create', target, '-t', 'script', '--force']), 73);
+    }
+    expect(Directory(dir('missing')).existsSync(), isFalse);
+    expect(ran, isEmpty);
+  }, skip: Platform.isWindows);
+
+  test('does not follow template symlinks outside the target', () async {
+    final target = dir('demo');
+    Directory(target).createSync();
+    final outside = dir('outside');
+    Directory(outside).createSync();
+    Link(p.join(target, 'bin')).createSync(outside);
+    expect(await exitCodeOf(['create', target, '-t', 'script', '--force']), 73);
+    expect(Directory(outside).listSync(), isEmpty);
+    expect(File(p.join(target, 'README.md')).existsSync(), isFalse);
+  }, skip: Platform.isWindows);
+
+  test('next steps quote shell metacharacters in directory names', () async {
+    final target = dir(r'demo $HOME `whoami` "quoted"; touch nope');
+    expect(
+        await runner(plain: true).run(
+            ['create', target, '-t', 'script', '--no-git', '--no-pub-get']),
+        0);
+    final cd =
+        out.text.split('\n').singleWhere((line) => line.startsWith('  cd '));
+    final result = await Process.run('sh', ['-c', '${cd.trim()} && pwd']);
+    expect(result.exitCode, 0, reason: result.stderr.toString());
+    expect(result.stdout.toString().trim(), target);
+  }, skip: Platform.isWindows);
+
   test('a failed pub get keeps the files and prints the command', () async {
     failPubGet = true;
     final target = dir('demo');
@@ -252,6 +328,33 @@ void main() {
             'problem and run it again: cd ${_quoted(target)} && '
             'dart pub get'));
     expect(out.text, contains('✗ dart pub get'));
+  });
+
+  test('a failed git init keeps files and exits 1 with a retry command',
+      () async {
+    failGit = true;
+    final target = dir('demo');
+    expect(await exitCodeOf(['create', target, '-t', 'app']), 1);
+    expect(files(target), contains('pubspec.yaml'));
+    expect(ran, ['dart pub get', 'git init']);
+    expect(
+        err.text,
+        contains('git init failed. The files are in place; fix '
+            'the problem and run it again: cd ${_quoted(target)} && git init'));
+  });
+
+  test('the same runner can retry a failed create without stale failures',
+      () async {
+    failPubGet = true;
+    final target = dir('retry');
+    final r = runner(plain: true);
+    final args = ['create', target, '-t', 'script'];
+    expect(await r.run(args), 1);
+    File(p.join(target, 'notes.txt')).writeAsStringSync('keep me');
+    failPubGet = false;
+    expect(await r.run([...args, '--force']), 0);
+    expect(ran, ['dart pub get', 'git init', 'dart pub get', 'git init']);
+    expect(File(p.join(target, 'notes.txt')).readAsStringSync(), 'keep me');
   });
 
   test('a command that cannot start is a failure too', () async {

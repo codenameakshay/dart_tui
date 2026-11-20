@@ -20,6 +20,20 @@ void main() {
     expect(t.screen, contains('› [ ] Read lib/__name__.dart'));
   });
 
+  test('checking an empty list does not add a nonexistent item', () async {
+    final t = TuiTester(AppModel(items: const []));
+    addTearDown(t.dispose);
+    expect(t.screen, contains('q quit'));
+    await t.press('down');
+    expect((t.model as AppModel).cursor, 0);
+    await t.press('enter');
+    expect((t.model as AppModel).checked, isEmpty);
+    await t.press('space');
+    expect((t.model as AppModel).checked, isEmpty);
+    await t.press('q');
+    expect((await t.done()).model, isA<AppModel>());
+  });
+
   test('q quits', () async {
     final t = TuiTester(AppModel());
     addTearDown(t.dispose);
