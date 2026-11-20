@@ -151,7 +151,7 @@ void main() {
     expect(ran, ['dart pub get', 'git init']);
     expect(out.text, contains('✓ dart pub get'));
     expect(out.text, contains('Created plain_app.'));
-    expect(out.text, contains('  cd ${_quoted(target)}\n  dart run\n'));
+    expect(out.text, contains('  cd ${quotePath(target)}\n  dart run\n'));
     expect(files(target), contains('test/plain_app_test.dart'));
   });
 
@@ -325,7 +325,7 @@ void main() {
     expect(
         err.text,
         contains('dart pub get failed. The files are in place; fix the '
-            'problem and run it again: cd ${_quoted(target)} && '
+            'problem and run it again: cd ${quotePath(target)} && '
             'dart pub get'));
     expect(out.text, contains('✗ dart pub get'));
   });
@@ -340,7 +340,7 @@ void main() {
     expect(
         err.text,
         contains('git init failed. The files are in place; fix '
-            'the problem and run it again: cd ${_quoted(target)} && git init'));
+            'the problem and run it again: cd ${quotePath(target)} && git init'));
   });
 
   test('the same runner can retry a failed create without stale failures',
@@ -412,8 +412,6 @@ void main() {
     expect(Directory(p.join(target, '.git')).existsSync(), isTrue);
   }, skip: _hasGit ? false : 'git is not installed');
 }
-
-String _quoted(String path) => path.contains(' ') ? '"$path"' : path;
 
 final _hasGit = () {
   try {

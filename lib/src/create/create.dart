@@ -194,7 +194,7 @@ class CreateCommand extends CliCommand<int> {
       if (git) Task('git init', (task) => step(task, 'git', ['init'])),
     ]);
 
-    final cd = p.equals(root, p.current) ? null : 'cd ${_quote(shown)}';
+    final cd = p.equals(root, p.current) ? null : 'cd ${quotePath(shown)}';
     logger
       ..info('')
       ..success('Created $name.')
@@ -301,7 +301,10 @@ const _reservedWords = {
 String _shown(String path) =>
     p.isWithin(p.current, path) ? p.relative(path) : path;
 
-String _quote(String path) {
+/// [path] as one word for the user's shell: as it is when it is safe,
+/// else in double quotes (with `\`, `"`, `$` and backticks escaped off
+/// Windows).
+String quotePath(String path) {
   if (RegExp(r'^[a-zA-Z0-9_./:-]+$').hasMatch(path)) return path;
   if (Platform.isWindows) return '"$path"';
   final escaped = path
