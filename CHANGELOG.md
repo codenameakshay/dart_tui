@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+- **`dart_tui create`.** `dart pub global activate dart_tui` installs a
+  `dart_tui` command (a `CliRunner` app, so it has styled help, `--plain`,
+  `--no-color` and shell completions). `dart_tui create` asks for the project
+  name, the starter and whether to run `git init`, writes the files, runs
+  `dart pub get` and prints the next steps. The starters are `script` (one
+  file with prompts), `cli` (a `CliRunner` with two commands, a progress line
+  and completions) and `app` (a full-screen list with a help bar). Each has a
+  `pubspec.yaml` on `dart_tui ^3.1.0` and SDK `>=3.5.0`, `package:lints`, a
+  `.gitignore`, a README and tests that use `package:dart_tui/testing.dart`.
+  For CI and agents: `dart_tui create <dir> --template script|cli|app
+  [--name x] [--no-git] [--no-pub-get] [--force]` asks nothing. Without a
+  terminal, a missing directory or `--template` exits 64 and names it. The
+  name must be a valid package name, not a reserved word and not `dart_tui`.
+  A directory that is not empty is refused (exit 73) unless `--force`, which
+  adds or overwrites the starter's files, lists them, and never deletes. A
+  failed `dart pub get` or `git init` leaves the files, prints the command to
+  run again and exits 1. The library API is unchanged.
+
 ## 3.2.0 - 2026-11-19
 
 ### Changes

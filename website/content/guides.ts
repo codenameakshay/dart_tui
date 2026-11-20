@@ -2,6 +2,84 @@ import type { DocEntry } from "./registry";
 
 export const guides: DocEntry[] = [
   {
+    slug: "get-started",
+    name: "Get started in one minute",
+    category: "guides",
+    order: 0,
+    featured: true,
+    isNew: true,
+    tagline: "Install the dart_tui command and make a working app with tests.",
+    description:
+      "`dart_tui create` asks three questions and writes a starter project that runs, passes `dart analyze` and has tests. Pick a script, a CLI with commands, or a full-screen app.",
+    gif: "create.gif",
+    blocks: [
+      { type: "heading", text: "Install and create" },
+      {
+        type: "code",
+        lang: "bash",
+        code: `dart pub global activate dart_tui && dart_tui create`,
+      },
+      {
+        type: "prose",
+        md: "If your shell cannot find `dart_tui`, add pub's bin directory to your `PATH` (`dart pub global activate` prints it). The wizard asks for the project name, the starter and whether to run `git init`. Then it writes the files, runs `dart pub get` and prints the next steps:",
+      },
+      {
+        type: "code",
+        lang: "bash",
+        code: `cd my_app\ndart run\ndart test`,
+      },
+      { type: "heading", text: "The starters" },
+      {
+        type: "table",
+        headers: ["Starter", "What you get", "Run it"],
+        rows: [
+          ["`script`", "One file in `bin/` that asks with `Logger` prompts and prints a result. Its test answers the prompts with `TuiTester`.", "`dart run`"],
+          ["`cli`", "A `CliRunner` app with two commands in one category, a progress line, styled `--help`, `--plain`, `--no-color` and shell completions. Its tests check the help and run a command.", "`dart run my_app --help`"],
+          ["`app`", "A full-screen `Program`: a checklist with a help bar and quit keys. Its tests press keys with `TuiTester` and read the screen.", "`dart run`"],
+        ],
+      },
+      {
+        type: "prose",
+        md: "Each starter has a `pubspec.yaml` that depends on `dart_tui`, `analysis_options.yaml` with `package:lints`, a `.gitignore` and a short README. It needs the same Dart SDK as dart_tui: 3.5 or later.",
+      },
+      { type: "heading", text: "Without questions (CI and agents)" },
+      {
+        type: "prose",
+        md: "Give the directory and `--template`, and nothing is asked:",
+      },
+      {
+        type: "code",
+        lang: "bash",
+        code: `dart_tui create my_app --template app\ndart_tui create tools --template cli --name my_tool --no-git --no-pub-get`,
+      },
+      {
+        type: "table",
+        headers: ["Flag", "Meaning"],
+        rows: [
+          ["`-t, --template`", "`script`, `cli` or `app`."],
+          ["`--name`", "The package name. The default is made from the directory name (`My-App` becomes `my_app`)."],
+          ["`--[no-]git`", "Run `git init` (default on)."],
+          ["`--[no-]pub-get`", "Run `dart pub get` (default on)."],
+          ["`--force`", "Write into a directory that is not empty."],
+          ["`--plain`", "Never show the terminal UI."],
+        ],
+      },
+      {
+        type: "prose",
+        md: "In a pipe, in CI or with `--plain`, it never prompts. A missing directory or `--template` then exits with code 64 and names what is missing.",
+      },
+      { type: "heading", text: "Safety" },
+      {
+        type: "prose",
+        md: "The name must be a valid Dart package name, not a reserved word and not `dart_tui`. A directory that is not empty is refused (exit 73) unless you pass `--force`. Even then nothing is deleted: the starter's files are added or overwritten, and each one is listed. When `dart pub get` or `git init` fails, the files stay, the command's output and the command to run again are printed, and the exit code is 1.",
+      },
+      {
+        type: "prose",
+        md: "Next: [the MVU architecture](/guides/mvu-architecture), [building a CLI with commands](/guides/cli-commands) and [testing](/guides/testing).",
+      },
+    ],
+  },
+  {
     slug: "installation",
     name: "Installation",
     category: "guides",

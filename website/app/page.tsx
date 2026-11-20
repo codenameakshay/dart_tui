@@ -220,7 +220,7 @@ export default function HomePage() {
               </p>
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link
-                  href="/guides/installation"
+                  href="/guides/get-started"
                   className="inline-flex h-11 items-center gap-2 rounded-lg border border-border bg-card px-5 font-medium transition-colors hover:border-mauve/40"
                 >
                   Read the guide
