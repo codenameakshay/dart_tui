@@ -55,9 +55,60 @@ void main() {
     final id = (jsonDecode(socket.sent.single as String) as Map)['id'];
     socket._events.add(jsonEncode(
         {'jsonrpc': '2.0', 'id': id, 'result': <String, Object?>{}}));
-    await Future<void>.delayed(Duration.zero);
+    final next = client.call('getVM');
+    final nextId = (jsonDecode(socket.sent.last as String) as Map)['id'];
+    socket._events.add(jsonEncode(
+        {'jsonrpc': '2.0', 'id': nextId, 'result': 'still connected'}));
+    expect(await next, 'still connected');
     await client.close();
   });
+
+  for (final outcome in ['reply', 'rpc error', 'close', 'write error']) {
+    test('$outcome cancels the call timeout', () async {
+      final socket =
+          outcome == 'write error' ? _FailingWriteSocket() : _SilentSocket();
+      final client = VmServiceClient(socket);
+      final timers = <Timer>[];
+      final reply = runZoned(
+        () => client.call('getVM'),
+        zoneSpecification: ZoneSpecification(
+          createTimer: (self, parent, zone, duration, callback) {
+            final timer = parent.createTimer(zone, duration, callback);
+            timers.add(timer);
+            return timer;
+          },
+        ),
+      );
+      final expectation = outcome == 'reply'
+          ? expectLater(reply, completion('ok'))
+          : expectLater(
+              reply,
+              throwsA(switch (outcome) {
+                'rpc error' => isA<RpcException>(),
+                'close' => isA<ServiceClosedException>(),
+                _ => isA<StateError>(),
+              }),
+            );
+      if (socket is _SilentSocket) {
+        if (outcome == 'close') {
+          await client.close();
+        } else {
+          final id = (jsonDecode(socket.sent.single as String) as Map)['id'];
+          socket._events.add(jsonEncode({
+            'jsonrpc': '2.0',
+            'id': id,
+            if (outcome == 'reply') 'result': 'ok',
+            if (outcome == 'rpc error')
+              'error': {'code': -32601, 'message': 'not found'},
+          }));
+        }
+      }
+      await expectation;
+      expect(timers, isNotEmpty);
+      expect(timers.every((timer) => !timer.isActive), isTrue);
+      if (outcome != 'close') await client.close();
+    });
+  }
 
   test('a synchronous socket write failure completes and removes the request',
       () async {

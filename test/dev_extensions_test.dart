@@ -104,20 +104,23 @@ void main() {
     expect(registrations, 0);
   });
 
-  test('no banner preserves inline output with or without a VM service',
-      () async {
-    fakeService(running: false);
-    final withoutService = _Run(false);
-    await withoutService.waitFor('OLD count=7');
-    await withoutService.stop();
-    final plainOutput = withoutService.out.text;
+  for (final alt in [false, true]) {
+    test(
+        'no banner preserves ${alt ? 'alt-screen' : 'inline'} output '
+        'with or without a VM service', () async {
+      fakeService(running: false);
+      final withoutService = _Run(alt);
+      await withoutService.waitFor('OLD count=7');
+      await withoutService.stop();
+      final plainOutput = withoutService.out.text;
 
-    fakeService();
-    final withService = _Run(false);
-    await withService.waitFor('OLD count=7');
-    await withService.stop();
-    expect(withService.out.text, plainOutput);
-  });
+      fakeService();
+      final withService = _Run(alt);
+      await withService.waitFor('OLD count=7');
+      await withService.stop();
+      expect(withService.out.text, plainOutput);
+    });
+  }
 
   test('two programs and a second run register once', () async {
     fakeService();

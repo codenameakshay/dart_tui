@@ -595,6 +595,8 @@ final class DevSession {
           return;
         }
         if (await _serviceUri == null) return; // the app exited
+      } on TimeoutException {
+        return;
       } on Object {
         if (activeClient != null && identical(_client, activeClient)) {
           unawaited(activeClient.close());

@@ -28,6 +28,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 TIMEOUT = 60.0
 ROWS, COLUMNS = 24, 100
+DEV_RESET = (b"\x1b[?25h\x1b[?1000l\x1b[?1002l\x1b[?1003l"
+             b"\x1b[?1006l\x1b[?1004l\x1b[?2004l\x1b[>4m\x1b[=0;1u")
 
 APP = """\
 import 'dart:io';
@@ -294,6 +296,7 @@ class DevPtyTest(unittest.TestCase):
         session.send(b"\x03")
         self.assertEqual(session.exit_code(), 0)
         self.assert_restored(session)
+        self.assertNotIn(DEV_RESET, session.data)
 
     def test_sigint_to_the_process_group_waits_for_the_app(self) -> None:
         session = self.start()
@@ -338,6 +341,26 @@ class DevPtyTest(unittest.TestCase):
         session.send(b"e")
         self.assertEqual(session.exit_code(), 7)
         self.assert_restored(session)
+        self.assertEqual(bytes(session.data).count(DEV_RESET), 1)
+        self.assertNotIn(b"\x1b[?1049l", session.data)
+
+    def test_sigkill_escalation_restores_changed_terminal(self) -> None:
+        self.write("""import 'dart:async';
+import 'dart:io';
+void main() {
+  ProcessSignal.sigterm.watch().listen((_) {});
+  stdin.echoMode = false;
+  stdin.lineMode = false;
+  stdout.write('VIEW-ONE count=0');
+  Timer.periodic(const Duration(seconds: 1), (_) {});
+}
+""")
+        session = self.start()
+        os.kill(session.pid, signal.SIGTERM)
+        self.assertEqual(session.exit_code(), 128 + signal.SIGKILL)
+        self.assert_restored(session)
+        self.assertEqual(bytes(session.data).count(DEV_RESET), 1)
+        self.assertNotIn(b"\x1b[?1049l", session.data)
 
 
 if __name__ == "__main__":
