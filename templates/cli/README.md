@@ -11,6 +11,9 @@ dart run __name__ greet Ada
 dart run __name__ count --to 5
 ```
 
+`dart_tui dev -- count --to 50` runs a command and reloads the code when you
+save, while it runs.
+
 ## Test
 
 ```bash

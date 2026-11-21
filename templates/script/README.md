@@ -12,6 +12,9 @@ dart run
 Pipe it (`dart run | cat`) or set `ACCESSIBLE=1` to get plain line questions
 instead of the terminal UI.
 
+`dart_tui dev` runs it too, and reloads the code when you save while a
+question is open.
+
 ## Test
 
 ```bash

@@ -4,6 +4,23 @@
 
 ### Features
 
+- **`dart_tui dev`: hot reload.** `dart_tui dev [file] [-- app args]` runs an
+  app (by default `bin/<package>.dart`) with the VM service on, watches
+  `lib/`, `bin/` and the file, and reloads the code 100 ms after a save. The
+  model survives: `view()` changes show at once and `update()` changes on the
+  next message; `init()` does not run again. A compile error shows a one-line
+  banner and keeps the app running; the full error goes to
+  `.dart_tool/dart_tui/dev.log`. When the VM refuses a change (an enum that
+  becomes a class, a const class that loses a field), the app restarts and
+  shows `restarted: <reason>`; a reload with no reply for 30 s restarts it
+  too. Ctrl+C and SIGTERM reach the app first, so it
+  restores the terminal; `dart_tui dev` exits with the app's exit code. If
+  the app ends without restoring the terminal (it calls `exit()`, say),
+  `dart_tui dev` puts the terminal settings back and shows the cursor. It
+  talks JSON-RPC to the VM service over a dart:io WebSocket, so it adds no
+  dependency. `Program` registers two service extensions,
+  `ext.dart_tui.reassemble` and `ext.dart_tui.devStatus`, once per isolate and
+  only when the VM service runs; normal runs and AOT builds register nothing.
 - **`dart_tui create`.** `dart pub global activate dart_tui` installs a
   `dart_tui` command (a `CliRunner` app, so it has styled help, `--plain`,
   `--no-color` and shell completions). `dart_tui create` asks for the project

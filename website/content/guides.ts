@@ -80,6 +80,64 @@ export const guides: DocEntry[] = [
     ],
   },
   {
+    slug: "hot-reload",
+    name: "Hot reload with dart_tui dev",
+    category: "guides",
+    order: 0.5,
+    isNew: true,
+    tagline: "Save a file and the running app redraws with the new code. Its state stays.",
+    description:
+      "`dart_tui dev` runs your app with the Dart VM service on, watches your code, and reloads it when you save. The model is kept, so a counter at 5 is still 5 after you change the view.",
+    gif: "dev.gif",
+    blocks: [
+      { type: "heading", text: "Run it" },
+      {
+        type: "code",
+        lang: "bash",
+        code: `dart pub global activate dart_tui\ncd my_app\ndart_tui dev                        # runs bin/<package>.dart\ndart_tui dev example/counter.dart   # or a file you name\ndart_tui dev -- --name Ada          # app arguments go after --`,
+      },
+      {
+        type: "prose",
+        md: "The app owns the terminal, as with `dart run`. `dart_tui dev` watches `lib/`, `bin/` and the file it runs. 100 ms after the last `.dart` change it reloads the code into the running app and redraws every `Program`. Files in hidden directories, such as `.dart_tool`, and editor backup files do not count.",
+      },
+      { type: "heading", text: "What a reload keeps" },
+      {
+        type: "table",
+        headers: ["You change", "After you save"],
+        rows: [
+          ["`view()`", "The next frame uses the new code. The app redraws at once."],
+          ["`update()`", "The next message uses the new code."],
+          ["Fields of the model, global variables, static fields", "They keep their values. The model object is the same object, so the state survives."],
+          ["`init()`", "It does not run again. Restart the app (quit and run `dart_tui dev` again) to run it."],
+          ["A field added to or removed from a class, an enum, generic type parameters", "The VM can refuse some of these changes. Then the app restarts with the new code, its state is lost, and the banner shows `restarted: <reason>`."],
+          ["Code with a compile error", "Nothing changes. The app keeps running the old code, and the banner shows the first error."],
+          ["A reload with no reply for 30 seconds (the app hangs)", "The app restarts, and the banner shows `restarted: reload timed out`."],
+        ],
+      },
+      { type: "heading", text: "Errors" },
+      {
+        type: "prose",
+        md: "On a compile error, a one-line banner at the bottom of the app shows the log path and the first error, for example `Compile error (.dart_tool/dart_tui/dev.log): bin/app.dart:12:30: Expected ';' after this.` The log file has the full compiler output. Fix the error and save: the banner goes away and the app reloads.",
+      },
+      { type: "heading", text: "Quitting" },
+      {
+        type: "prose",
+        md: "Quit the app as usual. `dart_tui dev` exits when the app exits, with the app's exit code. Ctrl+C goes to the app, not to `dart_tui dev`. When `dart_tui dev` gets SIGTERM or SIGHUP, it sends the signal to the app and waits for it, so the app restores the terminal. When the app crashes, `dart_tui dev` exits with its exit code. If the app ends without restoring the terminal, for example because it calls `exit()`, `dart_tui dev` restores the terminal settings and shows the cursor. It does not leave the alternate screen.",
+      },
+      { type: "heading", text: "How it works" },
+      {
+        type: "prose",
+        md: "`dart_tui dev` starts `dart run` with `--enable-vm-service` and `--write-service-info`, and talks JSON-RPC to the VM service over a WebSocket. It adds no dependency. After a reload it calls the service extension `ext.dart_tui.reassemble`, which redraws each running `Program`. The banner uses `ext.dart_tui.devStatus`. A `Program` registers these two extensions once per isolate, and only when the VM service runs, so `dart run`, `dart compile exe` and tests without the service pay nothing.",
+      },
+      {
+        type: "callout",
+        variant: "note",
+        md: "Only the main isolate reloads. `dart_tui dev` works on Windows, macOS and Linux; dart_tui's own end-to-end tests for it run in a PTY, so on POSIX only.",
+      },
+    ],
+    related: ["get-started", "mvu-architecture", "testing"],
+  },
+  {
     slug: "installation",
     name: "Installation",
     category: "guides",

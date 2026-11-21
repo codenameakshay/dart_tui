@@ -25,6 +25,9 @@ dart run
 
 Move with ↑/↓ (or k/j), check an item with Enter, and quit with q.
 
+Run `dart_tui dev` instead of `dart run` to reload the code when you save:
+the app redraws and keeps its state.
+
 ## Test
 
 ```bash
@@ -233,6 +236,9 @@ dart run __name__ greet Ada
 dart run __name__ count --to 5
 ```
 
+`dart_tui dev -- count --to 50` runs a command and reloads the code when you
+save, while it runs.
+
 ## Test
 
 ```bash
@@ -433,6 +439,9 @@ dart run
 
 Pipe it (`dart run | cat`) or set `ACCESSIBLE=1` to get plain line questions
 instead of the terminal UI.
+
+`dart_tui dev` runs it too, and reloads the code when you save while a
+question is open.
 
 ## Test
 
