@@ -32,7 +32,33 @@ final class _FailingWriteSocket implements WebSocket {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+/// A socket that sends nothing and never answers.
+final class _SilentSocket extends _FailingWriteSocket {
+  final List<Object?> sent = [];
+
+  @override
+  void add(Object? data) => sent.add(data);
+}
+
 void main() {
+  test('a call with no reply times out, and a late reply is ignored', () async {
+    final socket = _SilentSocket();
+    final client = VmServiceClient(
+      socket,
+      timeout: const Duration(milliseconds: 20),
+    );
+
+    await expectLater(
+      client.call('reloadSources'),
+      throwsA(isA<TimeoutException>()),
+    );
+    final id = (jsonDecode(socket.sent.single as String) as Map)['id'];
+    socket._events.add(jsonEncode(
+        {'jsonrpc': '2.0', 'id': id, 'result': <String, Object?>{}}));
+    await Future<void>.delayed(Duration.zero);
+    await client.close();
+  });
+
   test('a synchronous socket write failure completes and removes the request',
       () async {
     final client = VmServiceClient(_FailingWriteSocket());

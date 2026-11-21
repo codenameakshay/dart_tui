@@ -30,6 +30,8 @@ TIMEOUT = 60.0
 ROWS, COLUMNS = 24, 100
 
 APP = """\
+import 'dart:io';
+
 import 'package:dart_tui/dart_tui.dart';
 
 enum Mode { a, b }
@@ -46,6 +48,7 @@ final class Counter extends Model {
     if (msg is KeyMsg) {
       if (msg.key == 'q' || msg.key == 'ctrl+c') return (this, () => quit());
       if (msg.key == 'x') throw StateError('boom');
+      if (msg.key == 'e') exit(7);
       if (msg.key == '+') count++;
     }
     return (this, null);
@@ -327,6 +330,13 @@ class DevPtyTest(unittest.TestCase):
         session = self.start()
         session.send(b"x")
         self.assertEqual(session.exit_code(), 255)
+        self.assert_restored(session)
+
+    def test_app_that_calls_exit_gets_its_terminal_back(self) -> None:
+        # exit() skips the Program's restore; dev puts the terminal back.
+        session = self.start()
+        session.send(b"e")
+        self.assertEqual(session.exit_code(), 7)
         self.assert_restored(session)
 
 

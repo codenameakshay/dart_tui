@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dart_tui/src/dev/dev.dart';
+import 'package:dart_tui/src/dev/vm_service_client.dart';
 import 'package:test/test.dart';
 
 final class _FakeProcess implements Process {
@@ -215,6 +216,60 @@ void main() {
     expect(await running.timeout(const Duration(seconds: 5)), 0);
   });
 
+  test('a reload with no reply restarts the app', () async {
+    final root = Directory.systemTemp.createTempSync('dart_tui_dev_hang');
+    addTearDown(() => root.deleteSync(recursive: true));
+    final lib = Directory('${root.path}/lib')..createSync();
+    Directory('${root.path}/bin').createSync();
+    final source = File('${lib.path}/source.dart')..writeAsStringSync('one');
+    final processes = <_FakeProcess>[];
+    final services = <_FakeVmService>[];
+
+    Future<Process> startChild(
+      String _,
+      List<String> args, {
+      required String workingDirectory,
+      required ProcessStartMode mode,
+    }) async {
+      final process = _FakeProcess();
+      final service = await _FakeVmService.start(
+        processes.length + 1,
+        holdReload: processes.isEmpty,
+      );
+      processes.add(process);
+      services.add(service);
+      final infoArg =
+          args.singleWhere((arg) => arg.startsWith('--write-service-info='));
+      File.fromUri(Uri.parse(infoArg.split('=').last))
+          .writeAsStringSync(jsonEncode({'uri': service.uri.toString()}));
+      return process;
+    }
+
+    final running = DevSession(
+      root: root.path,
+      file: 'bin/app.dart',
+      debounce: const Duration(milliseconds: 15),
+      processStarter: startChild,
+      vmServiceConnector: (uri) => VmServiceClient.connect(
+        uri,
+        timeout: const Duration(milliseconds: 100),
+      ),
+    ).run();
+    addTearDown(() async {
+      processes.last.exit(0);
+      await running.timeout(const Duration(seconds: 5));
+      for (final service in services) {
+        await service.close();
+      }
+    });
+
+    source.writeAsStringSync('two');
+    await _waitUntil(() =>
+        services.length == 2 &&
+        services.last.bannerTexts.contains('restarted: reload timed out'));
+    expect(processes.first.signals, [ProcessSignal.sigterm]);
+  });
+
   test('a save during a pending reload causes one follow-up reload', () async {
     final root =
         Directory.systemTemp.createTempSync('dart_tui_dev_reload_race');
@@ -341,7 +396,7 @@ void main() {
     expect(service.closedConnections, 1);
     expect(service.methods, contains('getVM'));
     expect(service.methods, isNot(contains('reloadSources')));
-  });
+  }, skip: Platform.isWindows ? 'SIGHUP is not supported on Windows' : false);
 
   test(
     'a signal during child startup is forwarded to that child',

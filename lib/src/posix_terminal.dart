@@ -111,6 +111,42 @@ bool posixInputReady(Duration timeout) {
   }
 }
 
+/// A copy of stdin's terminal settings (`struct termios`), or null off
+/// macOS/Linux or when stdin is not a terminal.
+Uint8List? posixTerminalSettings() {
+  if (!Platform.isMacOS && !Platform.isLinux) return null;
+  final tcgetattr = DynamicLibrary.process()
+      .lookupFunction<_TcGetAttrC, _TcGetAttrD>('tcgetattr');
+  final termios = calloc<Uint8>(_termiosBytes);
+  try {
+    if (tcgetattr(0, termios) != 0) return null;
+    return Uint8List.fromList(termios.asTypedList(_termiosBytes));
+  } finally {
+    calloc.free(termios);
+  }
+}
+
+/// Sets stdin's terminal settings back to [settings], from
+/// [posixTerminalSettings], if they differ now. Returns whether it did.
+bool restorePosixTerminalSettings(Uint8List settings) {
+  final now = posixTerminalSettings();
+  if (now == null) return false;
+  var same = now.length == settings.length;
+  for (var i = 0; same && i < now.length; i++) {
+    same = now[i] == settings[i];
+  }
+  if (same) return false;
+  final tcsetattr = DynamicLibrary.process()
+      .lookupFunction<_TcSetAttrC, _TcSetAttrD>('tcsetattr');
+  final termios = calloc<Uint8>(_termiosBytes);
+  try {
+    termios.asTypedList(_termiosBytes).setAll(0, settings);
+    return tcsetattr(0, _tcsaNow, termios) == 0;
+  } finally {
+    calloc.free(termios);
+  }
+}
+
 void _setRawInput(bool raw) {
   if (!Platform.isMacOS && !Platform.isLinux) return;
   if (raw == (_saved != null)) return;

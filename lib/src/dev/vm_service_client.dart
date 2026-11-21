@@ -69,7 +69,7 @@ Uri webSocketUri(Uri serviceUri) {
 
 /// A JSON-RPC client for one VM service connection.
 final class VmServiceClient {
-  VmServiceClient(this._socket) {
+  VmServiceClient(this._socket, {this.timeout = const Duration(seconds: 30)}) {
     _socket.listen(
       _onMessage,
       onError: (Object _) => _close(),
@@ -79,8 +79,18 @@ final class VmServiceClient {
   }
 
   /// Connects to the VM service at [serviceUri] (its HTTP URI).
-  static Future<VmServiceClient> connect(Uri serviceUri) async =>
-      VmServiceClient(await WebSocket.connect('${webSocketUri(serviceUri)}'));
+  static Future<VmServiceClient> connect(
+    Uri serviceUri, {
+    Duration timeout = const Duration(seconds: 30),
+  }) async =>
+      VmServiceClient(
+        await WebSocket.connect('${webSocketUri(serviceUri)}'),
+        timeout: timeout,
+      );
+
+  /// How long a call waits for its reply before it throws
+  /// [TimeoutException], for example when the app hangs.
+  final Duration timeout;
 
   final WebSocket _socket;
   final Map<String, Completer<Object?>> _pending = {};
@@ -93,7 +103,8 @@ final class VmServiceClient {
   bool get isClosed => _done.isCompleted;
 
   /// Calls [method] and returns its `result`. Throws [RpcException] for an
-  /// error reply and [ServiceClosedException] when the connection drops.
+  /// error reply, [ServiceClosedException] when the connection drops and
+  /// [TimeoutException] when no reply comes within [timeout].
   Future<Object?> call(String method,
       [Map<String, Object?> params = const {}]) {
     if (isClosed) return Future.error(ServiceClosedException());
@@ -110,7 +121,10 @@ final class VmServiceClient {
       _pending.remove(id);
       reply.completeError(error, stackTrace);
     }
-    return reply.future;
+    return reply.future.timeout(timeout, onTimeout: () {
+      _pending.remove(id);
+      throw TimeoutException('$method had no reply', timeout);
+    });
   }
 
   /// The id of the isolate named `main`, or of the first one that is not a

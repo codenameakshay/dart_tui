@@ -10,6 +10,8 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../cli.dart';
+import '../posix_terminal.dart'
+    show posixTerminalSettings, restorePosixTerminalSettings;
 import 'vm_service_client.dart';
 
 /// `dart_tui dev [file] [-- app arguments]`.
@@ -125,6 +127,14 @@ String firstErrorLine(String message) {
 /// The exit code a shell would report for a child's [code] (`-N` = signal N).
 int shellExitCode(int code) => code < 0 ? 128 - code : code;
 
+/// Turns off what a dart_tui app may leave on when it dies without
+/// restoring the terminal: a hidden cursor, mouse and focus reports,
+/// bracketed paste and keyboard enhancements. Each is a no-op when off.
+/// It does not leave the alternate screen: without knowing the app was
+/// there, that can move the cursor.
+const terminalResetSequence = '\x1b[?25h\x1b[?1000l\x1b[?1002l\x1b[?1003l'
+    '\x1b[?1006l\x1b[?1004l\x1b[?2004l\x1b[>4m\x1b[=0;1u';
+
 typedef DevProcessStarter = Future<Process> Function(
   String executable,
   List<String> arguments, {
@@ -187,6 +197,7 @@ final class DevSession {
         _subs.add(_signalStream(signal).listen((_) => _stop()));
       }
     }
+    final terminal = posixTerminalSettings();
     try {
       _watchSources();
       String? banner;
@@ -195,6 +206,11 @@ final class DevSession {
         if (_stopping) _kill();
         if (banner != null) unawaited(_showBanner(banner, _generation));
         final code = await child.exitCode;
+        // An app that calls exit() itself, or is killed, skips its own
+        // restore. Put the terminal back only if it changed.
+        if (terminal != null && restorePosixTerminalSettings(terminal)) {
+          stdout.write(terminalResetSequence);
+        }
         final reason = _restartReason;
         if (reason == null || _stopping) return shellExitCode(code);
         _restartReason = null;
@@ -337,6 +353,9 @@ final class DevSession {
       }
     }
     _subs.add(Directory(root).watch().listen((event) {
+      // Windows reports a change inside lib/ as a change to lib itself; the
+      // lib/ watcher handles those.
+      if (event is FileSystemModifyEvent) return;
       final paths = [
         event.path,
         if (event case FileSystemMoveEvent(:final destination?)) destination,
@@ -496,6 +515,11 @@ final class DevSession {
           _writeLog('Restarted', reason);
           _restart(reason);
       }
+    } on TimeoutException catch (error) {
+      // The app stopped answering, for example stuck in a loop.
+      if (generation != _generation || _stopping) return;
+      _writeLog('Restarted', '$error');
+      _restart('reload timed out');
     } on Object catch (error) {
       // The app is exiting or restarting; its exit decides what happens.
       _writeLog('Reload failed', '$error');

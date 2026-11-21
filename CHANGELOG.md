@@ -12,8 +12,11 @@
   banner and keeps the app running; the full error goes to
   `.dart_tool/dart_tui/dev.log`. When the VM refuses a change (an enum that
   becomes a class, a const class that loses a field), the app restarts and
-  shows `restarted: <reason>`. Ctrl+C and SIGTERM reach the app first, so it
-  restores the terminal; `dart_tui dev` exits with the app's exit code. It
+  shows `restarted: <reason>`; a reload with no reply for 30 s restarts it
+  too. Ctrl+C and SIGTERM reach the app first, so it
+  restores the terminal; `dart_tui dev` exits with the app's exit code. If
+  the app ends without restoring the terminal (it calls `exit()`, say),
+  `dart_tui dev` puts the terminal settings back and shows the cursor. It
   talks JSON-RPC to the VM service over a dart:io WebSocket, so it adds no
   dependency. `Program` registers two service extensions,
   `ext.dart_tui.reassemble` and `ext.dart_tui.devStatus`, once per isolate and

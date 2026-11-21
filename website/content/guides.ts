@@ -111,6 +111,7 @@ export const guides: DocEntry[] = [
           ["`init()`", "It does not run again. Restart the app (quit and run `dart_tui dev` again) to run it."],
           ["A field added to or removed from a class, an enum, generic type parameters", "The VM can refuse some of these changes. Then the app restarts with the new code, its state is lost, and the banner shows `restarted: <reason>`."],
           ["Code with a compile error", "Nothing changes. The app keeps running the old code, and the banner shows the first error."],
+          ["A reload with no reply for 30 seconds (the app hangs)", "The app restarts, and the banner shows `restarted: reload timed out`."],
         ],
       },
       { type: "heading", text: "Errors" },
@@ -121,7 +122,7 @@ export const guides: DocEntry[] = [
       { type: "heading", text: "Quitting" },
       {
         type: "prose",
-        md: "Quit the app as usual. `dart_tui dev` exits when the app exits, with the app's exit code. Ctrl+C goes to the app, not to `dart_tui dev`. When `dart_tui dev` gets SIGTERM or SIGHUP, it sends the signal to the app and waits for it, so the app restores the terminal. When the app crashes, `dart_tui dev` exits with its exit code.",
+        md: "Quit the app as usual. `dart_tui dev` exits when the app exits, with the app's exit code. Ctrl+C goes to the app, not to `dart_tui dev`. When `dart_tui dev` gets SIGTERM or SIGHUP, it sends the signal to the app and waits for it, so the app restores the terminal. When the app crashes, `dart_tui dev` exits with its exit code. If the app ends without restoring the terminal, for example because it calls `exit()`, `dart_tui dev` restores the terminal settings and shows the cursor. It does not leave the alternate screen.",
       },
       { type: "heading", text: "How it works" },
       {
