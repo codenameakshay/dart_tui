@@ -18,6 +18,9 @@ The wizard makes a script, a CLI with commands, or a full-screen app, each
 with tests that pass. In CI or from an agent, give everything as flags:
 `dart_tui create my_app --template app`. See
 [Get started in one minute](https://dart-tui.vercel.app/guides/get-started).
+Then run `dart_tui dev` instead of `dart run`: it reloads your code when you
+save and keeps the app's state. See
+[Hot reload](https://dart-tui.vercel.app/guides/hot-reload).
 
 ![showcase](https://dart-tui.vercel.app/gifs/showcase.gif)
 

@@ -14,6 +14,7 @@ export 'program.dart'
         SyncPromptInput,
         syncPromptInputKey,
         promptExitKey,
-        runModelSync;
+        runModelSync,
+        setDevHooksForTesting;
 export 'prompts.dart' hide promptSummaryKey;
 export 'view.dart';

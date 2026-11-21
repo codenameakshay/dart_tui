@@ -43,6 +43,9 @@ jobs:
         run: python3 tool/pty_examples_smoke.py
       - if: runner.os != 'Windows'
         run: python3 tool/pty_program_runtime_test.py
+      # `dart_tui dev` end to end in a PTY: reload, banner, restart, signals.
+      - if: runner.os == 'Linux'
+        run: python3 tool/pty_dev_test.py
       - if: runner.os != 'Windows'
         run: python3 -m unittest -v tool/bench_command_test.py
 

@@ -1,4 +1,5 @@
-/// The `dart_tui` executable: `dart_tui create` makes a starter project.
+/// The `dart_tui` executable: `dart_tui create` makes a starter project and
+/// `dart_tui dev` runs an app with hot reload.
 ///
 /// Internal: bin/dart_tui.dart runs it. Not exported.
 library;
@@ -10,6 +11,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../cli.dart';
+import '../dev/dev.dart';
 import 'templates.g.dart';
 
 /// Runs [executable] in [workingDirectory], sends each output line to [log]
@@ -34,6 +36,7 @@ class DartTuiRunner extends CliRunner<int> {
       : super('dart_tui', 'Make terminal apps with dart_tui.',
             version: packageVersion) {
     addCommand(CreateCommand(runProcess ?? _runProcess));
+    addCommand(DevCommand());
   }
 
   @override

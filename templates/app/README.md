@@ -11,6 +11,9 @@ dart run
 
 Move with ↑/↓ (or k/j), check an item with Enter, and quit with q.
 
+Run `dart_tui dev` instead of `dart run` to reload the code when you save:
+the app redraws and keeps its state.
+
 ## Test
 
 ```bash

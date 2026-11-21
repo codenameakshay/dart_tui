@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
+import 'dart:developer';
 import 'dart:io';
 import 'dart:isolate';
 
@@ -18,6 +19,7 @@ import 'terminal_control.dart';
 import 'view.dart';
 import 'windows_terminal.dart';
 
+part 'dev_extensions.dart';
 part 'plain.dart';
 part 'sync_prompt.dart';
 
@@ -782,7 +784,15 @@ final class Program {
       }
       // A throttled frame must not land after a release or kill.
       if (runId == _runs && !_killed && !_terminalReleased) {
-        _renderer?.render(v);
+        _renderer?.render(_devBanner == null || _renderer is PlainRenderer
+            ? v
+            : _withDevBanner(
+                v,
+                width: lastWindowSize?.$1 ?? 80,
+                height: (_renderer?.altScreenActive ?? false)
+                    ? lastWindowSize?.$2
+                    : null,
+              ));
       }
       lastRenderedView = v;
       lastRenderMicros = frameClock.elapsedMicroseconds;
@@ -813,6 +823,8 @@ final class Program {
     // Does NOT call render() — the event loop renders once per drained batch.
     Future<bool> applyMsg(Msg rawMsg) async {
       if (_testHook?.handleMessage(rawMsg) ?? false) return false;
+      // `dart_tui dev` reloaded the code or changed the banner: redraw.
+      if (rawMsg is _DevRedrawMsg) return true;
       final syntheticBackground = syntheticBackgroundReplies.remove(rawMsg);
       var msg = rawMsg;
       final model = runModel;
@@ -1085,6 +1097,9 @@ final class Program {
       }
       bench('raw_mode');
 
+      _livePrograms.add(this);
+      _registerDevExtensions();
+
       if (!_disableSignalHandler) {
         _sigintSub = ProcessSignal.sigint.watch().listen((_) {
           if (_running) enqueue(InterruptMsg());
@@ -1210,6 +1225,7 @@ final class Program {
         }
       }
     } finally {
+      _livePrograms.remove(this);
       restoreStyleDefaults();
       if (runId == _runs) _shutdown();
       for (final timer in commandTimers) {
