@@ -214,6 +214,11 @@ void main() {
   });
 
   group('watch filter', () {
+    test('does not descend into hidden directories', () {
+      expect(shouldWatchDirectory(p.join('lib', 'src')), isTrue);
+      expect(shouldWatchDirectory(p.join('lib', '.generated')), isFalse);
+    });
+
     test('takes .dart files', () {
       expect(isWatchedChange(p.join('lib', 'src', 'app.dart')), isTrue);
       expect(isWatchedChange(p.join('bin', 'app.dart')), isTrue);
@@ -283,6 +288,9 @@ void main() {
       File(p.join(dir.path, 'pubspec.yaml'))
           .writeAsStringSync('# app\nname: my_app\nversion: 1.0.0\n');
       expect(defaultDevFile(dir.path), p.join('bin', 'my_app.dart'));
+      File(p.join(dir.path, 'pubspec.yaml'))
+          .writeAsStringSync('name: "quoted-app"\nversion: 1.0.0\n');
+      expect(defaultDevFile(dir.path), p.join('bin', 'quoted-app.dart'));
     });
   });
 

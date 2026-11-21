@@ -73,8 +73,9 @@ class DevCommand extends CliCommand<int> {
 String? defaultDevFile(String root) {
   final pubspec = File(p.join(root, 'pubspec.yaml'));
   if (!pubspec.existsSync()) return null;
-  final name = RegExp(r'^name:\s*([A-Za-z0-9_]+)', multiLine: true)
-      .firstMatch(pubspec.readAsStringSync())?[1];
+  final name = RegExp(r'''^name:\s*(['"]?)([A-Za-z0-9_-]+)\1\s*(?:#.*)?$''',
+          multiLine: true)
+      .firstMatch(pubspec.readAsStringSync())?[2];
   return name == null ? null : p.join('bin', '$name.dart');
 }
 
@@ -85,6 +86,15 @@ bool isWatchedChange(String path) =>
     !p
         .split(path)
         .any((part) => part.startsWith('.') && part != '.' && part != '..');
+
+/// Whether a directory at [path] (relative to the project) holds sources:
+/// no part of it is hidden.
+bool isWatchedDirectory(String path) => !p
+    .split(path)
+    .any((part) => part.startsWith('.') && part != '.' && part != '..');
+
+/// Whether the Linux watcher should descend into [path].
+bool shouldWatchDirectory(String path) => !p.basename(path).startsWith('.');
 
 /// Calls an action once no call has come for [delay].
 final class Debouncer {
@@ -115,6 +125,13 @@ String firstErrorLine(String message) {
 /// The exit code a shell would report for a child's [code] (`-N` = signal N).
 int shellExitCode(int code) => code < 0 ? 128 - code : code;
 
+typedef DevProcessStarter = Future<Process> Function(
+  String executable,
+  List<String> arguments, {
+  required String workingDirectory,
+  required ProcessStartMode mode,
+});
+
 /// One `dart_tui dev` run: the child app, the file watchers and the reloads.
 final class DevSession {
   DevSession({
@@ -122,43 +139,56 @@ final class DevSession {
     required this.file,
     this.appArgs = const [],
     this.debounce = const Duration(milliseconds: 100),
-  });
+    DevProcessStarter? processStarter,
+    Future<VmServiceClient> Function(Uri)? vmServiceConnector,
+    Stream<ProcessSignal> Function(ProcessSignal)? signalStream,
+  })  : _processStarter = processStarter ?? _startProcess,
+        _vmServiceConnector = vmServiceConnector ?? VmServiceClient.connect,
+        _signalStream = signalStream ?? _watchSignal;
 
   final String root;
   final String file;
   final List<String> appArgs;
   final Duration debounce;
+  final DevProcessStarter _processStarter;
+  final Future<VmServiceClient> Function(Uri) _vmServiceConnector;
+  final Stream<ProcessSignal> Function(ProcessSignal) _signalStream;
 
   late final Directory _temp;
   late final String _logPath =
       p.join(root, '.dart_tool', 'dart_tui', 'dev.log');
   final List<StreamSubscription<Object?>> _subs = [];
+  final Set<String> _watchedDirs = {};
+  final Map<String, StreamSubscription<FileSystemEvent>> _dirWatchSubs = {};
   late final Debouncer _changes = Debouncer(debounce, _reloadAll);
 
   Process? _child;
   int _generation = 0;
   Future<Uri?>? _serviceUri;
+  Future<(VmServiceClient, String)?>? _connecting;
   VmServiceClient? _client;
   String? _isolateId;
   bool _reloading = false;
   bool _again = false;
-  bool _bannerShown = false;
   String? _restartReason;
   bool _stopping = false;
+  int _bannerRevision = 0;
 
   /// Runs the app until it exits and returns its exit code.
   Future<int> run() async {
     _temp = Directory.systemTemp.createTempSync('dart_tui_dev');
     // Ctrl+C reaches the whole foreground process group. The app decides
     // what it means; this process exits when the app does.
-    _subs.add(ProcessSignal.sigint.watch().listen((_) {}));
+    _subs.add(_signalStream(ProcessSignal.sigint).listen((_) {}));
     if (!Platform.isWindows) {
+      // A Program quits on SIGTERM and restores the terminal; on SIGHUP
+      // it would just die, so the app gets SIGTERM for both.
       for (final signal in [ProcessSignal.sigterm, ProcessSignal.sighup]) {
-        _subs.add(signal.watch().listen((_) => _stop(signal)));
+        _subs.add(_signalStream(signal).listen((_) => _stop()));
       }
     }
-    _watchSources();
     try {
+      _watchSources();
       String? banner;
       while (true) {
         final child = await _start();
@@ -168,10 +198,13 @@ final class DevSession {
         final reason = _restartReason;
         if (reason == null || _stopping) return shellExitCode(code);
         _restartReason = null;
-        _bannerShown = false;
         banner = 'restarted: $reason';
       }
     } finally {
+      _stopping = true;
+      _generation++;
+      final child = _child;
+      if (child != null) await child.exitCode;
       _changes.cancel();
       for (final sub in _subs) {
         await sub.cancel();
@@ -191,28 +224,51 @@ final class DevSession {
     return p.basenameWithoutExtension(exe) == 'dart' ? exe : 'dart';
   }
 
+  static Future<Process> _startProcess(
+    String executable,
+    List<String> arguments, {
+    required String workingDirectory,
+    required ProcessStartMode mode,
+  }) =>
+      Process.start(
+        executable,
+        arguments,
+        workingDirectory: workingDirectory,
+        mode: mode,
+      );
+
   Future<Process> _start() async {
     final generation = ++_generation;
     final info = File(p.join(_temp.path, 'service-$generation.json'));
+    final oldClient = _client;
     _client = null;
     _isolateId = null;
-    final child = _child = await Process.start(
-      _dart,
-      [
-        'run',
-        '--enable-vm-service=0',
-        '--no-dds',
-        '-DSILENT_VM_SERVICE=true',
-        '--write-service-info=${Uri.file(info.path)}',
-        file,
-        ...appArgs,
-      ],
-      workingDirectory: root,
-      // The app owns the terminal; this process never reads stdin.
-      mode: ProcessStartMode.inheritStdio,
-    );
-    _serviceUri = _readServiceInfo(info, child);
-    return child;
+    _connecting = null;
+    final serviceUri = Completer<Uri?>();
+    _serviceUri = serviceUri.future;
+    try {
+      await oldClient?.close();
+      final child = _child = await _processStarter(
+        _dart,
+        [
+          'run',
+          '--enable-vm-service=0',
+          '--no-dds',
+          '-DSILENT_VM_SERVICE=true',
+          '--write-service-info=${Uri.file(info.path)}',
+          file,
+          ...appArgs,
+        ],
+        workingDirectory: root,
+        // The app owns the terminal; this process never reads stdin.
+        mode: ProcessStartMode.inheritStdio,
+      );
+      serviceUri.complete(_readServiceInfo(info, child));
+      return child;
+    } on Object {
+      serviceUri.complete(null);
+      rethrow;
+    }
   }
 
   /// Waits for the child to write its service URI; null if it exits first.
@@ -231,17 +287,42 @@ final class DevSession {
     return null;
   }
 
-  Future<(VmServiceClient, String)?> _connect() async {
+  Future<(VmServiceClient, String)?> _connect() {
     final client = _client;
     final isolate = _isolateId;
     if (client != null && !client.isClosed && isolate != null) {
-      return (client, isolate);
+      return Future.value((client, isolate));
     }
+    final connecting = _connecting;
+    if (connecting != null) return connecting;
+    final generation = _generation;
+    late final Future<(VmServiceClient, String)?> pending;
+    pending = _connectFresh(generation).whenComplete(() {
+      if (identical(_connecting, pending)) _connecting = null;
+    });
+    _connecting = pending;
+    return pending;
+  }
+
+  Future<(VmServiceClient, String)?> _connectFresh(int generation) async {
     final uri = await _serviceUri;
-    if (uri == null) return null;
-    unawaited(client?.close());
-    final fresh = _client = await VmServiceClient.connect(uri);
-    final id = _isolateId = await fresh.mainIsolateId();
+    if (uri == null || generation != _generation) return null;
+    final old = _client;
+    final fresh = await _vmServiceConnector(uri);
+    final String? id;
+    try {
+      id = await fresh.mainIsolateId();
+    } on Object {
+      await fresh.close();
+      rethrow;
+    }
+    if (generation != _generation || _stopping || fresh.isClosed) {
+      await fresh.close();
+      return null;
+    }
+    unawaited(old?.close());
+    _client = fresh;
+    _isolateId = id;
     return id == null ? null : (fresh, id);
   }
 
@@ -255,10 +336,34 @@ final class DevSession {
         watched.add(dir.path);
       }
     }
+    _subs.add(Directory(root).watch().listen((event) {
+      final paths = [
+        event.path,
+        if (event case FileSystemMoveEvent(:final destination?)) destination,
+      ];
+      for (final path in paths) {
+        if (!['lib', 'bin'].contains(p.basename(path))) continue;
+        if (Directory(path).existsSync()) {
+          if (event is FileSystemMoveEvent || event is FileSystemCreateEvent) {
+            _forgetDirectoryWatch(path);
+          }
+          _watchTree(Directory(path));
+          _changes();
+        } else if (event is FileSystemDeleteEvent ||
+            event is FileSystemMoveEvent) {
+          _forgetDirectoryWatch(path);
+        }
+      }
+    }, onError: (Object _) {}));
     if (!watched.any((dir) => p.isWithin(dir, target))) {
       final parent = Directory(p.dirname(target));
       _subs.add(parent.watch().listen((event) {
-        if (p.normalize(p.absolute(event.path)) == target) _changes();
+        final movedToTarget = event is FileSystemMoveEvent &&
+            event.destination != null &&
+            p.normalize(p.absolute(event.destination!)) == target;
+        if (p.normalize(p.absolute(event.path)) == target || movedToTarget) {
+          _changes();
+        }
       }, onError: (Object _) {}));
     }
   }
@@ -266,22 +371,73 @@ final class DevSession {
   /// Watches [dir] and every directory below it. Linux has no recursive
   /// watch, so there each directory gets its own.
   void _watchTree(Directory dir) {
+    if (!dir.existsSync() || !shouldWatchDirectory(dir.path)) return;
+    final path = p.normalize(p.absolute(dir.path));
+    if (!_watchedDirs.add(path)) return;
     final native = !Platform.isLinux;
-    _subs.add(dir.watch(recursive: native).listen((event) {
-      if (!native && event is FileSystemCreateEvent && event.isDirectory) {
-        _watchTree(Directory(event.path));
-      }
-      for (final path in [
-        event.path,
-        if (event case FileSystemMoveEvent(:final destination?)) destination,
-      ]) {
-        if (isWatchedChange(p.relative(path, from: root))) _changes();
-      }
-    }, onError: (Object _) {}));
+    try {
+      final sub = dir.watch(recursive: native).listen((event) {
+        // A directory of sources created or moved in is a change everywhere.
+        if (event is FileSystemCreateEvent &&
+            event.isDirectory &&
+            isWatchedDirectory(p.relative(event.path, from: root))) {
+          _changes();
+        }
+        if (!native && event is FileSystemCreateEvent && event.isDirectory) {
+          final created = Directory(event.path);
+          if (created.existsSync() && shouldWatchDirectory(event.path)) {
+            _watchTree(created);
+            _changes();
+          }
+        }
+        if (!native && event is FileSystemMoveEvent) {
+          _forgetDirectoryWatch(event.path);
+          final destination = event.destination;
+          if (destination != null &&
+              shouldWatchDirectory(destination) &&
+              Directory(destination).existsSync()) {
+            _watchTree(Directory(destination));
+            _changes();
+          }
+        }
+        if (!native && event is FileSystemDeleteEvent) {
+          _forgetDirectoryWatch(event.path);
+        }
+        for (final path in [
+          event.path,
+          if (event case FileSystemMoveEvent(:final destination?)) destination,
+        ]) {
+          if (isWatchedChange(p.relative(path, from: root))) _changes();
+        }
+      }, onError: (Object _) {});
+      _dirWatchSubs[path] = sub;
+      _subs.add(sub);
+    } on FileSystemException {
+      _watchedDirs.remove(path);
+      return;
+    }
     if (native) return;
-    for (final entry in dir.listSync()) {
-      if (entry is Directory && !p.basename(entry.path).startsWith('.')) {
-        _watchTree(entry);
+    try {
+      for (final entry in dir.listSync()) {
+        if (entry is Directory && shouldWatchDirectory(entry.path)) {
+          _watchTree(entry);
+        }
+      }
+    } on FileSystemException {
+      _forgetDirectoryWatch(path);
+    }
+  }
+
+  void _forgetDirectoryWatch(String path) {
+    final normalized = p.normalize(p.absolute(path));
+    for (final watched in _watchedDirs.toList()) {
+      if (watched == normalized || p.isWithin(normalized, watched)) {
+        _watchedDirs.remove(watched);
+        final sub = _dirWatchSubs.remove(watched);
+        if (sub != null) {
+          _subs.remove(sub);
+          unawaited(sub.cancel());
+        }
       }
     }
   }
@@ -297,6 +453,9 @@ final class DevSession {
       do {
         _again = false;
         await _reload();
+        if (_again && !_stopping) {
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+        }
       } while (_again && !_stopping);
     } finally {
       _reloading = false;
@@ -306,14 +465,22 @@ final class DevSession {
   Future<void> _reload() async {
     if (_stopping || _restartReason != null) return;
     final generation = _generation;
+    VmServiceClient? activeClient;
     try {
       // Null while a new child starts; it compiles the new code anyway.
       final connection = await _connect();
-      if (connection == null || generation != _generation) return;
+      if (connection == null) {
+        if (generation == _generation && !_stopping) _again = true;
+        return;
+      }
+      if (generation != _generation || _stopping) return;
       final (client, isolate) = connection;
-      switch (await client.reloadSources(isolate)) {
+      activeClient = client;
+      final result = await client.reloadSources(isolate);
+      if (generation != _generation || _stopping) return;
+      switch (result) {
         case ReloadSuccess():
-          if (_bannerShown) await _setBanner(client, isolate, '');
+          await _setBanner(client, isolate, '', generation);
           await _ignoreMissing(
             client.callExtension('ext.dart_tui.reassemble', isolate),
           );
@@ -323,6 +490,7 @@ final class DevSession {
             client,
             isolate,
             'Compile error ($log): ${firstErrorLine(message)}',
+            generation,
           );
         case ReloadRejected(:final reason):
           _writeLog('Restarted', reason);
@@ -331,8 +499,11 @@ final class DevSession {
     } on Object catch (error) {
       // The app is exiting or restarting; its exit decides what happens.
       _writeLog('Reload failed', '$error');
-      unawaited(_client?.close());
-      _client = null;
+      if (activeClient != null && identical(_client, activeClient)) {
+        unawaited(activeClient.close());
+        _client = null;
+        _isolateId = null;
+      }
     }
   }
 
@@ -340,39 +511,79 @@ final class DevSession {
     VmServiceClient client,
     String isolate,
     String text,
+    int generation,
   ) async {
-    await _ignoreMissing(
-      client.callExtension('ext.dart_tui.devStatus', isolate, {'text': text}),
-    );
-    _bannerShown = text.isNotEmpty;
+    if (generation != _generation || _stopping) return;
+    final revision = ++_bannerRevision;
+    try {
+      await client
+          .callExtension('ext.dart_tui.devStatus', isolate, {'text': text});
+    } on RpcException catch (error) {
+      if (!error.methodNotFound) rethrow;
+      if (text.isNotEmpty && generation == _generation && !_stopping) {
+        unawaited(_tryShowBanner(text, generation, revision));
+      }
+      return;
+    }
+    if (generation != _generation || _stopping || revision != _bannerRevision) {
+      return;
+    }
   }
 
   /// Shows [text] once the restarted app registers its extensions.
   Future<void> _showBanner(String text, int generation) async {
+    final revision = ++_bannerRevision;
+    await _tryShowBanner(text, generation, revision);
+  }
+
+  Future<void> _tryShowBanner(
+    String text,
+    int generation,
+    int revision,
+  ) async {
     final deadline = DateTime.now().add(const Duration(seconds: 10));
     while (!_stopping &&
         generation == _generation &&
+        revision == _bannerRevision &&
         DateTime.now().isBefore(deadline)) {
+      VmServiceClient? activeClient;
       try {
         // Until the app's Program runs there is no main isolate yet, or no
         // extension, or the isolate is not runnable: try again.
-        if (await _connect() case (final client, final isolate)) {
+        final connection = await _connect();
+        if (_stopping ||
+            generation != _generation ||
+            revision != _bannerRevision) {
+          return;
+        }
+        if (connection case (final client, final isolate)) {
+          activeClient = client;
           await client.callExtension(
             'ext.dart_tui.devStatus',
             isolate,
             {'text': text},
           );
-          _bannerShown = true;
+          if (_stopping ||
+              generation != _generation ||
+              revision != _bannerRevision) {
+            return;
+          }
           return;
         }
         if (await _serviceUri == null) return; // the app exited
       } on Object {
-        unawaited(_client?.close());
-        _client = null;
+        if (activeClient != null && identical(_client, activeClient)) {
+          unawaited(activeClient.close());
+          _client = null;
+          _isolateId = null;
+        }
       }
       await Future<void>.delayed(const Duration(milliseconds: 100));
     }
   }
+
+  static Stream<ProcessSignal> _watchSignal(ProcessSignal signal) =>
+      signal.watch();
 
   Future<void> _ignoreMissing(Future<Object?> call) async {
     try {
@@ -400,9 +611,9 @@ final class DevSession {
     _kill();
   }
 
-  void _stop(ProcessSignal signal) {
+  void _stop() {
     _stopping = true;
-    _kill(signal);
+    _kill();
   }
 
   /// Asks the child to quit, so it restores the terminal, and kills it if

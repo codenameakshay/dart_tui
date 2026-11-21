@@ -99,12 +99,17 @@ final class VmServiceClient {
     if (isClosed) return Future.error(ServiceClosedException());
     final id = '${++_nextId}';
     final reply = _pending[id] = Completer<Object?>();
-    _socket.add(jsonEncode({
-      'jsonrpc': '2.0',
-      'id': id,
-      'method': method,
-      'params': params,
-    }));
+    try {
+      _socket.add(jsonEncode({
+        'jsonrpc': '2.0',
+        'id': id,
+        'method': method,
+        'params': params,
+      }));
+    } on Object catch (error, stackTrace) {
+      _pending.remove(id);
+      reply.completeError(error, stackTrace);
+    }
     return reply.future;
   }
 
@@ -139,7 +144,7 @@ final class VmServiceClient {
     );
     // The kernel compiler reports errors as `file:line:col: Error: ...`;
     // the VM's own refusals (class shape, enums, const classes) do not.
-    if (RegExp(r'^\S+:\d+:\d+: Error: ', multiLine: true).hasMatch(message)) {
+    if (RegExp(r'^.*:\d+:\d+: Error: ', multiLine: true).hasMatch(message)) {
       return ReloadCompileError(message);
     }
     return ReloadRejected(shortReason(message));

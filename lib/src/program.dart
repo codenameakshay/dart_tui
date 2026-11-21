@@ -789,7 +789,10 @@ final class Program {
             : _withDevBanner(
                 v,
                 width: lastWindowSize?.$1 ?? 80,
-                height: (_renderer?.altScreenActive ?? false)
+                // In the alternate screen the banner takes the bottom row.
+                height: v.altScreen ||
+                        _altScreen ||
+                        (_renderer?.altScreenActive ?? false)
                     ? lastWindowSize?.$2
                     : null,
               ));
@@ -1097,8 +1100,10 @@ final class Program {
       }
       bench('raw_mode');
 
-      _livePrograms.add(this);
-      _registerDevExtensions();
+      if (!const bool.fromEnvironment('dart.vm.product')) {
+        _livePrograms.add(this);
+        _registerDevExtensions();
+      }
 
       if (!_disableSignalHandler) {
         _sigintSub = ProcessSignal.sigint.watch().listen((_) {
@@ -1225,7 +1230,9 @@ final class Program {
         }
       }
     } finally {
-      _livePrograms.remove(this);
+      if (!const bool.fromEnvironment('dart.vm.product')) {
+        _livePrograms.remove(this);
+      }
       restoreStyleDefaults();
       if (runId == _runs) _shutdown();
       for (final timer in commandTimers) {

@@ -246,6 +246,8 @@ class DevPtyTest(unittest.TestCase):
     def assert_restored(self, session: DevSession) -> None:
         output = bytes(session.data)
         self.assertGreater(output.rfind(b"\x1b[?25h"), output.rfind(b"\x1b[?25l"))
+        self.assertGreater(output.rfind(b"\x1b[>4m"), output.rfind(b"\x1b[>4;2m"))
+        self.assertIn(b"\x1b[=0;1u", output[output.rfind(b"\x1b[>4m"):])
         iflag, _, _, lflag = termios.tcgetattr(session.master)[:4]
         for flag in (termios.ECHO, termios.ICANON, termios.ISIG, termios.IEXTEN):
             self.assertTrue(lflag & flag)
@@ -296,13 +298,32 @@ class DevPtyTest(unittest.TestCase):
         self.assertEqual(session.exit_code(), 0)
         self.assert_restored(session)
 
+    def test_sigint_to_dev_only_is_ignored(self) -> None:
+        session = self.start()
+        os.kill(session.pid, signal.SIGINT)
+        # SIGINT belongs to the app when the terminal sends it to the process
+        # group. A signal sent only to the watcher must not stop the app.
+        time.sleep(0.2)
+        self.assertIsNone(session.status)
+        session.send(b"+")
+        session.wait_screen(r"VIEW-ONE count=1")
+        session.send(b"\x03")
+        self.assertEqual(session.exit_code(), 0)
+        self.assert_restored(session)
+
+    def test_sighup_to_dev_quits_the_app_first(self) -> None:
+        session = self.start()
+        os.kill(session.pid, signal.SIGHUP)
+        self.assertEqual(session.exit_code(), 0)
+        self.assert_restored(session)
+
     def test_sigterm_to_dev_quits_the_app_first(self) -> None:
         session = self.start()
         os.kill(session.pid, signal.SIGTERM)
         self.assertEqual(session.exit_code(), 0)
         self.assert_restored(session)
 
-    def test_app_crash_exits_with_its_code_and_restores(self) -> None:
+    def test_app_exception_exits_with_its_code_and_restores(self) -> None:
         session = self.start()
         session.send(b"x")
         self.assertEqual(session.exit_code(), 255)
