@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 3.3.0 - 2026-11-26
+
+First app in a minute: `dart_tui create` writes a script, CLI or full-screen starter
+with tests, and `dart_tui dev` hot-reloads it while it runs. The library API is unchanged.
 
 ### Features
 

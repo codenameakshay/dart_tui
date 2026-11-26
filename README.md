@@ -52,7 +52,7 @@ save and keeps the app's state. See
 ```yaml
 # pubspec.yaml
 dependencies:
-  dart_tui: ^3.1.0
+  dart_tui: ^3.3.0
 ```
 
 ```bash
