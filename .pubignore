@@ -43,3 +43,7 @@ example/tapes/output/
 .vscode/
 .cursor/
 .fvmrc
+
+# Starter sources; `dart_tui create` reads the copies embedded in
+# lib/src/create/templates.g.dart (tool/gen_templates.dart).
+templates/
